@@ -1,0 +1,2394 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทำนายความสำเร็จรายบุคคล - ระบบวิเคราะห์ขั้นสูง</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Kanit', sans-serif; /* Changed font to Kanit as per second code */
+            min-height: 100vh;
+            color: #333; /* Default text color for light mode */
+            transition: background 0.3s, color 0.3s;
+        }
+        body.dark-mode {
+            background: #1f1f1f;
+            color: #ddd;
+        }
+        body.dark-mode .container,
+        body.dark-mode .card {
+            background: #2b2b2b;
+            color: #ddd;
+        }
+        body.dark-mode .card-header {
+            background: linear-gradient(135deg, #34495e 0%, #444 100%);
+        }
+        body.dark-mode .accordion-item,
+        body.dark-mode .metric-card,
+        body.dark-mode .prediction-confidence,
+        body.dark-mode .recommendation-card,
+        body.dark-mode .alert-light {
+            background: #3a3a3a;
+            color: #ddd;
+        }
+        body.dark-mode .badge-low, body.dark-mode .risk-low { background: linear-gradient(45deg, #20c997, #28a745); }
+        body.dark-mode .badge-medium, body.dark-mode .risk-medium { background: linear-gradient(45deg, #fd7e14, #ffc107); }
+        body.dark-mode .badge-high, body.dark-mode .risk-high { background: linear-gradient(45deg, #e83e8c, #dc3545); }
+
+        body.dark-mode .blocked-subject-overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #e74c3c;
+            border: 1px dashed #e74c3c;
+        }
+        body.dark-mode .hamburger i { color: #fff; }
+        body.dark-mode .sidebar { background-color: #333; }
+        body.dark-mode .sidebar-menu li a, body.dark-mode .dark-mode-toggle { color: #ddd; }
+        body.dark-mode .sidebar-menu li a:hover, body.dark-mode .dark-mode-toggle:hover { background-color: #444; }
+        body.dark-mode .dark-mode-toggle:not(.active) { background-color: #f1c40f; color: #333; }
+        body.dark-mode .dark-mode-toggle.active { background-color: #2ecc71; color: #fff; }
+        body.dark-mode .modal-backdrop { background: rgba(0, 0, 0, 0.75); }
+        body.dark-mode .modal { background: #2b2b2b; color: #ddd; }
+        body.dark-mode .close-modal { background: #e74c3c; color: #fff; }
+        body.dark-mode .future-course-block { background: #444; color: #ddd; }
+
+        /* General Styling */
+        .container { max-width: 1200px; }
+        .card {
+            border-radius: 1rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+            border-top-left-radius: 1rem;
+            border-top-right-radius: 1rem;
+            border: none;
+        }
+        .grade-select { width: 90px; }
+        .spinner-border-sm { width: 1rem; height: 1rem; border-width: 0.2em; }
+        .result-container { max-height: 600px; overflow-y: auto; }
+
+        .badge-low { background: linear-gradient(45deg, #28a745, #20c997); color: white; }
+        .badge-medium { background: linear-gradient(45deg, #ffc107, #fd7e14); color: white; }
+        .badge-high { background: linear-gradient(45deg, #dc3545, #e83e8c); color: white; }
+
+        .accordion-item {
+            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+            box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+        }
+        .accordion-button { border-radius: 0.75rem !important; }
+        .list-group-item {
+            border-radius: 0.5rem;
+            margin-bottom: 0.25rem;
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            margin: 1rem 0;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            padding: 1rem;
+            box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+        }
+
+        .risk-indicator {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 0.25rem;
+            box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+        }
+
+        .risk-low { background: linear-gradient(45deg, #28a745, #20c997); color: white; }
+        .risk-medium { background: linear-gradient(45deg, #ffc107, #fd7e14); color: white; }
+        .risk-high { background: linear-gradient(45deg, #dc3545, #e83e8c); color: white; }
+
+        .prediction-summary {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+            border-radius: 1rem;
+            padding: 2rem;
+            margin: 1rem 0;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .trend-arrow {
+            font-size: 1.5rem;
+            margin-left: 0.5rem;
+        }
+
+        .trend-up { color: #28a745; }
+        .trend-down { color: #dc3545; }
+        .trend-stable { color: #6c757d; }
+
+        .recommendation-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 250, 0.95));
+            border-left: 5px solid;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+
+        .recommendation-urgent { border-left-color: #dc3545; }
+        .recommendation-warning { border-left-color: #ffc107; }
+        .recommendation-improvement { border-left-color: #0dcaf0; }
+        .recommendation-general { border-left-color: #6c757d; }
+        .recommendation-success { border-left-color: #28a745; }
+
+        .progress-ring {
+            position: relative;
+            display: inline-block;
+            width: 120px;
+            height: 120px;
+        }
+
+        .progress-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring circle {
+            fill: none;
+            stroke-width: 8;
+            r: 50;
+            cx: 60;
+            cy: 60;
+        }
+
+        .progress-ring .bg { stroke: #e9ecef; }
+        .progress-ring .progress {
+            stroke-linecap: round;
+            transition: stroke-dasharray 0.5s ease;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .floating-action {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+
+        .prediction-confidence {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border-radius: 1rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .blocked-subject-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 255, 255, 0.7); z-index: 10;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+            font-size: 0.8em; color: #dc3545; font-weight: bold; border-radius: 0.25rem;
+            border: 1px dashed #dc3545; cursor: not-allowed; flex-direction: column; padding: 5px;
+        }
+        .subject-input-wrapper { position: relative; width: 100%; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse-animation { animation: pulse 2s infinite; }
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        /* Sidebar & Hamburger styles (from second code, adapted for Bootstrap) */
+        .sidebar {
+            width: 250px;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: #2c3e50;
+            overflow-x: hidden;
+            padding-top: 60px;
+            transition: left 0.3s;
+            z-index: 1000;
+        }
+        .hamburger {
+            display: none; /* Hidden by default, shown on smaller screens */
+            font-size: 30px;
+            cursor: pointer;
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1001;
+            background: none;
+            border: none;
+        }
+        .hamburger i {
+            color: #2c3e50; /* Adjust initial color for light mode */
+            transition: color 0.3s;
+        }
+        @media screen and (max-width: 768px) {
+            .sidebar { left: -250px; }
+            .sidebar.active { left: 0; }
+            .hamburger { display: block; }
+            .container { margin-left: auto; margin-right: auto; } /* Center container when sidebar is hidden */
+        }
+        body.sidebar-open::after {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        .sidebar-header { padding: 20px; text-align: center; }
+        .sidebar-header h3 { color: #ecf0f1; margin: 0; font-size: 24px; }
+        .sidebar-menu { list-style-type: none; padding: 0; margin: 0; }
+        .sidebar-menu li { padding: 10px 15px; }
+        .sidebar-menu li a, .dark-mode-toggle {
+            color: #ecf0f1;
+            text-decoration: none;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            transition: 0.3s;
+        }
+        .sidebar-menu li a:hover, .dark-mode-toggle:hover {
+            background-color: #34495e;
+            border-left: 5px solid #3498db;
+        }
+        .sidebar-menu li a i, .dark-mode-toggle i { margin-right: 10px; width: 20px; text-align: center; }
+
+        /* Specific for the new course input structure */
+        .term-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-right: 1rem;
+        }
+        .term-locked-msg {
+            color: red;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .repeat-course-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+</head>
+<body>
+    <button class="hamburger" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>เมนูหลัก</h3>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="/page"><i class="fas fa-home"></i> หน้าหลัก</a></li>
+            <li><a href="/"><i class="fas fa-brain"></i> ฝึกฝนโมเดล</a></li>
+            <li><a href="/test"><i class="fas fa-user-graduate"></i> ทำนายรายบุคคล</a></li>
+            <li><a href="/csv"><i class="fas fa-file-csv"></i> ทำนายจาก CSV</a></li>
+            <li><a href="/s"><i class="fas fa-cogs"></i> ทำนายสาขา</a></li>
+            <li>
+                <button class="dark-mode-toggle" onclick="toggleDarkMode()">
+                    <i class="fas fa-moon"></i> Dark Mode
+                </button>
+            </li>
+        </ul>
+    </div>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+             <h1 class="mb-0 text-white">
+                 <i class="bi bi-magic"></i> ระบบทำนายความสำเร็จรายบุคคล
+                 <small class="d-block fs-6 opacity-75">AI-Powered Academic Success Prediction</small>
+             </h1>
+             <a href="/" class="btn btn-outline-light glassmorphism">
+                 <i class="bi bi-arrow-left-circle"></i> กลับหน้าหลัก
+             </a>
+        </div>
+
+        <div class="card glassmorphism mb-4">
+            <div class="card-header">
+                <i class="bi bi-pencil-square"></i> กรอกข้อมูลนักศึกษา
+            </div>
+            <div class="card-body">
+                <div id="alertArea"></div>
+                <form id="predictionForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="studentName" class="form-label">ชื่อ-นามสกุล (ไม่บังคับ)</label>
+                            <input type="text" class="form-control" id="studentName" placeholder="เช่น นายประหยัด ขยันเรียน">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="modelSelectForManualPrediction" class="form-label">เลือกโมเดลสำหรับทำนาย:</label>
+                            <select class="form-select" id="modelSelectForManualPrediction">
+                                <option value="">-- กำลังโหลดโมเดล --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <h5><i class="bi bi-bar-chart-line"></i> ผลการเรียนแต่ละรายวิชา:</h5>
+                    <p class="text-muted small">กรอกเฉพาะวิชาที่เคยเรียน ถ้าไม่ได้เรียน/ไม่มีเกรดให้เว้นว่างไว้</p>
+
+                    <div class="accordion" id="termsAccordion">
+                        </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <h5 class="mb-0"><i class="bi bi-plus-circle"></i> วิชาที่ลงทะเบียนซ้ำ/เพิ่มเติมในเทอมปัจจุบัน</h5>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="addRepeatCourseBtn">
+                            <i class="bi bi-plus-circle"></i> เพิ่มวิชาซ้ำ/เพิ่มเติม
+                        </button>
+                        <button type="button" class="btn btn-outline-info btn-sm" id="openFutureModal">
+                            <i class="bi bi-calendar-plus"></i> เพิ่มวิชาอนาคต
+                        </button>
+                    </div>
+                    <p class="text-muted small">วิชาซ้ำคือวิชาที่เคยเรียนแล้วได้ F/W/I หรือต้องการปรับเกรด วิชาเพิ่มเติมคือวิชานอกแผน</p>
+                    <div id="repeatCoursesSection" class="mb-3"></div>
+                    <p class="text-muted small">
+                        <span style="color:red;"><i class="bi bi-exclamation-triangle-fill"></i> ไม่สามารถลงวิชาที่ Prerequisite ยังไม่ผ่านพร้อมกันในเทอมเดียวกันได้</span>
+                    </p>
+
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg pulse-animation" id="predictManualBtn" disabled>
+                            <span id="predictManualSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <i class="bi bi-magic"></i> เริ่มการทำนายและวิเคราะห์
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="predictionResultsCard" class="card glassmorphism d-none mb-4">
+            <div class="card-header">
+                <i class="bi bi-graph-up-arrow"></i> ผลการทำนายและวิเคราะห์ขั้นสูง
+            </div>
+            <div class="card-body">
+                <div class="prediction-summary">
+                    <div class="row align-items-center">
+                        <div class="col-md-3 text-center">
+                            <div class="progress-ring" id="successProbabilityRing">
+                                <svg>
+                                    <circle class="bg" cx="60" cy="60" r="50"></circle>
+                                    <circle class="progress" cx="60" cy="60" r="50" id="progressCircle"></circle>
+                                </svg>
+                                <div class="progress-text" id="successPercentage">0%</div>
+                            </div>
+                            <h6 class="mt-2">โอกาสความสำเร็จ</h6>
+                        </div>
+                        <div class="col-md-9">
+                            <h4 id="predictionSummaryTitle"></h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-1"><strong>ชื่อ:</strong> <span id="resultStudentName"></span></p>
+                                    <p class="mb-1"><strong>เกรดเฉลี่ยปัจจุบัน:</strong> <span id="resultGpa"></span></p>
+                                    <p class="mb-1"><strong>ผลทำนาย:</strong> <span id="resultPrediction" class="badge"></span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-1"><strong>ระดับความเสี่ยง:</strong> <span id="resultRiskLevel" class="risk-indicator"></span></p>
+                                    <p class="mb-1"><strong>ความเชื่อมั่นโมเดล:</strong> <span id="resultConfidence"></span></p>
+                                    <p class="mb-1"><strong>โอกาสจบตามหลักสูตร:</strong> <span id="resultCompletionRate"></span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="metric-card">
+                            <div class="metric-value" id="currentGpaMetric">0.00</div>
+                            <div>GPA ปัจจุบัน <span class="trend-arrow" id="gpaTrend"></span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-card">
+                            <div class="metric-value" id="predictedNextGpaMetric">0.00</div>
+                            <div>GPA คาดการณ์เทอมหน้า</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="metric-card">
+                            <div class="metric-value" id="riskScoreMetric">0</div>
+                            <div>คะแนนความเสี่ยง <small>(0-100)</small></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h5><i class="bi bi-graph-up"></i> การวิเคราะห์แนวโน้ม GPA และการทำนาย</h5>
+                    <canvas id="advancedGpaTrendChart"></canvas>
+                    <div class="row mt-3">
+                        <div class="col-md-4 text-center">
+                            <small class="text-primary"><i class="bi bi-circle-fill"></i> GPA ประวัติจริง</small>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <small class="text-success"><i class="bi bi-circle-fill"></i> แนวโน้มที่ดี (เป้าหมาย)</small>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <small class="text-warning"><i class="bi bi-circle-fill"></i> แนวโน้มเสี่ยง</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-info text-white">
+                                <i class="bi bi-clipboard-data"></i> สถานะการเรียน
+                            </div>
+                            <div class="card-body">
+                                <p id="graduationStatusText" class="alert alert-info"></p>
+                                <div class="mt-3">
+                                    <h6>สถิติการเรียน:</h6>
+                                    <ul class="list-unstyled">
+                                        <li><i class="bi bi-check-circle text-success"></i> หน่วยกิตที่ผ่าน: <span id="completedCreditsCount">0</span></li>
+                                        <li><i class="bi bi-x-circle text-danger"></i> วิชาที่ตก (F/W/I): <span id="failedSubjectsCount">0</span></li>
+                                        <li><i class="bi bi-clock text-warning"></i> วิชาที่ยังไม่ผ่าน/ไม่มีเกรด: <span id="incompleteSubjectsCount">0</span></li>
+                                        <li><i class="bi bi-lock text-secondary"></i> วิชาที่ถูกบล็อก (Prerequisite): <span id="blockedSubjectsCount">0</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-warning text-dark">
+                                <i class="bi bi-exclamation-triangle"></i> ปัญหาที่ต้องระวัง
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item" id="incompleteCoursesList">
+                                        <strong>วิชาที่ยังไม่ได้เรียน:</strong> ไม่มี
+                                    </li>
+                                    <li class="list-group-item" id="failedCoursesList">
+                                        <strong>วิชาที่ได้เกรด F/W/I:</strong> ไม่มี
+                                    </li>
+                                    <li class="list-group-item" id="blockedCoursesList">
+                                        <strong>วิชาที่ถูกบล็อก:</strong> ไม่มี
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <i class="bi bi-shield-check"></i> การประเมินความเสี่ยงแบบละเอียด
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>ปัจจัยความเสี่ยง:</h6>
+                                <div id="riskFactors"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>ปัจจัยบวก:</h6>
+                                <div id="positiveFactors"></div>
+                            </div>
+                        </div>
+                        <div class="prediction-confidence mt-3">
+                            <h6><i class="bi bi-cpu"></i> ความเชื่อมั่นของโมเดล AI:</h6>
+                            <div class="progress mb-2">
+                                <div class="progress-bar" id="confidenceBar" role="progressbar"></div>
+                            </div>
+                            <small id="confidenceExplanation" class="text-muted"></small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-lightbulb"></i> คำแนะนำเฉพาะบุคคล
+                    </div>
+                    <div class="card-body">
+                        <div id="personalizedRecommendations"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-calendar-check"></i> แผนการเรียนที่แนะนำ
+                    </div>
+                    <div class="card-body">
+                        <div id="topologicalOrderSection">
+                            <h6>ลำดับการเรียนที่แนะนำ (Topological Order):</h6>
+                            <p id="topologicalOrderText" class="alert alert-light small">กำลังโหลด...</p>
+                            <p id="topologicalCycleWarning" class="alert alert-danger d-none">
+                                <i class="bi bi-exclamation-circle-fill"></i> ตรวจพบวงจรในวิชา (Cycle in prerequisites)! การเรียนต่อตามแผนอาจเป็นไปไม่ได้
+                            </p>
+                        </div>
+                        <div id="blockedChainInfo" class="mt-3"></div>
+                        <div class="mt-3">
+                            <h6>เทอมถัดไป ควรให้ความสำคัญกับ:</h6>
+                            <div id="nextTermPriorities"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="futureModalBackdrop" class="modal-backdrop">
+        <div class="modal">
+            <button class="close-modal" id="closeFutureModal">X</button>
+            <h3>เลือกวิชาอนาคตที่ต้องการเพิ่มในเทอมปัจจุบัน</h3>
+            <div id="futureModalContent"></div>
+            <button id="addSelectedFutureCoursesBtn" class="btn btn-primary btn-sm mt-3">เพิ่มวิชาที่เลือก</button>
+        </div>
+    </div>
+
+    <div class="floating-action">
+        <button class="btn btn-primary btn-lg rounded-circle shadow-lg" id="exportReport" title="ส่งออกรายงาน">
+            <i class="bi bi-download"></i>
+        </button>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let advancedGpaTrendChart = null;
+        let coursesData = []; // Loaded from backend
+        let allTermsData = []; // Loaded from backend
+        let gradeMapping = {}; // Loaded from backend
+        let messagesConfig = {}; // Loaded from backend
+        let riskLevelsConfig = {}; // Loaded from backend
+
+        // Additional data for prerequisite logic
+        const passingGrades = ["A", "B+", "B", "C+", "C", "D+", "D"]; // Should align with gradeMapping > 0
+        const coreSubjects = []; // This should ideally come from backend or be derived
+
+        let loadedTermsCount = 0; // Tracks how many terms have been populated in the UI
+        let currentTermIndex = 0; // Tracks the currently active/editable term
+        let repeatedCoursesInCurrentTerm = []; // Tracks manually added courses to the current active term
+
+        function getCourseById(courseId) {
+            return coursesData.find(c => c.id === courseId);
+        }
+
+        function getNumericGrade(gradeChar) {
+            if (!gradeChar || String(gradeChar).trim() === "") return -1; // -1 for empty/no grade
+            if (gradeMapping[String(gradeChar).toUpperCase()] !== undefined) {
+                return gradeMapping[String(gradeChar).toUpperCase()];
+            }
+            try {
+                const numeric = parseFloat(String(gradeChar));
+                if (!isNaN(numeric)) {
+                    return numeric;
+                }
+            } catch (e) {
+                // Not a direct number, proceed to map (already handled above)
+            }
+            return 0.0; // Default if not found, consider F as 0.0
+        }
+
+        function isGradePassing(gradeChar) {
+            return getNumericGrade(gradeChar) > 0.0; // Assuming any numeric grade > 0 is passing
+        }
+
+        function calculateRiskScore(data) {
+            let riskScore = 0;
+            if (!riskLevelsConfig || Object.keys(riskLevelsConfig).length === 0) {
+                console.warn('Risk levels configuration not loaded. Using default thresholds.');
+                // Fallback default thresholds if config is not available
+                riskLevelsConfig = {
+                    low_gpa_threshold: 2.0,
+                    warning_gpa_threshold: 2.5,
+                    high_confidence_threshold: 0.9,
+                    medium_confidence_threshold: 0.7
+                };
+            }
+
+            // GPA factors
+            if (data.gpa_input < riskLevelsConfig.low_gpa_threshold) riskScore += 40;
+            else if (data.gpa_input < riskLevelsConfig.warning_gpa_threshold) riskScore += 25;
+            else if (data.gpa_input < 3.0) riskScore += 10;
+
+            // Failed courses
+            riskScore += (data.failed_courses?.length || 0) * 8;
+
+            // Blocked courses
+            riskScore += (data.blocked_courses_details?.length || 0) * 6;
+
+            // Incomplete courses (many unlearned courses also contribute to risk)
+            riskScore += (data.incomplete_courses?.length || 0) * 2;
+
+            return Math.min(100, Math.max(0, riskScore));
+        }
+
+        function updateProgressRing(percentage) {
+            const circle = document.getElementById('progressCircle');
+            const percentageText = document.getElementById('successPercentage');
+
+            const circumference = 2 * Math.PI * 50;
+            const offset = circumference - (percentage / 100) * circumference;
+
+            circle.style.strokeDasharray = circumference;
+            circle.style.strokeDashoffset = offset;
+
+            // Color based on percentage
+            if (percentage >= 70) {
+                circle.style.stroke = '#28a745';
+            } else if (percentage >= 40) {
+                circle.style.stroke = '#ffc107';
+            } else {
+                circle.style.stroke = '#dc3545';
+            }
+
+            percentageText.textContent = `${percentage}%`;
+        }
+
+        function generateAdvancedGpaTrendChart(termGpasData, currentGPA, predictedNextGPA) {
+            const ctx = document.getElementById('advancedGpaTrendChart').getContext('2d');
+
+            if (advancedGpaTrendChart) {
+                advancedGpaTrendChart.destroy();
+            }
+
+            const actualLabels = termGpasData.map(term => term.label);
+            const actualGPAs = termGpasData.map(term => term.gpa);
+
+            const allLabels = [...actualLabels];
+            if (actualLabels.length > 0) {
+                allLabels.push('เทอมถัดไป');
+            }
+
+            const idealTrend = [];
+            let startGPAForIdeal = actualGPAs.length > 0 ? actualGPAs[0] : 2.0;
+            const targetGPA = 3.5;
+
+            for (let i = 0; i < allLabels.length; i++) {
+                const idealGpaAtTerm = Math.min(4.0, startGPAForIdeal + (i * (targetGPA - startGPAForIdeal)) / (allLabels.length - 1 || 1));
+                idealTrend.push(idealGpaAtTerm);
+            }
+
+            const riskTrend = [];
+            let startGPAForRisk = actualGPAs.length > 0 ? actualGPAs[0] : 2.0;
+            const riskTargetGPA = 1.5;
+
+            for (let i = 0; i < allLabels.length; i++) {
+                const riskGpaAtTerm = Math.max(0.0, startGPAForRisk - (i * (startGPAForRisk - riskTargetGPA)) / (allLabels.length - 1 || 1));
+                riskTrend.push(riskGpaAtTerm);
+            }
+
+            const extendedActualGPAs = [...actualGPAs];
+            if (predictedNextGPA !== undefined && predictedNextGPA !== null) {
+                extendedActualGPAs.push(predictedNextGPA);
+            }
+
+            advancedGpaTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: allLabels,
+                    datasets: [
+                        {
+                            label: 'GPA ประวัติจริง',
+                            data: extendedActualGPAs,
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            tension: 0.3,
+                            pointRadius: 5,
+                            pointHoverRadius: 8,
+                            borderWidth: 3
+                        },
+                        {
+                            label: 'แนวโน้มที่ดี (เป้าหมาย)',
+                            data: idealTrend,
+                            borderColor: '#28a745',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            tension: 0.3,
+                            pointRadius: 4,
+                            borderDash: [5, 5],
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'แนวโน้มเสี่ยง',
+                            data: riskTrend,
+                            borderColor: '#ffc107',
+                            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                            tension: 0.3,
+                            pointRadius: 4,
+                            borderDash: [10, 5],
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 4.0,
+                            ticks: {
+                                stepSize: 0.5,
+                                callback: function(value) {
+                                    return value.toFixed(1);
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
+        function generateRiskFactors(result) {
+            const riskFactors = [];
+            const positiveFactors = [];
+
+            // Ensure riskLevelsConfig is loaded
+            if (!riskLevelsConfig || Object.keys(riskLevelsConfig).length === 0) {
+                console.warn('Risk levels configuration not loaded for risk factors.');
+                // Provide a basic fallback or skip if essential for calculation
+                return { riskFactors: [], positiveFactors: [] };
+            }
+
+            // Risk factors
+            if (result.gpa_input < riskLevelsConfig.low_gpa_threshold) {
+                riskFactors.push({
+                    icon: 'bi-exclamation-triangle-fill',
+                    text: `GPA ต่ำกว่าเกณฑ์มาก (< ${riskLevelsConfig.low_gpa_threshold.toFixed(1)})`,
+                    level: 'high'
+                });
+            } else if (result.gpa_input < riskLevelsConfig.warning_gpa_threshold) {
+                riskFactors.push({
+                    icon: 'bi-exclamation-triangle',
+                    text: `GPA ใกล้เกณฑ์เสี่ยง (< ${riskLevelsConfig.warning_gpa_threshold.toFixed(1)})`,
+                    level: 'medium'
+                });
+            }
+
+            if (result.failed_courses && result.failed_courses.length > 0) {
+                riskFactors.push({
+                    icon: 'bi-x-circle-fill',
+                    text: `มีวิชาตก ${result.failed_courses.length} วิชา`,
+                    level: 'high'
+                });
+            }
+
+            if (result.blocked_courses_details && result.blocked_courses_details.length > 0) {
+                riskFactors.push({
+                    icon: 'bi-lock-fill',
+                    text: `วิชาถูกบล็อก ${result.blocked_courses_details.length} วิชา`,
+                    level: 'medium'
+                });
+            }
+
+            if (result.incomplete_courses && result.incomplete_courses.length > 5) {
+                riskFactors.push({
+                    icon: 'bi-clock-fill',
+                    text: `วิชาที่ยังไม่เรียนจำนวนมาก (${result.incomplete_courses.length} วิชา)`,
+                    level: 'medium'
+                });
+            }
+
+            // Positive factors
+            if (result.gpa_input >= 3.5) {
+                positiveFactors.push({
+                    icon: 'bi-star-fill',
+                    text: 'GPA สูงเป็นเกียรตินิยม',
+                    level: 'high'
+                });
+            } else if (result.gpa_input >= 3.0) {
+                positiveFactors.push({
+                    icon: 'bi-check-circle-fill',
+                    text: 'GPA อยู่ในเกณฑ์ดี',
+                    level: 'medium'
+                });
+            }
+
+            if (!result.failed_courses || result.failed_courses.length === 0) {
+                positiveFactors.push({
+                    icon: 'bi-shield-check',
+                    text: 'ไม่มีวิชาตก',
+                    level: 'high'
+                });
+            }
+
+            if (!result.blocked_courses_details || result.blocked_courses_details.length === 0) {
+                positiveFactors.push({
+                    icon: 'bi-unlock-fill',
+                    text: 'ไม่มีวิชาถูกบล็อก',
+                    level: 'medium'
+                });
+            }
+
+            if (result.completion_rate >= 80) {
+                positiveFactors.push({
+                    icon: 'bi-speedometer2',
+                    text: 'ความคืบหน้าดีเยี่ยม',
+                    level: 'high'
+                });
+            }
+
+            return { riskFactors, positiveFactors };
+        }
+
+        function displayRiskFactors(riskFactors, positiveFactors) {
+            const riskContainer = document.getElementById('riskFactors');
+            const positiveContainer = document.getElementById('positiveFactors');
+
+            riskContainer.innerHTML = '';
+            positiveContainer.innerHTML = '';
+
+            riskFactors.forEach(factor => {
+                const badge = document.createElement('div');
+                badge.className = `badge bg-${factor.level === 'high' ? 'danger' : 'warning'} me-2 mb-2`;
+                badge.innerHTML = `<i class="${factor.icon}"></i> ${factor.text}`;
+                riskContainer.appendChild(badge);
+            });
+
+            positiveFactors.forEach(factor => {
+                const badge = document.createElement('div');
+                badge.className = `badge bg-${factor.level === 'high' ? 'success' : 'info'} me-2 mb-2`;
+                badge.innerHTML = `<i class="${factor.icon}"></i> ${factor.text}`;
+                positiveContainer.appendChild(badge);
+            });
+
+            if (riskFactors.length === 0) {
+                riskContainer.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> ไม่พบปัจจัยเสี่ยงสำคัญ</span>';
+            }
+
+            if (positiveFactors.length === 0) {
+                positiveContainer.innerHTML = '<span class="text-muted">ไม่มีปัจจัยบวกเด่นชัด</span>';
+            }
+        }
+
+        function generatePersonalizedRecommendations(result, riskScore) {
+            const recommendations = [];
+            // Ensure messagesConfig is loaded
+            if (!messagesConfig || !messagesConfig.recommendations) {
+                console.warn('Messages configuration not loaded for recommendations.');
+                return [];
+            }
+
+            // High risk recommendations
+            if (riskScore >= 60) {
+                recommendations.push({
+                    type: 'urgent',
+                    icon: 'bi-exclamation-triangle-fill',
+                    title: messagesConfig.recommendations.high_risk[0],
+                    items: messagesConfig.recommendations.high_risk.slice(1)
+                });
+            }
+
+            // Medium risk recommendations
+            if (riskScore >= 30 && riskScore < 60) {
+                recommendations.push({
+                    type: 'warning',
+                    icon: 'bi-exclamation-circle-fill',
+                    title: messagesConfig.recommendations.medium_risk[0],
+                    items: messagesConfig.recommendations.medium_risk.slice(1)
+                });
+            }
+
+            // Academic improvement recommendations (from original prompt, not backend config)
+            if (result.gpa_input < 3.0) {
+                recommendations.push({
+                    type: 'improvement',
+                    icon: 'bi-graph-up-arrow',
+                    title: messagesConfig.recommendations.improvement[0],
+                    items: messagesConfig.recommendations.improvement.slice(1)
+                });
+            }
+
+            // General (low risk) recommendations
+            if (riskScore < 30 && result.prediction === 'จบ') {
+                recommendations.push({
+                    type: 'success',
+                    icon: 'bi-award-fill',
+                    title: messagesConfig.recommendations.low_risk[0],
+                    items: messagesConfig.recommendations.low_risk.slice(1)
+                });
+            }
+            // Add a general time management/future planning section regardless of risk
+            recommendations.push({
+                type: 'general',
+                icon: 'bi-calendar-check',
+                title: messagesConfig.recommendations.time_management[0],
+                items: messagesConfig.recommendations.time_management.slice(1)
+            });
+            recommendations.push({
+                type: 'general',
+                icon: 'bi-lightbulb',
+                title: messagesConfig.recommendations.future_planning[0],
+                items: messagesConfig.recommendations.future_planning.slice(1)
+            });
+
+
+            return recommendations;
+        }
+
+        function displayPersonalizedRecommendations(recommendations) {
+            const container = document.getElementById('personalizedRecommendations');
+            container.innerHTML = '';
+
+            if (recommendations.length === 0) {
+                container.innerHTML = '<p class="text-muted">ไม่พบคำแนะนำเฉพาะบุคคล</p>';
+                return;
+            }
+
+            recommendations.forEach(rec => {
+                const card = document.createElement('div');
+                card.className = `recommendation-card recommendation-${rec.type} mb-3`;
+
+                let cardHTML = `
+                    <h6><i class="${rec.icon}"></i> ${rec.title}</h6>
+                    <ul class="mb-0">
+                `;
+
+                rec.items.forEach(item => {
+                    cardHTML += `<li>${item}</li>`;
+                });
+
+                cardHTML += '</ul>';
+                card.innerHTML = cardHTML;
+                container.appendChild(card);
+            });
+        }
+
+        function generateNextTermPriorities(result) {
+            const priorities = [];
+
+            if (result.failed_courses && result.failed_courses.length > 0) {
+                priorities.push({
+                    priority: 'สูงสุด',
+                    color: 'danger',
+                    items: result.failed_courses.map(courseId => `เรียนซ่อม: ${getCourseById(courseId)?.thaiName || courseId}`)
+                });
+            }
+
+            if (result.blocked_courses_details && result.blocked_courses_details.length > 0) {
+                const prereqSubjects = [];
+                result.blocked_courses_details.forEach(blocked => {
+                    blocked.unmet_prereqs.forEach(prereqId => {
+                        if (!prereqSubjects.includes(prereqId)) {
+                            prereqSubjects.push(prereqId);
+                        }
+                    });
+                });
+
+                if (prereqSubjects.length > 0) {
+                    priorities.push({
+                        priority: 'สูง',
+                        color: 'warning',
+                        items: prereqSubjects.map(prereqId => `เรียนวิชาพื้นฐาน: ${getCourseById(prereqId)?.thaiName || prereqId}`)
+                    });
+                }
+            }
+
+            if (result.incomplete_courses && result.incomplete_courses.length > 0) {
+                const nextCourses = result.incomplete_courses.slice(0, 3); // Show top 3
+                priorities.push({
+                    priority: 'ปานกลาง',
+                    color: 'info',
+                    items: nextCourses.map(courseId => `เรียนตามแผน: ${getCourseById(courseId)?.thaiName || courseId}`)
+                });
+            }
+
+            if (priorities.length === 0) {
+                // If no specific issues, recommend focusing on core subjects or next planned courses
+                const nextPlannedCourses = allTermsData[result.loaded_terms_count] ? allTermsData[result.loaded_terms_count]['ids'].slice(0,3).map(id => getCourseById(id)?.thaiName || id) : [];
+                if (nextPlannedCourses.length > 0) {
+                    priorities.push({
+                        priority: 'ทั่วไป',
+                        color: 'success',
+                        items: [`เตรียมตัวสำหรับวิชาในเทอมถัดไป เช่น: ${nextPlannedCourses.join(', ')}`]
+                    });
+                } else {
+                    priorities.push({
+                        priority: 'ทั่วไป',
+                        color: 'secondary',
+                        items: ['รักษาผลการเรียนให้ดีอย่างต่อเนื่อง']
+                    });
+                }
+            }
+
+            return priorities;
+        }
+
+        function displayNextTermPriorities(priorities) {
+            const container = document.getElementById('nextTermPriorities');
+            container.innerHTML = '';
+
+            if (priorities.length === 0) {
+                container.innerHTML = '<p class="text-muted">ไม่มีข้อมูลเพียงพอสำหรับการแนะนำ</p>';
+                return;
+            }
+
+            priorities.forEach(priority => {
+                const card = document.createElement('div');
+                card.className = `card mb-2`;
+                card.innerHTML = `
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <span class="badge bg-${priority.color}">${priority.priority}</span>
+                        </h6>
+                        <ul class="mb-0">
+                            ${priority.items.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateTrendIndicators(currentGPA, predictedGPA) {
+            const gpaTrendElement = document.getElementById('gpaTrend');
+
+            if (predictedGPA > currentGPA + 0.1) {
+                gpaTrendElement.innerHTML = '<i class="bi bi-graph-up-arrow trend-up"></i>';
+                gpaTrendElement.title = 'แนวโน้มเพิ่มขึ้น';
+            } else if (predictedGPA < currentGPA - 0.1) {
+                gpaTrendElement.innerHTML = '<i class="bi bi-graph-down-arrow trend-down"></i>';
+                gpaTrendElement.title = 'แนวโน้มลดลง';
+            } else {
+                gpaTrendElement.innerHTML = '<i class="bi bi-dash-circle trend-stable"></i>';
+                gpaTrendElement.title = 'แนวโน้มคงที่';
+            }
+        }
+
+        function displayAdvancedPredictionResults(result) {
+            console.log('Displaying advanced results:', result);
+            document.getElementById('predictionResultsCard').classList.remove('d-none');
+
+            const riskScore = calculateRiskScore(result);
+
+            document.getElementById('resultStudentName').textContent = result.student_name || 'ไม่ระบุ';
+            document.getElementById('resultGpa').textContent = result.gpa_input ? result.gpa_input.toFixed(2) : '0.00';
+
+            const predictionBadge = document.getElementById('resultPrediction');
+            predictionBadge.textContent = result.prediction;
+            predictionBadge.className = `badge ${result.prediction === 'จบ' ? 'bg-success' : 'bg-danger'}`;
+
+            const riskBadge = document.getElementById('resultRiskLevel');
+            riskBadge.textContent = result.risk_level;
+            riskBadge.className = `risk-indicator risk-${result.risk_level === 'สูง' ? 'high' : result.risk_level === 'ปานกลาง' ? 'medium' : 'low'}`;
+
+            document.getElementById('resultConfidence').textContent = `${(result.confidence * 100).toFixed(1)}%`;
+            document.getElementById('resultCompletionRate').textContent = `${result.completion_rate.toFixed(1)}%`;
+
+            const successProbability = result.prediction_model === 'จบ' ? result.prob_pass * 100 : result.prob_fail * 100;
+            updateProgressRing(Math.round(successProbability));
+
+            document.getElementById('currentGpaMetric').textContent = result.gpa_input ? result.gpa_input.toFixed(2) : '0.00';
+            document.getElementById('predictedNextGpaMetric').textContent = result.next_term_predicted_gpa ? result.next_term_predicted_gpa.toFixed(2) : 'N/A';
+            document.getElementById('riskScoreMetric').textContent = riskScore;
+
+            if (result.next_term_predicted_gpa !== undefined && result.next_term_predicted_gpa !== null) {
+                updateTrendIndicators(result.gpa_input || 0, result.next_term_predicted_gpa);
+            }
+
+            document.getElementById('completedCreditsCount').textContent = result.completedCredits || 0;
+            document.getElementById('failedSubjectsCount').textContent = result.failed_courses ? result.failed_courses.length : 0;
+            document.getElementById('incompleteSubjectsCount').textContent = result.incomplete_courses ? result.incomplete_courses.length : 0;
+            document.getElementById('blockedSubjectsCount').textContent = result.blocked_courses_details ? result.blocked_courses_details.length : 0;
+
+            document.getElementById('graduationStatusText').textContent = result.graduation_status;
+
+            const incompleteText = result.incomplete_courses && result.incomplete_courses.length > 0 ?
+                result.incomplete_courses.slice(0, 5).map(id => getCourseById(id)?.thaiName || id).join(', ') + (result.incomplete_courses.length > 5 ? ` และอีก ${result.incomplete_courses.length - 5} วิชา` : '') : 'ไม่มี';
+            document.getElementById('incompleteCoursesList').innerHTML = `<strong>วิชาที่ยังไม่ผ่าน/ไม่มีเกรด:</strong> ${incompleteText}`;
+
+            const failedText = result.failed_courses && result.failed_courses.length > 0 ? result.failed_courses.map(id => getCourseById(id)?.thaiName || id).join(', ') : 'ไม่มี';
+            document.getElementById('failedCoursesList').innerHTML = `<strong>วิชาที่ได้เกรด F/W/I:</strong> ${failedText}`;
+
+            const blockedText = result.blocked_courses_details && result.blocked_courses_details.length > 0 ?
+                result.blocked_courses_details.map(course => `${getCourseById(course.id)?.thaiName || course.id} (ต้องผ่าน: ${course.unmet_prereqs.map(id => getCourseById(id)?.thaiName || id).join(', ')})`).join('; ') : 'ไม่มี';
+            document.getElementById('blockedCoursesList').innerHTML = `<strong>วิชาที่ถูกบล็อก:</strong> ${blockedText}`;
+
+            const { riskFactors, positiveFactors } = generateRiskFactors(result);
+            displayRiskFactors(riskFactors, positiveFactors);
+
+            const confidenceBar = document.getElementById('confidenceBar');
+            const confidencePercentage = (result.confidence * 100).toFixed(1);
+            confidenceBar.style.width = `${confidencePercentage}%`;
+            confidenceBar.textContent = `${confidencePercentage}%`;
+
+            if (result.confidence >= riskLevelsConfig.high_confidence_threshold) {
+                confidenceBar.className = 'progress-bar bg-success';
+                document.getElementById('confidenceExplanation').textContent = messagesConfig.confidence_levels.high;
+            } else if (result.confidence >= riskLevelsConfig.medium_confidence_threshold) {
+                confidenceBar.className = 'progress-bar bg-warning';
+                document.getElementById('confidenceExplanation').textContent = messagesConfig.confidence_levels.medium;
+            } else {
+                confidenceBar.className = 'progress-bar bg-danger';
+                document.getElementById('confidenceExplanation').textContent = messagesConfig.confidence_levels.low;
+            }
+
+            const recommendations = generatePersonalizedRecommendations(result, riskScore);
+            displayPersonalizedRecommendations(recommendations);
+
+            const priorities = generateNextTermPriorities(result);
+            displayNextTermPriorities(priorities);
+
+            if (result.topological_cycle) {
+                document.getElementById('topologicalCycleWarning').classList.remove('d-none');
+                document.getElementById('topologicalOrderText').textContent = 'ไม่สามารถสร้างลำดับการเรียนได้เนื่องจากมีวงจรใน Prerequisites';
+            } else {
+                document.getElementById('topologicalCycleWarning').classList.add('d-none');
+                document.getElementById('topologicalOrderText').textContent = result.topological_order ? result.topological_order.map(id => getCourseById(id)?.thaiName || id).join(' → ') : 'ไม่มีข้อมูล';
+            }
+
+            const blockedChainInfo = document.getElementById('blockedChainInfo');
+            if (result.blocked_chain_texts && result.blocked_chain_texts.length > 0) {
+                blockedChainInfo.innerHTML = result.blocked_chain_texts.map(text => `<div class="alert alert-warning small">${text.replace(/\n/g, '<br>')}<br></div>`).join('');
+            } else {
+                blockedChainInfo.innerHTML = '';
+            }
+
+            if (result.term_gpas_chart_data && result.term_gpas_chart_data.length > 0) {
+                generateAdvancedGpaTrendChart(
+                    result.term_gpas_chart_data,
+                    result.gpa_input || 0,
+                    result.next_term_predicted_gpa || 0
+                );
+            } else {
+                if (advancedGpaTrendChart) {
+                    advancedGpaTrendChart.destroy();
+                    advancedGpaTrendChart = null;
+                }
+            }
+        }
+
+        async function fetchInitialConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+                if (data.success) {
+                    coursesData = data.COURSES_DATA;
+                    allTermsData = data.ALL_TERMS_DATA;
+                    gradeMapping = data.GRADE_MAPPING;
+                    messagesConfig = data.MESSAGES;
+                    riskLevelsConfig = data.DATA_CONFIG_RISK_LEVELS;
+
+                    console.log('Fetched config:', { coursesData, allTermsData, gradeMapping, messagesConfig, riskLevelsConfig });
+                    
+                    // Initialize coreSubjects if needed from config
+                    if (data.CORE_SUBJECTS) {
+                        coreSubjects = data.CORE_SUBJECTS;
+                    }
+
+                    // Populate the first term and setup the UI
+                    loadInitialTerm();
+                    populateModelSelectForManualPrediction();
+                    updatePrerequisiteStatus(); // Initial status update
+                } else {
+                    showAlert(`เกิดข้อผิดพลาดในการโหลดการตั้งค่า: ${data.error}`, 'danger');
+                    console.error('Failed to load config:', data.error);
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการดึงข้อมูลการตั้งค่าเริ่มต้นจากเซิร์ฟเวอร์', 'danger');
+                console.error('Error fetching config:', error);
+            }
+        }
+
+        $(document).ready(function() {
+            console.log('Document ready, initializing advanced prediction system...');
+
+            fetchInitialConfig(); // Call this to load data first
+
+            initializeEventHandlers();
+
+            setTimeout(() => {
+                document.querySelector('.pulse-animation')?.classList.remove('pulse-animation');
+            }, 3000);
+        });
+
+        function populateTermsAccordion() {
+            const accordion = document.getElementById('termsAccordion');
+            accordion.innerHTML = ''; // Clear existing content
+
+            if (!allTermsData || allTermsData.length === 0) {
+                accordion.innerHTML = '<p class="text-muted">ไม่พบข้อมูลแผนการเรียนหลักสูตร</p>';
+                return;
+            }
+
+            allTermsData.forEach((termData, index) => {
+                const accordionItem = document.createElement('div');
+                accordionItem.className = 'accordion-item';
+                accordionItem.innerHTML = `
+                    <h2 class="accordion-header" id="heading${termData.year}_${termData.term}">
+                        <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#collapse${termData.year}_${termData.term}"
+                                aria-expanded="${index === 0 ? 'true' : 'false'}"
+                                aria-controls="collapse${termData.year}_${termData.term}" data-term-index="${index}">
+                            <div class="term-section-header w-100">
+                                ภาคเรียนที่ ${termData.term} ปีที่ ${termData.year}
+                                <span class="term-locked-msg d-none"> (เทอมนี้ไม่สามารถแก้ไขได้แล้ว)</span>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse${termData.year}_${termData.term}"
+                                class="accordion-collapse collapse ${index === 0 ? 'show' : ''}"
+                                aria-labelledby="heading${termData.year}_${termData.term}"
+                                data-bs-parent="#termsAccordion" data-term-index="${index}">
+                        <div class="accordion-body">
+                            <div class="row row-cols-1 row-cols-md-2 g-3">
+                                ${generateCourseInputs(termData.ids, index)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                accordion.appendChild(accordionItem);
+            });
+            // Initial call to lock terms. Only the first term is unlocked by default.
+            lockTermsExceptCurrent();
+        }
+
+        function generateCourseInputs(courseIds, termIndex) {
+            if (!coursesData || coursesData.length === 0) {
+                return '<p class="text-muted">ไม่พบข้อมูลรายวิชา</p>';
+            }
+            return courseIds.map(courseId => {
+                const course = getCourseById(courseId);
+                if (!course) {
+                    console.warn(`Course with ID ${courseId} not found in coursesData.`);
+                    return '';
+                }
+                const isLockedForInput = termIndex !== currentTermIndex; // Lock if not current term
+                return `
+                    <div class="col">
+                        <div class="input-group input-group-sm subject-input-wrapper">
+                            <span class="input-group-text w-75" title="${course.thaiName} (${course.credit} หน่วยกิต)">
+                                ${course.thaiName}
+                            </span>
+                            <select class="form-select grade-select" id="grade_${course.id}_term_${termIndex}" data-course-id="${course.id}" data-term-index="${termIndex}" ${isLockedForInput ? 'disabled' : ''}>
+                                <option value="">-- เกรด --</option>
+                                ${Object.keys(gradeMapping).map(grade =>
+                                    `<option value="${grade}">${grade}</option>`
+                                ).join('')}
+                            </select>
+                            <div class="blocked-subject-overlay d-none" id="overlay_${course.id}_term_${termIndex}">
+                                <i class="bi bi-lock-fill"></i>
+                                <span class="blocked-reason">ยังไม่ผ่าน Prerequisites:</span>
+                                <span class="prereq-list small"></span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function loadInitialTerm() {
+            if (allTermsData.length > 0) {
+                // Populate all terms but keep only the first one enabled initially
+                populateTermsAccordion();
+                currentTermIndex = 0; // Set the first term as current editable term
+                loadedTermsCount = 1; // Mark the first term as loaded
+                lockTermsExceptCurrent(); // Ensure only the first term is editable
+            } else {
+                document.getElementById('termsAccordion').innerHTML = '<p class="text-muted">ไม่พบข้อมูลแผนการเรียนหลักสูตร</p>';
+            }
+        }
+
+        function lockTermsExceptCurrent() {
+            const termAccordions = document.querySelectorAll('#termsAccordion .accordion-collapse');
+            termAccordions.forEach((accordion, index) => {
+                const selectElements = accordion.querySelectorAll('.grade-select');
+                const termHeaderSpan = accordion.closest('.accordion-item').querySelector('.term-locked-msg');
+
+                if (index < currentTermIndex) {
+                    // Lock past terms
+                    selectElements.forEach(select => {
+                        select.disabled = true;
+                        select.closest('.subject-input-wrapper').querySelector('.blocked-subject-overlay')?.classList.add('d-none'); // Hide overlay for past terms
+                    });
+                    if (termHeaderSpan) termHeaderSpan.classList.remove('d-none');
+                } else if (index === currentTermIndex) {
+                    // Unlock current term
+                    selectElements.forEach(select => {
+                        select.disabled = false;
+                        // Overlays will be managed by updatePrerequisiteStatus()
+                    });
+                    if (termHeaderSpan) termHeaderSpan.classList.add('d-none');
+                } else {
+                    // Lock future terms
+                    selectElements.forEach(select => {
+                        select.disabled = true;
+                        select.closest('.subject-input-wrapper').querySelector('.blocked-subject-overlay')?.classList.add('d-none'); // Hide overlay for future terms
+                        select.value = ""; // Clear grades for future terms
+                    });
+                    if (termHeaderSpan) termHeaderSpan.classList.remove('d-none');
+                }
+            });
+            // Ensure repeatCoursesSection is always active for the current term
+            document.getElementById('repeatCoursesSection').querySelectorAll('select').forEach(s => s.disabled = false);
+            document.getElementById('addRepeatCourseBtn').disabled = false;
+            document.getElementById('openFutureModal').disabled = false;
+        }
+
+        function initializeEventHandlers() {
+            document.getElementById('predictionForm').addEventListener('submit', handleFormSubmission);
+            document.getElementById('modelSelectForManualPrediction').addEventListener('change', function() {
+                const predictBtn = document.getElementById('predictManualBtn');
+                predictBtn.disabled = !this.value;
+            });
+
+            document.getElementById('addRepeatCourseBtn').addEventListener('click', addRepeatCourseInput);
+            document.getElementById('openFutureModal').addEventListener('click', openFutureModal);
+            document.getElementById('addSelectedFutureCoursesBtn').addEventListener('click', addSelectedFutureCoursesToCurrentTerm);
+            document.getElementById('closeFutureModal').addEventListener('click', closeFutureModal);
+
+
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('grade-select') ||
+                    e.target.classList.contains('repeat-grade-select')) {
+                    updatePrerequisiteStatus();
+                }
+            });
+            $('#repeatCoursesSection').on('change', '.select2-hidden-accessible', function() {
+                updatePrerequisiteStatus();
+            });
+
+            document.getElementById('exportReport').addEventListener('click', exportReport);
+        }
+
+        async function handleFormSubmission(event) {
+            event.preventDefault();
+            console.log('Form submitted for advanced prediction!');
+
+            const studentName = document.getElementById('studentName').value.trim();
+            const modelSelect = document.getElementById('modelSelectForManualPrediction');
+            const selectedModelFilename = modelSelect.value;
+
+            if (!selectedModelFilename) {
+                showAlert('กรุณาเลือกโมเดลสำหรับทำนายก่อน', 'warning');
+                return;
+            }
+
+            const currentGrades = {};
+            const repeatedCoursesInThisTermIds = [];
+
+            // Collect grades from normal term accordions (only from terms up to currentTermIndex)
+            document.querySelectorAll('#termsAccordion .accordion-collapse').forEach((accordion, index) => {
+                if (index <= currentTermIndex) {
+                    accordion.querySelectorAll('.grade-select').forEach(select => {
+                        const courseId = select.dataset.courseId;
+                        if (select.value) {
+                            currentGrades[courseId] = select.value;
+                        }
+                    });
+                }
+            });
+
+            // Collect grades from manually added repeat/future courses
+            document.querySelectorAll('#repeatCoursesSection .repeat-course-entry').forEach(entry => {
+                const courseIdSelect2 = entry.querySelector('.repeat-course-autocomplete');
+                const courseId = $(courseIdSelect2).val(); // Get selected value from Select2
+                const gradeSelect = entry.querySelector('.repeat-grade-select');
+
+                if (courseId && gradeSelect && gradeSelect.value) {
+                    const newNumericGrade = getNumericGrade(gradeSelect.value);
+                    const existingNumericGrade = getNumericGrade(currentGrades[courseId]);
+
+                    // If a course is repeated, take the higher grade
+                    if (existingNumericGrade === -1 || newNumericGrade > existingNumericGrade) {
+                        currentGrades[courseId] = gradeSelect.value;
+                    }
+                    repeatedCoursesInThisTermIds.push(courseId);
+                }
+            });
+
+            const enteredGradesCount = Object.keys(currentGrades).filter(cid => currentGrades[cid] !== '').length;
+            if (enteredGradesCount < 1) {
+                showAlert('กรุณากรอกเกรดอย่างน้อย 1 วิชา หรือระบุวิชาซ้ำ/เพิ่มเติมเพื่อทำการทำนาย', 'warning');
+                return;
+            }
+
+            toggleSpinner('predictManualBtn', true);
+            document.getElementById('predictionResultsCard').classList.add('d-none');
+            hideAlert();
+
+            try {
+                console.log('Sending request to enhanced prediction API');
+                const response = await fetch('/api/analyze_curriculum', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_name: studentName,
+                        current_grades: currentGrades,
+                        loaded_terms_count: currentTermIndex + 1, // Pass the number of terms considered
+                        repeated_courses_in_this_term_ids: repeatedCoursesInThisTermIds,
+                        model_filename: selectedModelFilename
+                    })
+                });
+
+                const result = await response.json();
+                console.log('Enhanced prediction response:', result);
+
+                if (result.success) {
+                    displayAdvancedPredictionResults(result);
+                    showAlert('วิเคราะห์และทำนายความสำเร็จเสร็จสิ้น! ระบบได้ประเมินข้อมูลแล้ว', 'success');
+
+                    document.getElementById('predictionResultsCard').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                } else {
+                    showAlert(`เกิดข้อผิดพลาดในการทำนาย: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                console.error('Enhanced prediction error:', error);
+                showAlert('เกิดข้อผิดพลาดในการสื่อสารกับเซิร์ฟเวอร์', 'danger');
+            } finally {
+                toggleSpinner('predictManualBtn', false);
+            }
+        }
+
+        function addRepeatCourseInput() {
+            const container = document.getElementById('repeatCoursesSection');
+            const newRow = document.createElement('div');
+            newRow.className = 'row g-3 mb-2 repeat-course-entry align-items-center'; // Add align-items-center for better vertical alignment
+            newRow.innerHTML = `
+                <div class="col-6">
+                    <div class="subject-input-wrapper">
+                        <select class="form-select form-select-sm repeat-course-autocomplete" style="width: 100%;" data-placeholder="ค้นหาวิชา..."></select>
+                        <div class="blocked-subject-overlay d-none">
+                            <i class="bi bi-lock-fill"></i>
+                            <span class="blocked-reason">ยังไม่ผ่าน Prerequisites:</span>
+                            <span class="prereq-list small"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <select class="form-select form-select-sm repeat-grade-select">
+                        <option value="">-- เกรด --</option>
+                        ${Object.keys(gradeMapping).map(grade =>
+                            `<option value="${grade}">${grade}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="col-2 d-flex justify-content-end">
+                    <button type="button" class="btn btn-danger btn-sm remove-repeat-course-btn">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+
+            container.appendChild(newRow);
+
+            const newCourseSelect = newRow.querySelector('.repeat-course-autocomplete');
+            initializeSelect2ForCourse(newCourseSelect);
+
+            newRow.querySelector('.remove-repeat-course-btn').addEventListener('click', function() {
+                // Remove the course from repeatedCoursesInCurrentTerm
+                const removedCourseId = $(newCourseSelect).val();
+                repeatedCoursesInCurrentTerm = repeatedCoursesInCurrentTerm.filter(c => c.id !== removedCourseId);
+                newRow.remove();
+                updatePrerequisiteStatus();
+            });
+
+            newRow.querySelector('.repeat-grade-select').addEventListener('change', updatePrerequisiteStatus);
+
+            updatePrerequisiteStatus();
+        }
+
+        function initializeSelect2ForCourse(element) {
+            $(element).select2({
+                theme: "bootstrap-5",
+                width: '100%',
+                placeholder: 'ค้นหาด้วยรหัสหรือชื่อวิชา...',
+                allowClear: true,
+                data: coursesData.map(c => ({ id: c.id, text: `${c.thaiName} (${c.id})` })),
+                matcher: function(params, data) {
+                    if ($.trim(params.term) === '') {
+                        return data;
+                    }
+                    if (typeof data.text === 'undefined') {
+                        return null;
+                    }
+                    const term = params.term.toLowerCase();
+                    if (data.text.toLowerCase().includes(term) ||
+                        data.id.toLowerCase().includes(term)) {
+                        return data;
+                    }
+                    return null;
+                }
+            });
+             // Add event listener for when a course is selected/deselected
+            $(element).on('select2:select select2:unselect', function (e) {
+                const selectedId = e.params.data ? e.params.data.id : null;
+                if (selectedId) {
+                    const course = getCourseById(selectedId);
+                    if (e.type === 'select2:select') {
+                        // Add to repeatedCoursesInCurrentTerm if not already there
+                        if (!repeatedCoursesInCurrentTerm.some(c => c.id === course.id)) {
+                             repeatedCoursesInCurrentTerm.push(course);
+                        }
+                    } else { // select2:unselect
+                         repeatedCoursesInCurrentTerm = repeatedCoursesInCurrentTerm.filter(c => c.id !== course.id);
+                    }
+                }
+                updatePrerequisiteStatus();
+            });
+        }
+
+        async function populateModelSelectForManualPrediction() {
+            const selectElement = document.getElementById('modelSelectForManualPrediction');
+            selectElement.innerHTML = '<option value="">-- กำลังโหลดโมเดล --</option>';
+
+            try {
+                const response = await fetch('/api/models');
+                const data = await response.json();
+
+                if (data.success && data.models.length > 0) {
+                    const availableModelsForManual = data.models
+                        .filter(m => m.data_format === 'subject_based' || m.data_format === 'record_based')
+                        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+                    if (availableModelsForManual.length === 0) {
+                        selectElement.innerHTML = '<option value="">-- ไม่มีโมเดลที่เหมาะสม --</option>';
+                        showAlert('ไม่มีโมเดลที่เหมาะสมสำหรับการทำนายรายบุคคล. กรุณาฝึกโมเดล Subject-based หรือ Record-based ก่อน', 'warning');
+                        document.getElementById('predictManualBtn').disabled = true;
+                        return;
+                    }
+
+                    selectElement.innerHTML = '<option value="">-- กรุณาเลือกโมเดล --</option>';
+                    availableModelsForManual.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.filename;
+                        const accuracy = model.performance.accuracy ? (model.performance.accuracy * 100).toFixed(2) : 'N/A';
+                        const createdDate = new Date(model.created_at).toLocaleDateString('th-TH', {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                        option.textContent = `${model.filename} (${model.data_format}, ความแม่นยำ: ${accuracy}% | สร้าง: ${createdDate})`;
+                        selectElement.appendChild(option);
+                    });
+
+                    document.getElementById('predictManualBtn').disabled = !selectElement.value;
+                } else {
+                    selectElement.innerHTML = '<option value="">-- ไม่มีโมเดลที่ฝึกแล้ว --</option>';
+                    showAlert('ไม่มีโมเดลที่ฝึกแล้ว กรุณาไปที่หน้าหลักเพื่ออัปโหลดและฝึกโมเดล', 'warning');
+                    document.getElementById('predictManualBtn').disabled = true;
+                }
+            } catch (error) {
+                console.error('Error loading models:', error);
+                selectElement.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดโมเดล --</option>';
+                showAlert('เกิดข้อผิดพลาดในการโหลดโมเดล', 'danger');
+                document.getElementById('predictManualBtn').disabled = true;
+            }
+        }
+
+        // --- Core Prerequisite Logic (adapted from second code) ---
+        function checkPrerequisites(courseId, currentGrades) {
+            const course = getCourseById(courseId);
+            if (!course || !course.prereq || course.prereq.length === 0) return true;
+
+            return course.prereq.every(prereqId => {
+                const grade = currentGrades[prereqId];
+                return isGradePassing(grade);
+            });
+        }
+
+        function getUnmetPrerequisites(courseId, currentGrades) {
+            const course = getCourseById(courseId);
+            if (!course || !course.prereq) return [];
+            return course.prereq.filter(prereqId => !isGradePassing(currentGrades[prereqId]));
+        }
+
+        function getCurrentGrades() {
+            const grades = {};
+            // Grades from official terms up to currentTermIndex
+            document.querySelectorAll('#termsAccordion .accordion-collapse').forEach((accordion, index) => {
+                if (index <= currentTermIndex) {
+                    accordion.querySelectorAll('.grade-select').forEach(select => {
+                        grades[select.dataset.courseId] = select.value.trim();
+                    });
+                }
+            });
+            // Grades from manually added repeat/future courses
+            document.querySelectorAll('#repeatCoursesSection .repeat-course-entry').forEach(entry => {
+                const courseId = $(entry.querySelector('.repeat-course-autocomplete')).val();
+                const grade = entry.querySelector('.repeat-grade-select').value.trim();
+                if (courseId && grade) {
+                    grades[courseId] = grade;
+                }
+            });
+            return grades;
+        }
+
+        function getAllPastAndCurrentTermCourseIds() {
+            let courseIds = [];
+            for (let i = 0; i <= currentTermIndex; i++) {
+                courseIds = courseIds.concat(allTermsData[i].ids);
+            }
+            courseIds = courseIds.concat(repeatedCoursesInCurrentTerm.map(c => c.id));
+            return Array.from(new Set(courseIds)); // Ensure uniqueness
+        }
+
+
+        function updatePrerequisiteStatus() {
+            const currentGrades = getCurrentGrades();
+            const currentTermCourseIds = Array.from(
+                document.querySelectorAll(`#collapse${allTermsData[currentTermIndex].year}_${allTermsData[currentTermIndex].term} .grade-select`)
+            ).map(s => s.dataset.courseId);
+
+            // Add manually added courses to current term's consideration
+            const allCoursesInCurrentConsideration = new Set(currentTermCourseIds.concat(repeatedCoursesInCurrentTerm.map(c => c.id)));
+
+            // Update status for all courses currently displayed in the active term section
+            document.querySelectorAll(`#termsAccordion .accordion-collapse[data-term-index="${currentTermIndex}"] .subject-input-wrapper, #repeatCoursesSection .subject-input-wrapper`).forEach(wrapper => {
+                const courseId = wrapper.querySelector('.grade-select')?.dataset.courseId || $(wrapper.querySelector('.repeat-course-autocomplete')).val();
+                if (!courseId) return;
+
+                const course = getCourseById(courseId);
+                if (!course) return;
+
+                const overlay = wrapper.querySelector('.blocked-subject-overlay');
+                const prereqListSpan = wrapper.querySelector('.prereq-list');
+                const selectElement = wrapper.querySelector('select.grade-select') || wrapper.querySelector('select.repeat-grade-select');
+                if (!overlay || !prereqListSpan || !selectElement) return;
+
+                let unmetPrereqs = [];
+                let isBlocked = false;
+
+                if (course.prereq && course.prereq.length > 0) {
+                    course.prereq.forEach(prereqId => {
+                        const prereqCourse = getCourseById(prereqId);
+                        const prereqGrade = currentGrades[prereqId];
+
+                        // Check if prerequisite is itself in the current term
+                        const isPrereqInCurrentTerm = allCoursesInCurrentConsideration.has(prereqId);
+
+                        if (isPrereqInCurrentTerm) {
+                            // If the prerequisite is also attempted in the current term, check if they can be taken together
+                            if (!canTakeTogether(course, prereqCourse, currentGrades, Array.from(allCoursesInCurrentConsideration))) {
+                                unmetPrereqs.push(`${prereqCourse?.thaiName || prereqId} (ไม่สามารถลงพร้อมกันได้)`);
+                                isBlocked = true;
+                            }
+                        } else if (!prereqGrade || !isGradePassing(prereqGrade)) {
+                            // If prerequisite is from a previous term and not passed
+                            unmetPrereqs.push(prereqCourse?.thaiName || prereqId);
+                            isBlocked = true;
+                        }
+                    });
+                }
+
+                // Additional check: If the course itself has a failing grade from input (in current view)
+                const currentCourseGradeInput = selectElement.value;
+                if (currentCourseGradeInput && !isGradePassing(currentCourseGradeInput)) {
+                    isBlocked = true;
+                    // Add a message if it's failed, but don't re-add "วิชานี้ไม่ผ่าน" if already blocked by prereqs
+                    if (unmetPrereqs.length === 0 || !unmetPrereqs.some(msg => msg.includes("วิชานี้ไม่ผ่าน"))) {
+                         unmetPrereqs.unshift("วิชานี้ไม่ผ่าน");
+                    }
+                }
+
+                if (isBlocked) {
+                    overlay.classList.remove('d-none');
+                    prereqListSpan.innerHTML = unmetPrereqs.filter(Boolean).join('<br>');
+                    selectElement.disabled = true;
+                    selectElement.value = ''; // Clear selection if blocked
+                } else {
+                    overlay.classList.add('d-none');
+                    prereqListSpan.innerHTML = '';
+                    // Only re-enable if it wasn't already disabled by term locking
+                    if (parseInt(wrapper.closest('.accordion-collapse')?.dataset.termIndex) === currentTermIndex || wrapper.closest('#repeatCoursesSection')) {
+                        selectElement.disabled = false;
+                    }
+                }
+            });
+        }
+
+        // --- Logic for canTakeTogether (from second code) ---
+        function canTakeTogether(courseA, courseB, courseGrades, currentTermCourseIds) {
+            // This function is for specific cases where a lab and its theory can be taken concurrently
+            // if the theory is a direct prerequisite of the lab AND other lab prerequisites are met.
+            // Example: "Physics I Lab" requires "Physics I" - can take both in same term.
+            // But "Calculus II" requiring "Calculus I" means you *must* pass Calc I before Calc II.
+
+            const labKeywords = ["ปฏิบัติการ", "Lab", "การฝึกพื้นฐาน"]; // Added "Lab" to keywords
+            function isLabCourse(c) {
+                return labKeywords.some((kw) => c.thaiName.includes(kw));
+            }
+
+            const AIsLab = isLabCourse(courseA);
+            const BIsLab = isLabCourse(courseB);
+
+            // If both are labs or both are non-labs, they cannot be taken concurrently if one is a prerequisite of the other
+            if (courseA.prereq.includes(courseB.id) && !AIsLab && !BIsLab) return false;
+            if (courseB.prereq.includes(courseA.id) && !AIsLab && !BIsLab) return false;
+
+            // Specific case: A lab course can be taken with its *direct theory prerequisite* in the same term
+            // provided all *other* prerequisites for the lab are already met.
+            let labCourse = null;
+            let theoryCourse = null;
+
+            if (AIsLab && courseA.prereq.includes(courseB.id)) {
+                labCourse = courseA;
+                theoryCourse = courseB;
+            } else if (BIsLab && courseB.prereq.includes(courseA.id)) {
+                labCourse = courseB;
+                theoryCourse = courseA;
+            }
+
+            if (labCourse && theoryCourse) {
+                // Check if all OTHER prerequisites for the lab (excluding the current theory course) are met
+                const otherPrereqsMet = labCourse.prereq.every(prereqId => {
+                    if (prereqId === theoryCourse.id) {
+                        return true; // The theory course is the one we're checking for concurrency
+                    }
+                    // For all other prerequisites, they must already be passed
+                    return isGradePassing(courseGrades[prereqId]);
+                });
+
+                if (otherPrereqsMet) {
+                    return true; // Yes, they can be taken together
+                }
+            }
+            return false; // Otherwise, cannot take together
+        }
+
+        // --- Modal for Future Courses (adapted from second code) ---
+        function openFutureModal() {
+            renderFutureCoursesList();
+            futureModalBackdrop.style.display = "flex";
+        }
+
+        function closeFutureModal() {
+            futureModalBackdrop.style.display = "none";
+        }
+
+        function renderFutureCoursesList() {
+            futureModalContent.innerHTML = "";
+
+            const { canTake, cannotTake } = getAvailableFutureCoursesWithReasons();
+
+            if (canTake.length === 0 && cannotTake.length === 0) {
+                futureModalContent.innerHTML = "<p>ไม่มีวิชาอนาคตเหลือให้ลง</p>";
+                addSelectedFutureCoursesBtn.disabled = true;
+                return;
+            } else {
+                addSelectedFutureCoursesBtn.disabled = false;
+            }
+
+            if (canTake.length > 0) {
+                const canTakeTitle = document.createElement("h4");
+                canTakeTitle.textContent = "สามารถลงได้ (ผ่าน Prerequisite แล้ว):";
+                futureModalContent.appendChild(canTakeTitle);
+
+                canTake.forEach((obj) => {
+                    const block = document.createElement("div");
+                    block.className = "future-course-block";
+                    block.innerHTML = `
+                        <div class="future-course-item">
+                            <input type="checkbox" class="futureCourseCheckbox" value="${obj.id}" />
+                            <label>${obj.thaiName} (${obj.id})</label>
+                        </div>
+                    `;
+                    futureModalContent.appendChild(block);
+                });
+            }
+
+            if (cannotTake.length > 0) {
+                const cannotTakeTitle = document.createElement("h4");
+                cannotTakeTitle.textContent = "ยังไม่สามารถลงได้ เนื่องจาก Prerequisite ไม่ครบ:";
+                futureModalContent.appendChild(cannotTakeTitle);
+
+                cannotTake.forEach((obj) => {
+                    const block = document.createElement("div");
+                    block.className = "future-course-block";
+                    const unmetNames = obj.unmet.map((mid) => getCourseById(mid)?.thaiName || mid).join(", ");
+                    block.innerHTML = `
+                        <div class="future-course-item">
+                            <label>${obj.thaiName} (${obj.id})</label>
+                            <span class="reason"> - ยังไม่ผ่าน: ${unmetNames}</span>
+                        </div>
+                    `;
+                    futureModalContent.appendChild(block);
+                });
+            }
+        }
+
+        function getAvailableFutureCoursesWithReasons() {
+            const allCoursesInPlan = new Set(allTermsData.flatMap(term => term.ids));
+            const currentGrades = getCurrentGrades(); // Includes grades from past terms and current term's inputs
+
+            const takenOrCurrentlyAttempted = new Set(Object.keys(currentGrades));
+            repeatedCoursesInCurrentTerm.forEach(c => takenOrCurrentlyAttempted.add(c.id));
+
+            const potentialFutureCourses = Array.from(allCoursesInPlan).filter(id => !takenOrCurrentlyAttempted.has(id));
+
+            const canTake = [];
+            const cannotTake = [];
+
+            potentialFutureCourses.forEach(courseId => {
+                const unmet = getUnmetPrerequisites(courseId, currentGrades);
+                const course = getCourseById(courseId);
+
+                if (unmet.length === 0) {
+                    canTake.push(course);
+                } else {
+                    cannotTake.push({ ...course, unmet });
+                }
+            });
+
+            return { canTake, cannotTake };
+        }
+
+        function addSelectedFutureCoursesToCurrentTerm() {
+            const checkboxes = futureModalContent.querySelectorAll(".futureCourseCheckbox:checked");
+            if (!checkboxes.length) {
+                closeFutureModal();
+                return;
+            }
+
+            const selectedCourseIds = Array.from(checkboxes).map((cb) => cb.value);
+            const currentTermSection = document.querySelector(`#termsAccordion .accordion-collapse[data-term-index="${currentTermIndex}"] .accordion-body .row`);
+            if (!currentTermSection) {
+                showAlert('ไม่พบส่วนสำหรับเพิ่มวิชาในเทอมปัจจุบัน', 'danger');
+                return;
+            }
+
+            selectedCourseIds.forEach((cid) => {
+                const course = getCourseById(cid);
+                if (!course) return;
+
+                // Check if the course is already in the current term's official plan or manually added
+                const isAlreadyInTerm = allTermsData[currentTermIndex]?.ids.includes(cid) || repeatedCoursesInCurrentTerm.some(c => c.id === cid);
+                if (isAlreadyInTerm) {
+                    showAlert(`วิชา ${course.thaiName} (${course.id}) ถูกเพิ่มแล้ว`, 'info');
+                    return;
+                }
+
+                repeatedCoursesInCurrentTerm.push(course);
+
+                // Create a new input group for the selected future course
+                const newRepeatCourseEntry = document.createElement('div');
+                newRepeatCourseEntry.className = 'row g-3 mb-2 repeat-course-entry align-items-center';
+                newRepeatCourseEntry.innerHTML = `
+                    <div class="col-6">
+                        <div class="subject-input-wrapper">
+                            <select class="form-select form-select-sm repeat-course-autocomplete" style="width: 100%;" data-placeholder="ค้นหาวิชา..."></select>
+                            <div class="blocked-subject-overlay d-none">
+                                <i class="bi bi-lock-fill"></i>
+                                <span class="blocked-reason">ยังไม่ผ่าน Prerequisites:</span>
+                                <span class="prereq-list small"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <select class="form-select form-select-sm repeat-grade-select">
+                            <option value="">-- เกรด --</option>
+                            ${Object.keys(gradeMapping).map(grade =>
+                                `<option value="${grade}">${grade}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="col-2 d-flex justify-content-end">
+                        <button type="button" class="btn btn-danger btn-sm remove-repeat-course-btn">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                `;
+                document.getElementById('repeatCoursesSection').appendChild(newRepeatCourseEntry);
+
+                const newSelect2 = newRepeatCourseEntry.querySelector('.repeat-course-autocomplete');
+                initializeSelect2ForCourse(newSelect2);
+                $(newSelect2).val(cid).trigger('change'); // Set the selected course
+
+                newRepeatCourseEntry.querySelector('.remove-repeat-course-btn').addEventListener('click', function() {
+                    repeatedCoursesInCurrentTerm = repeatedCoursesInCurrentTerm.filter(c => c.id !== cid);
+                    newRepeatCourseEntry.remove();
+                    updatePrerequisiteStatus();
+                });
+                newRepeatCourseEntry.querySelector('.repeat-grade-select').addEventListener('change', updatePrerequisiteStatus);
+            });
+
+            updatePrerequisiteStatus();
+            closeFutureModal();
+        }
+
+
+        // --- Analytical Functions (from second code) ---
+
+        function getTermWiseGPAs() {
+            let results = [];
+            for (let i = 0; i < loadedTermsCount; i++) {
+                const termAccordion = document.querySelector(`#termsAccordion .accordion-collapse[data-term-index="${i}"]`);
+                if (!termAccordion) continue;
+
+                const selects = termAccordion.querySelectorAll('.grade-select');
+                let totalPoints = 0;
+                let totalCreditsConsidered = 0; // Credits for GPA calculation
+
+                selects.forEach(sel => {
+                    const grade = sel.value;
+                    const courseId = sel.dataset.courseId;
+                    const c = getCourseById(courseId);
+                    if (!c || !grade || grade.trim() === '') return;
+
+                    const numericGrade = getNumericGrade(grade);
+                    if (numericGrade !== -1) { // Only count grades that have a numeric value (i.e., not empty)
+                        totalPoints += numericGrade * c.credit;
+                        // Only add credits if the grade is passing (not F, W, I, etc. if they map to 0)
+                        if (isGradePassing(grade)) {
+                            totalCreditsConsidered += c.credit;
+                        }
+                    }
+                });
+
+                // Include grades from repeated courses *for the current term* in the current term's GPA
+                if (i === currentTermIndex) {
+                    document.querySelectorAll('#repeatCoursesSection .repeat-course-entry').forEach(entry => {
+                        const courseId = $(entry.querySelector('.repeat-course-autocomplete')).val();
+                        const grade = entry.querySelector('.repeat-grade-select').value;
+                        const c = getCourseById(courseId);
+                        if (!c || !grade || grade.trim() === '') return;
+
+                        const numericGrade = getNumericGrade(grade);
+                         if (numericGrade !== -1) {
+                            totalPoints += numericGrade * c.credit;
+                            if (isGradePassing(grade)) {
+                                totalCreditsConsidered += c.credit;
+                            }
+                        }
+                    });
+                }
+
+
+                let termGPA = (totalCreditsConsidered > 0) ? (totalPoints / totalCreditsConsidered) : 0;
+                // If no grades entered for a term, it might be 0. We might want to skip it for chart if it's explicitly 0 due to no input.
+                // For now, let's include it.
+
+                const { year, term } = allTermsData[i];
+                const label = `ปี${year} เทอม${term}`;
+                results.push({ label, gpa: parseFloat(termGPA.toFixed(2)) });
+            }
+            return results;
+        }
+
+        function linearRegressionNextTermGPA(termGPAs) {
+            if (termGPAs.length === 0) return 0;
+            if (termGPAs.length === 1) return termGPAs[0].gpa;
+
+            const n = termGPAs.length;
+            let xVals = [];
+            let yVals = [];
+            for (let i = 0; i < n; i++) {
+                xVals.push(i+1);
+                yVals.push(termGPAs[i].gpa);
+            }
+
+            let sumX = xVals.reduce((a,b) => a+b, 0);
+            let sumY = yVals.reduce((a,b) => a+b, 0);
+            let sumXY = 0;
+            let sumXX = 0;
+            for (let i=0; i<n; i++){
+                sumXY += xVals[i]*yVals[i];
+                sumXX += xVals[i]*xVals[i];
+            }
+
+            // Avoid division by zero if all X values are the same (shouldn't happen with i+1)
+            const denominator = (n*sumXX - sumX*sumX);
+            if (denominator === 0) {
+                 return termGPAs[n-1].gpa; // If no variance in X, predict last GPA
+            }
+
+            const slope = (n*sumXY - sumX*sumY) / denominator;
+            const intercept = (sumY - slope*sumX)/n;
+
+            let predicted = slope*(n+1) + intercept;
+            if (predicted < 0) predicted = 0;
+            if (predicted > 4) predicted = 4;
+
+            return predicted;
+        }
+
+
+        function calculateGPAAndFailedCourses(courseGrades) {
+            let totalPoints = 0;
+            let completedCredits = 0; // Credits for GPA calculation (only for passing grades)
+            let totalAttemptedCredits = 0; // Total credits attempted (for overall progress)
+            let failedCourses = []; // IDs of failed courses (grade 'F' or not passing)
+
+            Object.entries(courseGrades).forEach(([cid, grade]) => {
+                const course = getCourseById(cid);
+                if (!course) return;
+
+                if (grade && grade.trim() !== "") {
+                    totalAttemptedCredits += course.credit;
+                    const numericGrade = getNumericGrade(grade);
+
+                    if (isGradePassing(grade)) {
+                        totalPoints += numericGrade * course.credit;
+                        completedCredits += course.credit;
+                    } else {
+                        failedCourses.push(cid);
+                    }
+                }
+            });
+
+            const avgGPA = completedCredits > 0 ? totalPoints / completedCredits : 0;
+            return { avgGPA, completedCredits, totalAttemptedCredits, failedCourses };
+        }
+
+        function findBlockedCoursesDetails(courseGrades) {
+            const allCoursesInPlan = new Set(allTermsData.flatMap(term => term.ids));
+            repeatedCoursesInCurrentTerm.map(c => allCoursesInPlan.add(c.id)); // Include manually added
+
+            const blockedCoursesDetails = [];
+            Array.from(allCoursesInPlan).forEach(courseId => {
+                const course = getCourseById(courseId);
+                if (!course) return;
+
+                const currentGrade = courseGrades[courseId];
+                // Only consider blocking if the course hasn't been passed yet (or not attempted)
+                if (!currentGrade || !isGradePassing(currentGrade)) {
+                    const unmetPrereqs = getUnmetPrerequisites(courseId, courseGrades);
+                    if (unmetPrereqs.length > 0) {
+                        blockedCoursesDetails.push({
+                            id: courseId,
+                            name: course.thaiName,
+                            unmet_prereqs: unmetPrereqs
+                        });
+                    }
+                }
+            });
+            return blockedCoursesDetails;
+        }
+
+        function buildDependencyGraph(allCurriculumCourses) {
+            const graph = {};
+            const reverseGraph = {}; // For finding courses that depend on a given course
+
+            allCurriculumCourses.forEach(course => {
+                graph[course.id] = [];
+                reverseGraph[course.id] = [];
+            });
+
+            allCurriculumCourses.forEach(course => {
+                course.prereq.forEach(p => {
+                    if (graph[p] !== undefined) { // Check if prerequisite course exists in our current set
+                        graph[p].push(course.id);
+                    }
+                    if (reverseGraph[course.id] !== undefined) {
+                        reverseGraph[course.id].push(p);
+                    }
+                });
+            });
+            return { graph, reverseGraph };
+        }
+
+        function findAffectedCourses(failedCourseId, dependencyGraph) {
+            const affected = new Set();
+            const queue = [failedCourseId];
+            while (queue.length > 0) {
+                const current = queue.shift();
+                const dependents = dependencyGraph.graph[current] || [];
+                dependents.forEach(dep => {
+                    if (!affected.has(dep)) {
+                        affected.add(dep);
+                        queue.push(dep);
+                    }
+                });
+            }
+            return Array.from(affected);
+        }
+
+        function getBlockedChainTexts(failedCourses, currentGrades, allCurriculumCourses) {
+            const { graph } = buildDependencyGraph(allCurriculumCourses);
+            const blockedChainTexts = [];
+
+            failedCourses.forEach(failedCid => {
+                const affectedCourses = findAffectedCourses(failedCid, { graph });
+                if (affectedCourses.length > 0) {
+                    const failedCourseName = getCourseById(failedCid)?.thaiName || failedCid;
+                    let chainText = `${failedCourseName} (${failedCid}) ไม่ผ่าน ส่งผลกระทบต่อ:\n`;
+                    affectedCourses.forEach(affectedCid => {
+                        const affectedCourseName = getCourseById(affectedCid)?.thaiName || affectedCid;
+                        chainText += `  - ${affectedCourseName} (${affectedCid})\n`;
+                    });
+                    blockedChainTexts.push(chainText);
+                }
+            });
+            return blockedChainTexts;
+        }
+
+        function topologicalSortWithCycleCheck(allCurriculumCourses) {
+            const { graph, reverseGraph } = buildDependencyGraph(allCurriculumCourses);
+            const inDegree = {};
+            allCurriculumCourses.forEach(c => inDegree[c.id] = 0);
+
+            allCurriculumCourses.forEach(course => {
+                course.prereq.forEach(p => {
+                    if (inDegree[course.id] !== undefined) inDegree[course.id]++;
+                });
+            });
+
+            const queue = [];
+            for (let cid in inDegree) {
+                if (inDegree[cid] === 0) queue.push(cid);
+            }
+
+            const order = [];
+            let count = 0;
+
+            while (queue.length > 0) {
+                const u = queue.shift();
+                order.push(u);
+                count++;
+                (graph[u] || []).forEach(v => {
+                    if (inDegree[v] !== undefined) {
+                        inDegree[v]--;
+                        if (inDegree[v] === 0) queue.push(v);
+                    }
+                });
+            }
+
+            if (count !== allCurriculumCourses.length) {
+                return { order: [], cycle: true };
+            }
+            return { order, cycle: false };
+        }
+
+
+        // Alert and Spinner functions
+        function showAlert(message, type = 'danger') {
+            const alertArea = document.getElementById('alertArea');
+            alertArea.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            `;
+        }
+
+        function hideAlert() {
+            const alertArea = document.getElementById('alertArea');
+            alertArea.innerHTML = '';
+        }
+
+        function toggleSpinner(buttonId, show) {
+            const button = document.getElementById(buttonId);
+            const spinner = button.querySelector('span');
+            if (show) {
+                spinner.classList.remove('d-none');
+                button.disabled = true;
+                button.classList.add('pulse-animation');
+            } else {
+                spinner.classList.add('d-none');
+                button.disabled = false;
+                button.classList.remove('pulse-animation');
+            }
+        }
+
+        function exportReport() {
+            // Recalculate or collect current displayed data
+            const studentName = document.getElementById('studentName').value.trim();
+            const currentGpa = document.getElementById('resultGpa').textContent;
+            const prediction = document.getElementById('resultPrediction').textContent;
+            const riskLevel = document.getElementById('resultRiskLevel').textContent;
+            const confidence = document.getElementById('resultConfidence').textContent;
+            const completionRate = document.getElementById('resultCompletionRate').textContent;
+            const graduationStatus = document.getElementById('graduationStatusText').textContent;
+            const currentGpaMetric = document.getElementById('currentGpaMetric').textContent;
+            const predictedNextGpaMetric = document.getElementById('predictedNextGpaMetric').textContent;
+            const riskScoreMetric = document.getElementById('riskScoreMetric').textContent;
+            const completedCreditsCount = document.getElementById('completedCreditsCount').textContent;
+            const failedSubjectsCount = document.getElementById('failedSubjectsCount').textContent;
+            const incompleteSubjectsCount = document.getElementById('incompleteSubjectsCount').textContent;
+            const blockedSubjectsCount = document.getElementById('blockedSubjectsCount').textContent;
+
+            // Extract content from lists, accounting for "No" messages
+            const incompleteCoursesList = document.getElementById('incompleteCoursesList').textContent.replace('วิชาที่ยังไม่ผ่าน/ไม่มีเกรด: ', '');
+            const failedCoursesList = document.getElementById('failedCoursesList').textContent.replace('วิชาที่ได้เกรด F/W/I: ', '');
+            const blockedCoursesList = document.getElementById('blockedCoursesList').textContent.replace('วิชาที่ถูกบล็อก: ', '');
+
+            const riskFactors = Array.from(document.getElementById('riskFactors').children).map(el => el.textContent.trim()).join(', ');
+            const positiveFactors = Array.from(document.getElementById('positiveFactors').children).map(el => el.textContent.trim()).join(', ');
+            const confidenceExplanation = document.getElementById('confidenceExplanation').textContent;
+            const personalizedRecommendations = Array.from(document.getElementById('personalizedRecommendations').querySelectorAll('li')).map(el => el.textContent.trim());
+            const topologicalOrder = document.getElementById('topologicalOrderText').textContent;
+            const topologicalCycleWarning = document.getElementById('topologicalCycleWarning').classList.contains('d-none') ? 'ไม่มี' : document.getElementById('topologicalCycleWarning').textContent.trim();
+            const blockedChainInfo = Array.from(document.getElementById('blockedChainInfo').children).map(el => el.textContent.trim().replace(/\s+/g, ' ')).join('\n');
+            const nextTermPriorities = Array.from(document.getElementById('nextTermPriorities').querySelectorAll('li')).map(el => el.textContent.trim());
+            const timestamp = new Date().toLocaleString('th-TH');
+
+            const reportText = `
+รายงานการทำนายความสำเร็จทางการศึกษา
+==========================================
+
+ข้อมูลนักศึกษา:
+- ชื่อ: ${studentName || 'ไม่ระบุ'}
+- เกรดเฉลี่ยปัจจุบัน: ${currentGpa}
+- ผลการทำนาย: ${prediction}
+- ระดับความเสี่ยง: ${riskLevel}
+- ความเชื่อมั่นของโมเดล: ${confidence}
+- โอกาสจบตามหลักสูตร: ${completionRate}
+- สถานะการจบการศึกษา: ${graduationStatus}
+
+ภาพรวมการเรียน:
+- GPA ปัจจุบัน: ${currentGpaMetric}
+- GPA คาดการณ์เทอมหน้า: ${predictedNextGpaMetric}
+- คะแนนความเสี่ยง (0-100): ${riskScoreMetric}
+
+สถิติการเรียน:
+- หน่วยกิตที่ผ่าน: ${completedCreditsCount}
+- วิชาที่ตก (F/W/I): ${failedSubjectsCount}
+- วิชาที่ยังไม่ผ่าน/ไม่มีเกรด: ${incompleteSubjectsCount}
+- วิชาที่ถูกบล็อก (Prerequisite): ${blockedSubjectsCount}
+
+ปัญหาที่ต้องระวัง:
+- วิชาที่ยังไม่ผ่าน/ไม่มีเกรด: ${incompleteCoursesList}
+- วิชาที่ได้เกรด F/W/I: ${failedCoursesList}
+- วิชาที่ถูกบล็อก: ${blockedCoursesList}
+
+การประเมินความเสี่ยงแบบละเอียด:
+- ปัจจัยความเสี่ยง: ${riskFactors || 'ไม่มี'}
+- ปัจจัยบวก: ${positiveFactors || 'ไม่มี'}
+- ความเชื่อมั่นของโมเดล AI: ${confidenceExplanation}
+
+คำแนะนำเฉพาะบุคคล:
+${personalizedRecommendations.map(rec => `- ${rec}`).join('\n')}
+
+แผนการเรียนที่แนะนำ:
+- ลำดับการเรียนที่แนะนำ (Topological Order): ${topologicalOrder}
+- คำเตือนเรื่องวงจรในวิชา (Cycle in prerequisites): ${topologicalCycleWarning}
+- ข้อมูลวิชาที่ถูกบล็อกและผลกระทบ:
+${blockedChainInfo || 'ไม่มี'}
+- เทอมถัดไป ควรให้ความสำคัญกับ:
+${nextTermPriorities.map(p => `- ${p}`).join('\n')}
+
+สร้างรายงานเมื่อ: ${timestamp}
+            `;
+
+            const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prediction_report_${studentName.replace(/[^a-zA-Z0-9ก-ฮ-_\.]/g, '_') || 'student'}_${new Date().getTime()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showAlert('ส่งออกรายงานเสร็จสิ้น', 'success');
+        }
+
+        // --- Sidebar Toggles ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            sidebar.classList.toggle("active");
+            document.body.classList.toggle("sidebar-open");
+
+            const hamburgerIcon = document.querySelector('.hamburger i');
+            if (sidebar.classList.contains('active')) {
+                hamburgerIcon.classList.remove('fa-bars');
+                hamburgerIcon.classList.add('fa-times');
+            } else {
+                hamburgerIcon.classList.remove('fa-times');
+                hamburgerIcon.classList.add('fa-bars');
+            }
+        }
+
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const hamburger = document.querySelector('.hamburger');
+            if (
+                window.innerWidth <= 768 &&
+                !sidebar.contains(event.target) &&
+                event.target !== hamburger &&
+                !hamburger.contains(event.target) &&
+                sidebar.classList.contains('active') // Only close if it's open
+            ) {
+                sidebar.classList.remove('active');
+                document.body.classList.remove('sidebar-open');
+
+                const hamburgerIcon = document.querySelector('.hamburger i');
+                hamburgerIcon.classList.remove('fa-times');
+                hamburgerIcon.classList.add('fa-bars');
+            }
+        });
+
+        // --- Dark Mode ---
+        function toggleDarkMode() {
+            const body = document.body;
+            const darkModeBtn = document.querySelector('.dark-mode-toggle');
+            body.classList.toggle("dark-mode");
+            darkModeBtn.classList.toggle("active");
+        }
+
+    </script>
+</body>
+</html>
