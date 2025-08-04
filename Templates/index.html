@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบทำนายความสำเร็จของนักศึกษา</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Variables and Base Styles */
+        :root {
+            --primary-orange: #FF8C42;
+            --secondary-orange: #FFB574;
+            --light-orange: #FFE5D4;
+            --dark-orange: #E67A2E;
+            --white: #FFFFFF;
+            --light-gray: #F8F9FA;
+            --medium-gray: #E9ECEF;
+            --dark-gray: #6C757D;
+            --text-dark: #212529;
+            --success-color: #28A745;
+            --danger-color: #DC3545;
+            --warning-color: #FFC107;
+            --info-color: #17A2B8;
+            --border-radius: 12px;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.05); /* Lighter shadow for flat design */
+            --shadow-md: 0 4px 8px rgba(0,0,0,0.08); /* Lighter shadow for flat design */
+            --shadow-lg: 0 8px 16px rgba(0,0,0,0.1); /* Lighter shadow for flat design */
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--light-gray); /* Simpler, flatter background */
+            font-family: 'Kanit', sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px 0;
+            color: var(--text-dark);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; /* Align to start for better scrolling experience */
+        }
+
+        .main-container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+
+        /* Header Styles */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            background: var(--white); /* Flat background */
+            padding: 1.5rem 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm); /* Reduced shadow */
+            border: 1px solid var(--medium-gray); /* Subtle border */
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .page-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--primary-orange);
+            margin: 0;
+            text-shadow: none; /* No text shadow for flat design */
+        }
+
+        /* Card Styles */
+        .custom-card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm); /* Reduced shadow */
+            border: 1px solid var(--medium-gray);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease; /* Smoother, faster transition */
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .custom-card:hover {
+            transform: translateY(-3px); /* Less dramatic hover effect */
+            box-shadow: var(--shadow-md); /* Slightly more prominent shadow on hover */
+        }
+
+        .card-header-custom {
+            background: var(--primary-orange); /* Solid orange background for flat design */
+            color: var(--white);
+            padding: 1.2rem 1.8rem;
+            font-weight: 600;
+            font-size: 1.1rem;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+        }
+
+        .card-body-custom {
+            padding: 1.8rem;
+            background: var(--white);
+        }
+
+        /* Status Card - Adjusted to fit flat design */
+        .status-card {
+            background: var(--light-gray); /* Lighter background for status card */
+            border: 1px solid var(--medium-gray);
+        }
+
+        .status-item {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            transition: all 0.2s ease; /* Faster transition */
+            border-radius: var(--border-radius);
+            background: var(--white); /* White background for individual items */
+            margin: 0.5rem; /* Add some margin between status items */
+            box-shadow: var(--shadow-sm);
+        }
+
+        .status-item:hover {
+            background: var(--light-orange); /* Subtle hover effect */
+            transform: translateY(-2px); /* Less dramatic scale */
+            box-shadow: var(--shadow-md);
+        }
+
+        .status-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-dark); /* Darker text for better contrast */
+            margin-bottom: 0.8rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            margin-bottom: 0.8rem;
+        }
+
+        .status-info {
+            font-size: 0.85rem;
+            color: var(--dark-gray);
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* Button Styles */
+        .btn-custom {
+            border-radius: 8px;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            transition: all 0.2s ease; /* Smoother, faster transition */
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            font-size: 0.95rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm); /* Subtle shadow for buttons */
+        }
+
+        .btn-custom:active {
+            transform: translateY(1px); /* Simple click effect */
+            box-shadow: none; /* Remove shadow on active */
+        }
+
+        .btn-primary-custom {
+            background: var(--primary-orange); /* Solid color */
+            color: var(--white);
+        }
+
+        .btn-primary-custom:hover {
+            background: var(--dark-orange); /* Darker shade on hover */
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+            color: var(--white);
+        }
+
+        .btn-success-custom {
+            background: var(--success-color);
+            color: var(--white);
+        }
+
+        .btn-success-custom:hover {
+            background: #20A83A;
+            transform: translateY(-1px);
+            color: var(--white);
+        }
+
+        .btn-warning-custom {
+            background: var(--warning-color);
+            color: var(--white);
+        }
+
+        .btn-warning-custom:hover {
+            background: #E0A800;
+            transform: translateY(-1px);
+            color: var(--white);
+        }
+
+        .btn-danger-custom {
+            background: var(--danger-color);
+            color: var(--white);
+        }
+
+        .btn-danger-custom:hover {
+            background: #C82333;
+            transform: translateY(-1px);
+            color: var(--white);
+        }
+
+        .btn-outline-orange {
+            border: 2px solid var(--primary-orange); /* Solid border for outline */
+            color: var(--primary-orange);
+            background: transparent; /* No background blur */
+            font-weight: 600;
+            box-shadow: none; /* No shadow for outline button */
+        }
+
+        .btn-outline-orange:hover {
+            background: var(--light-orange); /* Light orange background on hover */
+            color: var(--dark-orange);
+            border-color: var(--dark-orange);
+            transform: translateY(-1px);
+        }
+        
+        .btn-standard-check {
+            background: var(--primary-orange);
+            color: var(--white);
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-standard-check:hover {
+            background: var(--dark-orange);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+            color: var(--white);
+        }
+
+        /* Form Styles */
+        .form-label-custom {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .form-control-custom {
+            border: 1px solid var(--medium-gray); /* Thinner border for flatter look */
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            transition: all 0.2s ease; /* Faster transition */
+            background: var(--white);
+            font-size: 0.95rem;
+        }
+
+        .form-control-custom:focus {
+            border-color: var(--primary-orange);
+            box-shadow: 0 0 0 0.15rem rgba(255, 140, 66, 0.15); /* Softer focus shadow */
+            outline: none;
+            background: var(--white); /* Keep background white on focus */
+        }
+
+        /* Table Styles */
+        .table-custom {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--medium-gray); /* Add a border to the table container */
+        }
+
+        .table-custom thead th {
+            background: var(--primary-orange); /* Solid background */
+            color: var(--white);
+            font-weight: 600;
+            border: none;
+            padding: 1.2rem 1rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .table-custom tbody td {
+            padding: 1rem;
+            border-color: var(--light-gray);
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        .table-custom tbody tr {
+            transition: background-color 0.2s ease; /* Smoother transition */
+        }
+
+        .table-custom tbody tr:hover {
+            background: var(--light-orange); /* Subtle highlight */
+            transform: none; /* No scale on hover for table rows */
+        }
+
+        /* Badge Styles */
+        .badge-custom {
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            display: inline-block;
+            box-shadow: var(--shadow-sm); /* Subtle shadow for badges */
+        }
+
+        .badge-success-custom { background: var(--success-color); color: var(--white); }
+        .badge-danger-custom { background: var(--danger-color); color: var(--white); }
+        .badge-warning-custom { background: var(--warning-color); color: var(--white); }
+        .badge-secondary-custom { background: var(--dark-gray); color: var(--white); }
+        .badge-orange-custom { background: var(--primary-orange); color: var(--white); }
+
+        /* Alert Styles */
+        .alert-custom {
+            border-radius: var(--border-radius);
+            border: 1px solid transparent; /* Subtle border for alerts */
+            padding: 1.2rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .alert-success-custom {
+            background: #e6ffe9; /* Very light green */
+            border-color: var(--success-color);
+            color: #155724;
+        }
+
+        .alert-danger-custom {
+            background: #ffe6e8; /* Very light red */
+            border-color: var(--danger-color);
+            color: #721c24;
+        }
+
+        .alert-info-custom {
+            background: #fff0e6; /* Very light orange */
+            border-color: var(--primary-orange);
+            color: var(--dark-orange);
+        }
+
+        /* Spinner */
+        .spinner-custom {
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 1.5rem;
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--medium-gray);
+        }
+
+        /* Accordion Styles */
+        .accordion-custom .accordion-item {
+            border: 1px solid var(--medium-gray);
+            border-radius: var(--border-radius);
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .accordion-custom .accordion-button {
+            background: var(--light-gray);
+            border: none;
+            padding: 1.2rem 1.5rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .accordion-custom .accordion-button:not(.collapsed) {
+            background: var(--primary-orange); /* Solid orange when open */
+            color: var(--white);
+        }
+
+        .accordion-custom .accordion-body {
+            padding: 1.5rem;
+            background: var(--white);
+        }
+
+        /* List Group */
+        .list-group-custom .list-group-item {
+            border: 1px solid var(--medium-gray);
+            border-radius: 8px;
+            margin-bottom: 0.3rem;
+            padding: 1rem 1.2rem;
+            background: var(--white);
+            transition: all 0.2s ease;
+        }
+
+        .list-group-custom .list-group-item:hover {
+            background: var(--light-orange);
+            transform: translateX(3px); /* Subtle slide effect */
+        }
+
+        /* File Info Display */
+        .file-info-display {
+            background: var(--light-orange);
+            border: 1px solid var(--secondary-orange); /* Thinner border */
+            border-radius: var(--border-radius);
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .file-info-display p {
+            margin: 0.3rem 0;
+            font-weight: 500;
+        }
+
+        /* Action Buttons Container */
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+                padding: 1rem;
+            }
+
+            .page-title {
+                font-size: 1.8rem;
+            }
+
+            .card-body-custom {
+                padding: 1rem;
+            }
+
+            .status-item {
+                padding: 1rem 0.5rem;
+                margin: 0.3rem 0; /* Adjust margin for mobile */
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .btn-custom {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 576px) {
+            body {
+                padding: 15px 0;
+            }
+            .main-container {
+                padding: 0 10px;
+            }
+            
+            .page-title {
+                font-size: 1.5rem;
+            }
+            .page-header {
+                padding: 1rem 1.2rem;
+            }
+        }
+
+        /* Utility Classes */
+        .text-muted-custom { color: var(--dark-gray) !important; }
+        .fw-medium { font-weight: 500; }
+        .fw-semibold { font-weight: 600; }
+        .text-orange { color: var(--primary-orange) !important; }
+        .d-none { display: none !important; }
+        .d-flex { display: flex !important; }
+        .align-items-center { align-items: center !important; }
+        .justify-content-between { justify-content: space-between !important; }
+        .gap-2 { gap: 0.5rem !important; }
+        .mb-3 { margin-bottom: 1rem !important; }
+        .mt-4 { margin-top: 1.5rem !important; }
+
+        /* Loading Animation */
+        .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: var(--dark-gray);
+            padding: 2rem 0;
+        }
+
+        /* Close Button for Alerts */
+        .btn-close {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: inherit;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+
+        .btn-close:hover {
+            opacity: 1;
+        }
+
+        /* Ripple Effect CSS - Simplified for flat design, no complex shadows */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2); /* Lighter ripple */
+            animation: ripple-animation 0.5s ease-out forwards; /* Faster, smoother animation */
+            pointer-events: none;
+            transform: scale(0);
+        }
+
+        @keyframes ripple-animation {
+            to {
+                transform: scale(3.5); /* Slightly smaller ripple */
+                opacity: 0;
+            }
+        }
+        
+        /* General Fade-in Animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Popup Styles (Modal) */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); /* Slightly darker overlay */
+            display: none; align-items: center; justify-content: center;
+            z-index: 1050;
+            transition: background 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-dialog-custom {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            max-width: 430px; width: 95vw;
+            padding: 1.8rem 1.5rem 1.5rem 1.5rem; /* Adjusted padding */
+            animation: popupIn 0.3s cubic-bezier(.4,2,.6,1); /* Faster animation */
+            position: relative;
+            outline: none;
+            border: 1px solid var(--medium-gray);
+        }
+
+        .modal-header-custom {
+            display: flex; justify-content: space-between; align-items: center;
+            font-weight: 600; font-size: 1.15rem; color: var(--primary-orange);
+            margin-bottom: 1.1rem;
+        }
+
+        .modal-close-btn {
+            background: transparent; border: none; font-size: 1.5rem;
+            color: var(--primary-orange); cursor: pointer; transition: color 0.2s;
+            line-height: 1; /* Align 'x' correctly */
+            padding: 0.2rem;
+            margin-right: -0.5rem; /* Pull button slightly right */
+        }
+
+        .modal-close-btn:hover {
+            color: var(--dark-orange);
+        }
+
+        .modal-body-custom {
+            color: var(--text-dark);
+            font-size: 1.03rem;
+        }
+
+        .modal-body-custom ul {
+            padding-left: 1.2em;
+            margin-bottom: 1.2em;
+        }
+
+        .modal-body-custom li {
+            margin-bottom: 0.5em;
+        }
+
+        @keyframes popupIn {
+            0% { opacity: 0; transform: scale(0.95) translateY(10px);}
+            100% { opacity: 1; transform: scale(1) translateY(0);}
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="page-header">
+            <h1 class="page-title">🎓 ระบบทำนายความสำเร็จของนักศึกษา</h1>
+            <div class="d-flex gap-2 align-items-center">
+                <a href="/test" class="btn-custom btn-outline-orange">
+                    <i class="bi bi-person-fill-check"></i> ทดสอบรายบุคคล
+                </a>
+                <button class="btn-custom btn-standard-check" id="openCheckBtn" aria-haspopup="dialog" aria-controls="checkModal">
+                    <i class="bi bi-shield-check"></i> ตรวจสอบมาตรฐาน
+                </button>
+            </div>
+        </div>
+
+        <div class="custom-card status-card">
+            <div class="card-header-custom">
+                <i class="bi bi-cpu"></i> สถานะโมเดล
+            </div>
+            <div class="card-body-custom">
+                <div class="row">
+                    <div class="col-md-4 status-item">
+                        <div class="status-title">โมเดลรายวิชา (Subject-based)</div>
+                        <div id="subject-model-status" class="status-badge">
+                            <span class="badge-custom badge-secondary-custom">กำลังตรวจสอบ...</span>
+                        </div>
+                        <div id="subject-model-info" class="status-info"></div>
+                    </div>
+                    <div class="col-md-4 status-item">
+                        <div class="status-title">โมเดล GPA (GPA-based)</div>
+                        <div id="gpa-model-status" class="status-badge">
+                            <span class="badge-custom badge-secondary-custom">กำลังตรวจสอบ...</span>
+                        </div>
+                        <div id="gpa-model-info" class="status-info"></div>
+                    </div>
+                    <div class="col-md-4 status-item">
+                        <div class="status-title">โมเดล Records (Record-based)</div>
+                        <div id="record-model-status" class="status-badge">
+                            <span class="badge-custom badge-secondary-custom">กำลังตรวจสอบ...</span>
+                        </div>
+                        <div id="record-model-info" class="status-info"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="custom-card">
+            <div class="card-header-custom">
+                <i class="bi bi-database-fill"></i> จัดการโมเดลที่ฝึกแล้ว
+            </div>
+            <div class="card-body-custom">
+                <div class="table-responsive">
+                    <table class="table table-custom">
+                        <thead>
+                            <tr>
+                                <th>ชื่อไฟล์</th>
+                                <th>รูปแบบข้อมูล</th>
+                                <th>ความแม่นยำ</th>
+                                <th>สร้างเมื่อ</th>
+                                <th>Features สำคัญ</th>
+                                <th>จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modelListTableBody">
+                            <tr>
+                                <td colspan="6">
+                                    <div class="loading-container">
+                                        <span class="spinner-custom"></span>
+                                        <span>กำลังโหลดข้อมูลโมเดล...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="custom-card">
+            <div class="card-header-custom">
+                <i class="bi bi-cloud-upload-fill"></i> อัปโหลดไฟล์ข้อมูล
+            </div>
+            <div class="card-body-custom">
+                <div class="mb-3">
+                    <label for="fileUpload" class="form-label-custom">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> เลือกไฟล์ CSV หรือ Excel สำหรับการฝึกหรือทำนาย
+                    </label>
+                    <input class="form-control-custom" type="file" id="fileUpload" accept=".csv, .xlsx, .xls">
+                </div>
+                <button class="btn-custom btn-primary-custom" id="uploadBtn" onclick="uploadFile()">
+                    <span id="uploadSpinner" class="spinner-custom d-none"></span>
+                    <i class="bi bi-upload"></i> อัปโหลดไฟล์
+                </button>
+            </div>
+        </div>
+
+        <div id="actionsCard" class="custom-card d-none">
+            <div class="card-header-custom">
+                <i class="bi bi-gear-fill"></i> เลือกการดำเนินการ
+            </div>
+            <div class="card-body-custom">
+                <div class="file-info-display">
+                    <p><i class="bi bi-file-text"></i> <strong>ไฟล์:</strong> <span id="fileName" class="text-orange fw-semibold"></span></p>
+                    <p><i class="bi bi-diagram-3"></i> <strong>รูปแบบข้อมูล:</strong> <span id="dataFormat" class="badge-custom badge-orange-custom"></span></p>
+                    <p><i class="bi bi-info-circle"></i> <span id="fileInfo" class="text-muted-custom fw-medium"></span></p>
+                </div>
+
+                <div class="mb-3">
+                    <label for="modelSelectForPrediction" class="form-label-custom">
+                        <i class="bi bi-robot"></i> เลือกโมเดลสำหรับทำนาย
+                    </label>
+                    <select class="form-control-custom" id="modelSelectForPrediction">
+                        <option value="">-- กรุณาเลือกโมเดล --</option>
+                    </select>
+                </div>
+
+                <div id="trainingStatusMessage" class="alert-custom alert-info-custom d-none">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="spinner-custom"></span>
+                        <span class="fw-medium">กำลังเริ่มต้นการฝึกโมเดล...</span>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn-custom btn-success-custom" id="trainBtn" onclick="trainModel()" disabled>
+                        <span id="trainSpinner" class="spinner-custom d-none"></span>
+                        <i class="bi bi-gear-wide-connected"></i> ฝึกโมเดล
+                    </button>
+                    <button class="btn-custom btn-primary-custom" id="predictBtn" onclick="predictData()" disabled>
+                        <span id="predictSpinner" class="spinner-custom d-none"></span>
+                        <i class="bi bi-magic"></i> ทำนายผล
+                    </button>
+                    <button class="btn-custom btn-warning-custom" id="analyzeBtn" onclick="analyzeSubjects()" disabled>
+                        <span id="analyzeSpinner" class="spinner-custom d-none"></span>
+                        <i class="bi bi-bar-chart-line-fill"></i> วิเคราะห์รายวิชา
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="alertArea"></div>
+
+        <div id="resultsCard" class="custom-card d-none">
+            <div class="card-header-custom" id="resultsHeader">
+                <i class="bi bi-graph-up"></i> ผลลัพธ์
+            </div>
+            <div class="card-body-custom">
+                <div id="summary"></div>
+                <div id="results"></div>
+                <div id="analysis-results"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="checkModalOverlay" class="modal-overlay" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog-custom" role="dialog" aria-modal="true" aria-labelledby="checkModalTitle">
+            <div class="modal-header-custom">
+                <span id="checkModalTitle"><i class="bi bi-shield-check"></i> ผลการตรวจสอบมาตรฐาน</span>
+                <button class="modal-close-btn" id="closeCheckBtn" aria-label="ปิดป็อบอัพ">&times;</button>
+            </div>
+            <div class="modal-body-custom">
+                <ul>
+                    <li>✅ ผ่านเกณฑ์ข้อมูลส่วนตัว</li>
+                    <li>✅ ผ่านเกณฑ์คะแนน GPA</li>
+                    <li>✅ ผ่านเกณฑ์ความแม่นยำของโมเดล</li>
+                    <li>✅ ผ่านเกณฑ์ความปลอดภัยของข้อมูล</li>
+                    <li>❌ <span style="color: var(--danger-color);">ไม่ผ่านเกณฑ์การเข้าเรียน</span><br>
+                        <small>ควรเข้าเรียนอย่างน้อย 80% เพื่อให้ผลการทำนายแม่นยำมากขึ้น</small>
+                    </li>
+                </ul>
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn-custom btn-outline-orange btn-sm" id="nextErrorBtn">
+                        <i class="bi bi-arrow-right-circle"></i> ดูข้อผิดพลาดถัดไป
+                    </button>
+                    <button class="btn-custom btn-primary-custom btn-sm" id="downloadReportBtn">
+                        <i class="bi bi-download"></i> ดาวน์โหลดรายงาน
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let currentFilename = '';
+        let currentDetectedDataFormat = '';
+        let availableModels = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial checks and setup
+            checkModelStatus();
+            listModels();
+            initializePopup();
+            
+            // Set intervals for automatic updates, but stop if tab is hidden
+            let statusCheckInterval;
+            let modelListInterval;
+
+            function startIntervals() {
+                if (!statusCheckInterval) {
+                    statusCheckInterval = setInterval(checkModelStatus, 30000); // Check every 30 seconds
+                }
+                if (!modelListInterval) {
+                    modelListInterval = setInterval(listModels, 60000); // Check every 60 seconds
+                }
+            }
+
+            function stopIntervals() {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+                clearInterval(modelListInterval);
+                modelListInterval = null;
+            }
+
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    stopIntervals();
+                } else {
+                    startIntervals();
+                    checkModelStatus(); // Refresh immediately when tab becomes visible
+                    listModels(); // Refresh immediately when tab becomes visible
+                }
+            });
+
+            startIntervals(); // Start intervals on initial load
+            
+            // Event listener for model selection dropdown
+            document.getElementById('modelSelectForPrediction').addEventListener('change', function() {
+                const predictBtn = document.getElementById('predictBtn');
+                predictBtn.disabled = !this.value; // Enable predict button only if a model is selected
+            });
+
+            // Add ripple effect to all custom buttons
+            const buttons = document.querySelectorAll('.btn-custom');
+            buttons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    // Only add ripple if the button is not disabled
+                    if (this.disabled) {
+                        e.preventDefault(); // Prevent default action for disabled buttons
+                        return;
+                    }
+
+                    const ripple = document.createElement('span');
+                    const rect = this.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    const x = e.clientX - rect.left - size / 2;
+                    const y = e.clientY - rect.top - size / 2;
+                    
+                    ripple.style.cssText = `
+                        position: absolute;
+                        width: ${size}px;
+                        height: ${size}px;
+                        left: ${x}px;
+                        top: ${y}px;
+                        background: rgba(255, 255, 255, 0.2);
+                        border-radius: 50%;
+                        transform: scale(0);
+                        animation: ripple-animation 0.5s ease-out forwards;
+                        pointer-events: none;
+                    `;
+                    
+                    // Ensure position and overflow properties are set for ripple
+                    this.style.position = 'relative';
+                    this.style.overflow = 'hidden';
+                    this.appendChild(ripple);
+                    
+                    // Remove ripple after animation
+                    ripple.addEventListener('animationend', () => {
+                        ripple.remove();
+                    });
+                });
+            });
+
+            // Global error handler (basic)
+            window.addEventListener('error', function(e) {
+                console.error('JavaScript Error:', e.error);
+                showAlert('เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง', 'danger');
+            });
+        });
+
+        /**
+         * Initializes and handles the logic for the standard check popup (modal).
+         */
+        function initializePopup() {
+            const openBtn = document.getElementById('openCheckBtn');
+            const overlay = document.getElementById('checkModalOverlay');
+            const closeBtn = document.getElementById('closeCheckBtn');
+            const nextErrorBtn = document.getElementById('nextErrorBtn');
+            const downloadReportBtn = document.getElementById('downloadReportBtn');
+
+            // Open modal handler
+            openBtn.addEventListener('click', () => {
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                closeBtn.focus(); // Focus on close button for accessibility
+            });
+
+            // Close modal handler
+            closeBtn.addEventListener('click', () => {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                openBtn.focus(); // Return focus to the button that opened the modal
+            });
+
+            // Close modal on outside click
+            overlay.addEventListener('mousedown', e => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('active');
+                    overlay.setAttribute('aria-hidden', 'true');
+                    openBtn.focus();
+                }
+            });
+
+            // Close modal on Escape key press
+            window.addEventListener('keydown', e => {
+                if (overlay.classList.contains('active') && e.key === 'Escape') {
+                    overlay.classList.remove('active');
+                    overlay.setAttribute('aria-hidden', 'true');
+                    openBtn.focus();
+                }
+            });
+
+            // Placeholder for "next error" functionality
+            nextErrorBtn.addEventListener('click', () => {
+                showAlert('แสดงข้อผิดพลาดถัดไป: ฟังก์ชันนี้สำหรับแสดงข้อผิดพลาดอื่นๆ ที่พบ (ตัวอย่าง)', 'info'); 
+            });
+
+            // Placeholder for "download report" functionality
+            downloadReportBtn.addEventListener('click', () => {
+                showAlert('กำลังดาวน์โหลดรายงานการตรวจสอบมาตรฐาน... (ตัวอย่าง)', 'info'); 
+            });
+        }
+
+        /**
+         * Displays an alert message at the top of the content area.
+         * @param {string} message The message to display.
+         * @param {'success'|'danger'|'warning'|'info'} type The type of alert (influences color and icon).
+         */
+        function showAlert(message, type = 'danger') {
+            const alertArea = document.getElementById('alertArea');
+            // Remove any existing alerts before showing a new one to prevent clutter
+            alertArea.innerHTML = ''; 
+
+            const alertClass = type === 'success' ? 'alert-success-custom' : 
+                               type === 'info' ? 'alert-info-custom' : 
+                               type === 'warning' ? 'alert-warning-custom' : 'alert-danger-custom';
+            
+            const icon = type === 'success' ? 'bi-check-circle-fill' : 
+                         type === 'info' ? 'bi-info-circle-fill' : 
+                         type === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-x-circle-fill'; 
+            
+            const alertHtml = `
+                <div class="alert-custom ${alertClass}" role="alert" aria-live="polite">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi ${icon}"></i>
+                        <span class="fw-medium">${message}</span>
+                    </div>
+                    <button type="button" class="btn-close" aria-label="ปิดการแจ้งเตือน" onclick="this.closest('.alert-custom').remove()">
+                        &times;
+                    </button>
+                </div>`;
+            alertArea.innerHTML = alertHtml;
+
+            // Automatically remove alert after 5 seconds, unless it's a "danger" alert
+            // Danger alerts usually require user action or explicit acknowledgement
+            if (type !== 'danger') {
+                setTimeout(() => {
+                    const currentAlert = alertArea.querySelector('.alert-custom');
+                    if (currentAlert) {
+                        currentAlert.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        /**
+         * Toggles the visibility of a spinner within a button and disables/enables the button.
+         * @param {string} buttonId The ID of the button element.
+         * @param {boolean} show True to show spinner and disable button, false to hide spinner and enable button.
+         */
+        function toggleSpinner(buttonId, show) {
+            const button = document.getElementById(buttonId);
+            const spinner = button.querySelector('.spinner-custom');
+            const icon = button.querySelector('i'); 
+
+            if (show) {
+                spinner.classList.remove('d-none');
+                if (icon) icon.classList.add('d-none'); // Hide icon when spinner is active
+                button.disabled = true;
+                button.style.opacity = '0.8'; 
+                button.style.cursor = 'not-allowed';
+            } else {
+                spinner.classList.add('d-none');
+                if (icon) icon.classList.remove('d-none'); // Show icon when spinner is not active
+                button.disabled = false;
+                button.style.opacity = '1';
+                button.style.cursor = 'pointer';
+            }
+        }
+
+        /**
+         * Fetches model status from the backend and updates the UI.
+         */
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/model_status');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                updateStatusUI('subject', data.subject_model, data.subject_model_info);
+                updateStatusUI('gpa', data.gpa_model, data.gpa_model_info);
+                updateStatusUI('record', data.record_model, data.record_model_info);
+
+            } catch (error) {
+                console.error('Error checking model status:', error);
+                // Only show a general server error if *all* checks fail, to avoid spamming
+                const currentSubjectStatus = document.getElementById('subject-model-status').querySelector('.badge-danger-custom');
+                const currentGpaStatus = document.getElementById('gpa-model-status').querySelector('.badge-danger-custom');
+                const currentRecordStatus = document.getElementById('record-model-status').querySelector('.badge-danger-custom');
+
+                if (!currentSubjectStatus || !currentGpaStatus || !currentRecordStatus) {
+                     showAlert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์เพื่อตรวจสอบสถานะโมเดลได้ หรือเกิดข้อผิดพลาดในการดึงข้อมูล', 'danger');
+                }
+                updateStatusUI('subject', false); 
+                updateStatusUI('gpa', false);
+                updateStatusUI('record', false);
+            }
+        }
+        
+        /**
+         * Updates the UI elements for a specific model's status (e.g., Subject, GPA, Record).
+         * @param {string} modelType Identifier for the model (e.g., 'subject', 'gpa', 'record').
+         * @param {boolean} isReady True if the model is ready, false otherwise.
+         * @param {object|null} info Model information like accuracy and creation date, if available.
+         */
+        function updateStatusUI(modelType, isReady, info) {
+            const statusEl = document.getElementById(`${modelType}-model-status`);
+            const infoEl = document.getElementById(`${modelType}-model-info`);
+            
+            if (isReady) {
+                statusEl.innerHTML = '<span class="badge-custom badge-success-custom"><i class="bi bi-check-circle"></i> พร้อมใช้งาน</span>';
+                if (info) {
+                    const createdDate = new Date(info.created_at).toLocaleString('th-TH', { 
+                        year: 'numeric', month: 'short', day: 'numeric', 
+                        hour: '2-digit', minute: '2-digit' 
+                    });
+                    infoEl.innerHTML = `<strong>ความแม่นยำ:</strong> ${(info.accuracy * 100).toFixed(2)}%<br><strong>สร้างเมื่อ:</strong> ${createdDate}`;
+                } else {
+                    infoEl.innerHTML = ''; 
+                }
+            } else {
+                statusEl.innerHTML = '<span class="badge-custom badge-danger-custom"><i class="bi bi-x-circle"></i> ยังไม่มีโมเดล</span>';
+                infoEl.innerHTML = 'กรุณาอัปโหลดข้อมูลและฝึกโมเดลก่อน';
+            }
+        }
+
+        /**
+         * Fetches the list of trained models from the backend and populates the table and dropdown.
+         */
+        async function listModels() {
+            try {
+                const response = await fetch('/api/models');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const modelListBody = document.getElementById('modelListTableBody');
+                modelListBody.innerHTML = ''; 
+                availableModels = data.models;
+
+                if (availableModels.length === 0) {
+                    modelListBody.innerHTML = `
+                        <tr>
+                            <td colspan="6">
+                                <div class="text-center text-muted-custom py-4">
+                                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                    <p class="mt-2 mb-0">ยังไม่มีโมเดลที่ฝึกแล้ว</p>
+                                </div>
+                            </td>
+                        </tr>`;
+                    populateModelSelect([]); 
+                    return;
+                }
+
+                // Sort models by creation date, newest first
+                availableModels.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+                availableModels.forEach(model => {
+                    const createdDate = new Date(model.created_at).toLocaleString('th-TH', { 
+                        year: 'numeric', month: 'short', day: 'numeric', 
+                        hour: '2-digit', minute: '2-digit' 
+                    });
+                    const accuracy = model.performance && model.performance.accuracy ? (model.performance.accuracy * 100).toFixed(2) + '%' : 'N/A';
+                    
+                    let featureImportancesHtml = '';
+                    if (model.feature_importances && Object.keys(model.feature_importances).length > 0) {
+                        featureImportancesHtml = Object.entries(model.feature_importances)
+                            .sort(([, a], [, b]) => b - a) // Sort features by importance (descending)
+                            .slice(0, 3) // Show top 3 features
+                            .map(([feature, importance]) => 
+                                `<small class="d-block"><strong>${feature}:</strong> ${importance.toFixed(3)}</small>`)
+                            .join('');
+                    } else {
+                        featureImportancesHtml = '<small class="text-muted-custom">ไม่มีข้อมูล</small>';
+                    }
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="fw-semibold text-orange">${model.filename}</td>
+                        <td><span class="badge-custom badge-orange-custom">${model.data_format}</span></td>
+                        <td><span class="badge-custom badge-success-custom">${accuracy}</span></td>
+                        <td class="text-muted-custom">${createdDate}</td>
+                        <td>${featureImportancesHtml}</td>
+                        <td>
+                            <button class="btn-custom btn-danger-custom" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="deleteModel('${model.filename}')">
+                                <i class="bi bi-trash"></i> ลบ
+                            </button>
+                        </td>
+                    `;
+                    modelListBody.appendChild(row);
+                });
+                populateModelSelect(availableModels);
+
+            } catch (error) {
+                console.error('Error listing models:', error);
+                showAlert('เกิดข้อผิดพลาดในการโหลดรายการโมเดล', 'danger');
+                document.getElementById('modelListTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0">เกิดข้อผิดพลาดในการโหลดรายการโมเดล</p>
+                        </td>
+                    </tr>`;
+                populateModelSelect([]);
+            }
+        }
+
+        /**
+         * Populates the dropdown list for selecting a model for prediction.
+         * @param {Array<object>} models An array of model objects.
+         */
+        function populateModelSelect(models) {
+            const selectElement = document.getElementById('modelSelectForPrediction');
+            selectElement.innerHTML = '<option value="">-- กรุณาเลือกโมเดล --</option>';
+
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.filename;
+                const accuracy = model.performance && model.performance.accuracy ? (model.performance.accuracy * 100).toFixed(2) : 'N/A';
+                const createdDate = new Date(model.created_at).toLocaleDateString('th-TH');
+                option.textContent = `${model.filename} (${model.data_format}, ${accuracy}%, ${createdDate})`;
+                selectElement.appendChild(option);
+            });
+            // Initially disable predict button if no model is selected
+            document.getElementById('predictBtn').disabled = !selectElement.value; 
+        }
+
+        /**
+         * Sends a request to delete a specified model from the backend.
+         * @param {string} filename The filename of the model to delete.
+         */
+        async function deleteModel(filename) {
+            if (!confirm(`คุณแน่ใจหรือไม่ที่จะลบโมเดล '${filename}'?\nการดำเนินการนี้ไม่สามารถยกเลิกได้`)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/models/${filename}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showAlert(`ลบโมเดล '${filename}' สำเร็จแล้ว`, 'success');
+                    listModels(); 
+                    checkModelStatus(); 
+                } else {
+                    showAlert(`เกิดข้อผิดพลาดในการลบโมเดล: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์', 'danger');
+                console.error('Delete model error:', error);
+            }
+        }
+
+        /**
+         * Uploads a selected data file to the backend for processing.
+         */
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileUpload');
+            if (fileInput.files.length === 0) {
+                showAlert('กรุณาเลือกไฟล์ก่อนอัปโหลด', 'warning');
+                return;
+            }
+            
+            toggleSpinner('uploadBtn', true);
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    currentFilename = result.filename;
+                    currentDetectedDataFormat = result.data_format;
+                    document.getElementById('actionsCard').classList.remove('d-none');
+                    document.getElementById('fileName').textContent = result.filename;
+                    document.getElementById('dataFormat').textContent = result.data_format || 'ไม่รู้จัก';
+                    document.getElementById('fileInfo').textContent = `จำนวนแถว: ${result.rows} | คอลัมน์: ${result.columns}`;
+                    
+                    const analyzeBtn = document.getElementById('analyzeBtn');
+                    const trainBtn = document.getElementById('trainBtn');
+                    
+                    // Enable/disable buttons based on data format
+                    analyzeBtn.disabled = (result.data_format !== 'subject_based' && result.data_format !== 'record_based');
+                    trainBtn.disabled = !currentFilename || currentDetectedDataFormat === 'unknown';
+                    document.getElementById('predictBtn').disabled = true; 
+
+                    showAlert(`อัปโหลดไฟล์ '${result.filename}' สำเร็จแล้ว!`, 'success');
+                    document.getElementById('resultsCard').classList.add('d-none'); 
+                } else {
+                    showAlert(result.error || 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'danger');
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์', 'danger');
+                console.error('Upload error:', error);
+            } finally {
+                toggleSpinner('uploadBtn', false);
+            }
+        }
+
+        /**
+         * Initiates the model training process on the backend.
+         */
+        async function trainModel() {
+            if (!currentFilename) {
+                showAlert('กรุณาอัปโหลดไฟล์ก่อนฝึกโมเดล', 'warning');
+                return;
+            }
+            
+            const modelTypeForTraining = currentDetectedDataFormat; 
+            if (modelTypeForTraining === 'unknown' || !modelTypeForTraining) {
+                showAlert('ไม่สามารถระบุรูปแบบข้อมูลได้ กรุณาตรวจสอบไฟล์ที่อัปโหลด', 'danger');
+                return;
+            }
+
+            toggleSpinner('trainBtn', true);
+            document.getElementById('resultsCard').classList.add('d-none');
+            
+            const trainingStatusMessageEl = document.getElementById('trainingStatusMessage');
+            trainingStatusMessageEl.classList.remove('d-none');
+            trainingStatusMessageEl.classList.remove('alert-danger-custom');
+            trainingStatusMessageEl.classList.add('alert-info-custom');
+            trainingStatusMessageEl.querySelector('span:last-child').textContent = 'กำลังเริ่มต้นการฝึกโมเดล...';
+
+            try {
+                // Simulate training steps with delays for better UX
+                const updateStatus = async (message, delay = 800) => {
+                    trainingStatusMessageEl.querySelector('span:last-child').textContent = message;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                };
+
+                await updateStatus('กำลังประมวลผลข้อมูล...');
+                await updateStatus('กำลังปรับจูน RandomForest...', 1000);
+                await updateStatus('กำลังปรับจูน Gradient Boosting...', 1000);
+                await updateStatus('กำลังปรับจูน Logistic Regression...', 1000);
+                await updateStatus('กำลังประเมินผลโมเดล...', 1000);
+
+                const response = await fetch('/train', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        filename: currentFilename,
+                        model_type: modelTypeForTraining
+                    })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('ฝึกโมเดลสำเร็จ! 🎉', 'success');
+                    displayTrainingResults(result);
+                    checkModelStatus(); 
+                    listModels(); 
+                    trainingStatusMessageEl.querySelector('span:last-child').textContent = 'การฝึกโมเดลเสร็จสิ้น!';
+                } else {
+                    showAlert(`เกิดข้อผิดพลาดในการฝึก: ${result.error}`, 'danger');
+                    trainingStatusMessageEl.querySelector('span:last-child').textContent = `การฝึกโมเดลล้มเหลว: ${result.error}`;
+                    trainingStatusMessageEl.classList.remove('alert-info-custom');
+                    trainingStatusMessageEl.classList.add('alert-danger-custom');
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์', 'danger');
+                console.error('Train error:', error);
+                trainingStatusMessageEl.querySelector('span:last-child').textContent = 'เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์';
+                trainingStatusMessageEl.classList.remove('alert-info-custom');
+                trainingStatusMessageEl.classList.add('alert-danger-custom');
+            } finally {
+                toggleSpinner('trainBtn', false);
+                setTimeout(() => {
+                    trainingStatusMessageEl.classList.add('d-none'); 
+                    trainingStatusMessageEl.classList.remove('alert-danger-custom');
+                    trainingStatusMessageEl.classList.add('alert-info-custom'); 
+                }, 3000);
+            }
+        }
+
+        /**
+         * Sends a request to the backend to perform data prediction using a selected model.
+         */
+        async function predictData() {
+            if (!currentFilename) {
+                showAlert('กรุณาอัปโหลดไฟล์ก่อนทำนาย', 'warning');
+                return;
+            }
+            const modelSelect = document.getElementById('modelSelectForPrediction');
+            const selectedModelFilename = modelSelect.value;
+
+            if (!selectedModelFilename) {
+                showAlert('กรุณาเลือกโมเดลสำหรับทำนาย', 'warning');
+                return;
+            }
+
+            toggleSpinner('predictBtn', true);
+            document.getElementById('resultsCard').classList.add('d-none');
+            
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: currentFilename, model_filename: selectedModelFilename })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('ทำนายผลสำเร็จ! 🔮', 'success');
+                    displayPredictionResults(result);
+                } else {
+                    showAlert(`เกิดข้อผิดพลาดในการทำนาย: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์', 'danger');
+                console.error('Predict error:', error);
+            } finally {
+                toggleSpinner('predictBtn', false);
+            }
+        }
+
+        /**
+         * Sends a request to the backend to perform subject-based analysis.
+         */
+        async function analyzeSubjects() {
+            if (!currentFilename) {
+                showAlert('กรุณาอัปโหลดไฟล์ก่อนวิเคราะห์', 'warning');
+                return;
+            }
+            
+            if (currentDetectedDataFormat !== 'subject_based' && currentDetectedDataFormat !== 'record_based') {
+                showAlert('รูปแบบข้อมูลนี้ไม่รองรับการวิเคราะห์รายวิชา', 'info');
+                return;
+            }
+
+            toggleSpinner('analyzeBtn', true);
+            document.getElementById('resultsCard').classList.add('d-none');
+            
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: currentFilename })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showAlert('วิเคราะห์รายวิชาสำเร็จ! 📊', 'success');
+                    displayAnalysisResults(result);
+                } else {
+                    showAlert(`เกิดข้อผิดพลาดในการวิเคราะห์: ${result.error}`, 'danger');
+                }
+            } catch (error) {
+                showAlert('เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์', 'danger');
+                console.error('Analyze error:', error);
+            } finally {
+                toggleSpinner('analyzeBtn', false);
+            }
+        }
+
+        /**
+         * Returns the appropriate badge class based on risk level.
+         * @param {'สูง'|'ปานกลาง'|'ต่ำ'} level The risk level.
+         * @returns {string} The CSS class name for the badge.
+         */
+        function getRiskBadge(level) {
+            switch(level) {
+                case 'สูง': return 'badge-danger-custom';
+                case 'ปานกลาง': return 'badge-warning-custom';
+                case 'ต่ำ': return 'badge-success-custom';
+                default: return 'badge-secondary-custom';
+            }
+        }
+
+        /**
+         * Displays the results of the model training process.
+         * @param {object} data The training results data from the backend.
+         */
+        function displayTrainingResults(data) {
+            const card = document.getElementById('resultsCard');
+            card.classList.remove('d-none');
+            document.getElementById('resultsHeader').innerHTML = '<i class="bi bi-graph-up"></i> สรุปผลการฝึกโมเดล';
+            
+            document.getElementById('summary').innerHTML = `
+                <div class="row mb-4 g-3">
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--success-color); border-radius: var(--border-radius);">
+                            <div class="fw-medium">Accuracy</div>
+                            <div class="h3 fw-bold mb-0">${(data.accuracy * 100).toFixed(2)}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--primary-orange); border-radius: var(--border-radius);">
+                            <div class="fw-medium">Precision</div>
+                            <div class="h3 fw-bold mb-0">${(data.precision * 100).toFixed(2)}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--info-color); border-radius: var(--border-radius);">
+                            <div class="fw-medium">Recall</div>
+                            <div class="h3 fw-bold mb-0">${(data.recall * 100).toFixed(2)}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--warning-color); border-radius: var(--border-radius);">
+                            <div class="fw-medium">F1-Score</div>
+                            <div class="h3 fw-bold mb-0">${(data.f1_score * 100).toFixed(2)}%</div>
+                        </div>
+                    </div>
+                </div>
+                <hr style="border-color: var(--medium-gray);">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="p-3" style="background: var(--light-gray); border-radius: var(--border-radius);">
+                            <p class="mb-2"><i class="bi bi-database"></i> <strong>ข้อมูลที่ใช้:</strong></p>
+                            <p class="mb-1">• ตัวอย่างฝึก: <span class="badge-custom badge-orange-custom">${data.training_samples}</span></p>
+                            <p class="mb-0">• ตัวอย่างทดสอบ: <span class="badge-custom badge-orange-custom">${data.validation_samples}</span></p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3" style="background: var(--light-gray); border-radius: var(--border-radius);">
+                            <p class="mb-2"><i class="bi bi-gear"></i> <strong>รายละเอียดโมเดล:</strong></p>
+                            <p class="mb-1">• Features: <span class="badge-custom badge-orange-custom">${data.features_count}</span></p>
+                            <p class="mb-0">• รูปแบบ: <span class="badge-custom badge-orange-custom">${data.data_format}</span></p>
+                        </div>
+                    </div>
+                </div>
+                <h5 class="mt-4 mb-3 text-orange"><i class="bi bi-star-fill"></i> Features สำคัญ (จาก RandomForest)</h5>
+                ${data.feature_importances && Object.keys(data.feature_importances).length > 0
+                    ? `<div class="row g-2">${Object.entries(data.feature_importances).map(([feature, importance]) => 
+                        `<div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center p-2" style="background: white; border-radius: 8px; border: 1px solid var(--medium-gray);">
+                                <span class="fw-semibold">${feature}</span>
+                                <span class="badge-custom badge-orange-custom">${importance.toFixed(3)}</span>
+                            </div>
+                        </div>`).join('')}</div>`
+                    : '<div class="alert-custom alert-info-custom">ไม่มีข้อมูล Feature Importances</div>'
+                }
+            `;
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('analysis-results').innerHTML = '';
+        }
+
+        /**
+         * Displays the prediction results, including summary charts and a detailed table.
+         * @param {object} data The prediction results data from the backend.
+         */
+        function displayPredictionResults(data) {
+            const card = document.getElementById('resultsCard');
+            card.classList.remove('d-none');
+            document.getElementById('resultsHeader').innerHTML = '<i class="bi bi-magic"></i> ผลการทำนาย';
+            document.getElementById('analysis-results').innerHTML = ''; // Clear previous analysis results
+
+            const summary = document.getElementById('summary');
+            summary.innerHTML = `
+                <h5 class="mb-4 text-orange"><i class="bi bi-people-fill"></i> ภาพรวมการทำนาย (${data.summary.total} คน)</h5>
+                <div class="row mb-4 g-3">
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <canvas id="predictionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-container">
+                            <canvas id="riskChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <hr style="border-color: var(--medium-gray);">
+            `;
+            
+            // Render Prediction Chart
+            new Chart(document.getElementById('predictionChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['จบการศึกษา', 'ไม่จบการศึกษา'],
+                    datasets: [{
+                        label: 'จำนวน',
+                        data: [data.summary.predicted_pass, data.summary.predicted_fail],
+                        backgroundColor: ['#28A745', '#DC3545'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        title: { 
+                            display: true, 
+                            text: 'ผลการทำนาย', 
+                            font: { size: 16, weight: 'bold', family: 'Kanit' },
+                            color: getComputedStyle(document.documentElement).getPropertyValue('--primary-orange') // Use CSS variable
+                        },
+                        legend: { 
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: { size: 12, weight: '500', family: 'Kanit' }
+                            }
+                        }
+                    } 
+                }
+            });
+
+            // Render Risk Chart
+            new Chart(document.getElementById('riskChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['เสี่ยงสูง', 'เสี่ยงปานกลาง', 'เสี่ยงต่ำ'],
+                    datasets: [{
+                        label: 'จำนวน',
+                        data: [data.summary.high_risk_count, data.summary.medium_risk_count, data.summary.low_risk_count],
+                        backgroundColor: ['#DC3545', '#FFC107', '#28A745'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        title: { 
+                            display: true, 
+                            text: 'ระดับความเสี่ยง', 
+                            font: { size: 16, weight: 'bold', family: 'Kanit' },
+                            color: getComputedStyle(document.documentElement).getPropertyValue('--primary-orange') // Use CSS variable
+                        },
+                        legend: { 
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: { size: 12, weight: '500', family: 'Kanit' }
+                            }
+                        }
+                    } 
+                }
+            });
+
+            const resultsDiv = document.getElementById('results');
+            let table = `
+                <h5 class="mt-4 mb-3 text-orange"><i class="bi bi-table"></i> ผลการทำนายรายบุคคล</h5>
+                <div class="table-responsive">
+                    <table class="table table-custom">
+                        <thead>
+                            <tr>
+                                <th><i class="bi bi-person"></i> ชื่อ</th>
+                                <th><i class="bi bi-graph-up"></i> เกรดเฉลี่ย</th>
+                                <th><i class="bi bi-magic"></i> ผลทำนาย</th>
+                                <th><i class="bi bi-percent"></i> ความเชื่อมั่น</th>
+                                <th><i class="bi bi-exclamation-triangle"></i> ระดับความเสี่ยง</th>
+                                <th><i class="bi bi-lightbulb"></i> คำแนะนำ</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            
+            data.results.forEach(r => {
+                table += `<tr style="transition: all 0.2s ease;">
+                    <td class="fw-semibold text-orange">${r['ชื่อ']}</td>
+                    <td><span class="badge-custom badge-orange-custom">${r['เกรดเฉลี่ย'].toFixed(2)}</span></td>
+                    <td><span class="badge-custom ${r['การทำนาย'] === 'จบ' ? 'badge-success-custom' : 'badge-danger-custom'}">
+                        <i class="bi ${r['การทำนาย'] === 'จบ' ? 'bi-check-circle' : 'bi-x-circle'}"></i> ${r['การทำนาย']}
+                    </span></td>
+                    <td><span class="fw-semibold">${(r['ความเชื่อมั่น'] * 100).toFixed(1)}%</span></td>
+                    <td><span class="badge-custom ${getRiskBadge(r['ระดับความเสี่ยง'])}">${r['ระดับความเสี่ยง']}</span></td>
+                    <td><small class="text-muted-custom">${r['คำแนะนำ'].join(' • ')}</small></td>
+                </tr>`;
+            });
+
+            table += '</tbody></table></div>';
+            resultsDiv.innerHTML = table;
+        }
+
+        /**
+         * Displays the subject analysis results, including overall statistics, problem subjects, and category summaries.
+         * @param {object} data The analysis results data from the backend.
+         */
+        function displayAnalysisResults(data) {
+            const card = document.getElementById('resultsCard');
+            card.classList.remove('d-none');
+            document.getElementById('resultsHeader').innerHTML = '<i class="bi bi-bar-chart-line-fill"></i> ผลการวิเคราะห์รายวิชา';
+            document.getElementById('results').innerHTML = ''; // Clear previous prediction results
+
+            const analysisDiv = document.getElementById('analysis-results');
+
+            let html = `
+                <h5 class="mb-4 text-orange"><i class="bi bi-graph-up"></i> ภาพรวม</h5>
+                <div class="row text-center mb-4 g-3">
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--info-color); border-radius: var(--border-radius);">
+                            <div class="fw-medium">นักศึกษา</div>
+                            <div class="h3 fw-bold mb-0">${data.overall_stats.total_students_considered}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--primary-orange); border-radius: var(--border-radius);">
+                            <div class="fw-medium">รายวิชา</div>
+                            <div class="h3 fw-bold mb-0">${data.overall_stats.total_subjects_analyzed}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--success-color); border-radius: var(--border-radius);">
+                            <div class="fw-medium">เกรดเฉลี่ยรวม</div>
+                            <div class="h3 fw-bold mb-0">${data.overall_stats.avg_gpa_overall.toFixed(2)}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="p-3 text-white" style="background: var(--danger-color); border-radius: var(--border-radius);">
+                            <div class="fw-medium">อัตราตกเฉลี่ย</div>
+                            <div class="h3 fw-bold mb-0">${(data.overall_stats.overall_fail_rate * 100).toFixed(2)}%</div>
+                        </div>
+                    </div>
+                </div>`;
+            
+            if (data.recommendations && data.recommendations.length > 0) {
+                html += `
+                    <div class="alert-custom alert-info-custom mb-4">
+                        <h6 class="fw-bold mb-2"><i class="bi bi-lightbulb-fill"></i> คำแนะนำ</h6>
+                        <ul class="mb-0 ps-3">${data.recommendations.map(rec => `<li class="fw-medium">${rec}</li>`).join('')}</ul>
+                    </div>`;
+            }
+
+            html += `
+                <h5 class="mb-3 text-orange"><i class="bi bi-exclamation-triangle-fill"></i> วิชาที่ควรให้ความสนใจ</h5>
+                <div class="row mb-4 g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold mb-3 text-danger"><i class="bi bi-arrow-down-circle"></i> อัตราการตกสูง (สูงสุด 10 อันดับ)</h6>
+                        <div class="list-group-custom">
+                            ${data.problem_subjects.high_fail_rate.map(s => 
+                                `<div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="fw-semibold">${s.subject}</span>
+                                    <span class="badge-custom badge-danger-custom">${(s.fail_rate*100).toFixed(1)}%</span>
+                                </div>`).join('')}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-semibold mb-3 text-warning"><i class="bi bi-arrow-down-circle"></i> เกรดเฉลี่ยต่ำ (ต่ำสุด 10 อันดับ)</h6>
+                        <div class="list-group-custom">
+                            ${data.problem_subjects.low_gpa.map(s => 
+                                `<div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="fw-semibold">${s.subject}</span>
+                                    <span class="badge-custom badge-warning-custom">${s.average.toFixed(2)}</span>
+                                </div>`).join('')}
+                        </div>
+                    </div>
+                </div>
+                <hr style="border-color: var(--medium-gray);">
+                <h5 class="mb-3 text-orange"><i class="bi bi-collection-fill"></i> สรุปตามหมวดวิชา</h5>
+                <div class="accordion-custom" id="categoryAccordion">`;
+
+            Object.entries(data.category_summary).forEach(([category, stats], index) => {
+                html += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading${index}">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}" aria-expanded="false">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-folder-fill text-orange"></i>
+                                <strong>${stats.thai_name || category}</strong>
+                                <span class="badge-custom badge-orange-custom">${stats.num_subjects} วิชา</span>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id="collapse${index}" class="accordion-collapse collapse" aria-labelledby="heading${index}" data-bs-parent="#categoryAccordion">
+                        <div class="accordion-body">
+                           <div class="row mb-3 g-3">
+                               <div class="col-md-6">
+                                   <div class="p-3" style="background: var(--light-gray); border-radius: 8px; border: 1px solid var(--medium-gray);">
+                                       <p class="mb-2"><i class="bi bi-graph-up"></i> <strong>เกรดเฉลี่ยของหมวด:</strong></p>
+                                       <span class="badge-custom badge-success-custom h5">${stats.avg_gpa.toFixed(2)}</span>
+                                   </div>
+                               </div>
+                               <div class="col-md-6">
+                                   <div class="p-3" style="background: var(--light-gray); border-radius: 8px; border: 1px solid var(--medium-gray);">
+                                       <p class="mb-2"><i class="bi bi-exclamation-triangle"></i> <strong>อัตราตกเฉลี่ยของหมวด:</strong></p>
+                                       <span class="badge-custom badge-danger-custom h5">${(stats.avg_fail_rate * 100).toFixed(2)}%</span>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="row mb-3 g-3">
+                               <div class="col-md-6">
+                                   <p class="mb-0"><i class="bi bi-emoji-frown"></i> <strong>วิชายากที่สุด:</strong> <span class="text-danger fw-semibold">${stats.hardest_subject || 'ไม่มีข้อมูล'}</span></p>
+                               </div>
+                               <div class="col-md-6">
+                                   <p class="mb-0"><i class="bi bi-emoji-smile"></i> <strong>วิชาง่ายที่สุด:</strong> <span class="text-success fw-semibold">${stats.easiest_subject || 'ไม่มีข้อมูล'}</span></p>
+                               </div>
+                           </div>
+                           <h6 class="fw-semibold mb-3 text-orange"><i class="bi bi-list-ul"></i> รายละเอียดวิชาในหมวดนี้:</h6>
+                           <div class="table-responsive">
+                               <table class="table table-custom table-sm">
+                                   <thead>
+                                       <tr>
+                                           <th><i class="bi bi-book"></i> วิชา</th>
+                                           <th><i class="bi bi-graph-up"></i> เฉลี่ย</th>
+                                           <th><i class="bi bi-exclamation-triangle"></i> อัตราตก</th>
+                                           <th><i class="bi bi-people"></i> จำนวน นศ.</th>
+                                       </tr>
+                                   </thead>
+                                   <tbody>`;
+                
+                const subjectsInThisCategory = Object.entries(data.subject_analysis[category]).sort((a,b) => b[1].average - a[1].average);
+                subjectsInThisCategory.forEach(([subjectName, subjectStats]) => {
+                    const gradeColor = subjectStats.average >= 3.0 ? 'text-success' : 
+                                       subjectStats.average >= 2.0 ? 'text-warning' : 'text-danger';
+                    const failRateColor = subjectStats.fail_rate <= 0.1 ? 'text-success' : 
+                                               subjectStats.fail_rate <= 0.3 ? 'text-warning' : 'text-danger';
+                    
+                    html += `<tr>
+                                   <td class="fw-semibold">${subjectName}</td>
+                                   <td><span class="fw-bold ${gradeColor}">${subjectStats.average.toFixed(2)}</span></td>
+                                   <td><span class="fw-bold ${failRateColor}">${(subjectStats.fail_rate * 100).toFixed(1)}%</span></td>
+                                   <td><span class="badge-custom badge-orange-custom">${subjectStats.num_students}</span></td>
+                               </tr>`;
+                });
+                html += `    </tbody>
+                               </table>
+                           </div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+
+            html += `</div>`;
+            analysisDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
