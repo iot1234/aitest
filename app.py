@@ -973,6 +973,7 @@ def train_model():
         if not os.path.exists(filepath):
             return jsonify({'success': False, 'error': 'Specified file not found.'})
 
+        # อ่านไฟล์
         file_extension = filename.rsplit('.', 1)[1].lower()
         df = None
         if file_extension == 'csv':
@@ -994,6 +995,7 @@ def train_model():
         if df is None:
             return jsonify({'success': False, 'error': 'Could not read file.'})
 
+        # ตรวจสอบรูปแบบข้อมูล
         data_format = detect_data_format(df)
         logger.info(f"Detected data format for training: {data_format}")
 
@@ -1008,6 +1010,7 @@ def train_model():
         if len(processed_df) < min_students_for_training:
             return jsonify({'success': False, 'error': f'Insufficient data for model training (at least {min_students_for_training} samples required).'})
 
+        # เตรียมข้อมูลสำหรับการเทรน
         feature_cols = [col for col in processed_df.columns if col not in ['ชื่อ', 'graduated']]
         X = processed_df[feature_cols].fillna(0)
         y = processed_df['graduated']
@@ -1015,12 +1018,15 @@ def train_model():
         logger.info(f"Number of data points for training: {len(X)}, Features: {len(feature_cols)}")
         logger.info(f"Label distribution for training: {y.value_counts().to_dict()}")
 
+        # เทรนโมเดล
         model_result = train_ensemble_model(X, y)
 
+        # สร้างชื่อไฟล์โมเดล
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         model_filename = f'{data_format}_model_{timestamp}.joblib'
         model_path = os.path.join(app.config['MODEL_FOLDER'], model_filename)
 
+        # คำนวณ feature importance
         feature_importances = {}
         if 'rf' in model_result['models']:
             rf_model = model_result['models']['rf']
@@ -1028,10 +1034,11 @@ def train_model():
                 importances = pd.Series(rf_model.feature_importances_, index=feature_cols).sort_values(ascending=False)
                 feature_importances = importances.head(5).to_dict()
 
+        # สร้างข้อมูลโมเดลสำหรับบันทึก
         model_data = {
             'models': model_result['models'],
             'scaler': model_result['scaler'],
-            'feature_columns': feature_cols,
+            'feature_columns': feature_cols.tolist(),  # แปลงเป็น list
             'data_format': data_format,
             'created_at': datetime.now().isoformat(),
             'training_data_info': {
@@ -1052,20 +1059,22 @@ def train_model():
             'best_lr_params': model_result.get('best_lr_params', {})
         }
 
+        # บันทึกโมเดลลงไฟล์
         joblib.dump(model_data, model_path)
-        logger.info(f"Model saved to: {model_path}")
+        logger.info(f"✅ Model saved successfully to: {model_path}")
 
+        # อัปเดตโมเดลในหน่วยความจำ
         if data_format == 'subject_based':
             models['subject_model'] = model_result
-            models['subject_model_info'] = model_data['performance_metrics']
+            models['subject_model_info'] = model_data['performance_metrics'].copy()
             models['subject_model_info']['created_at'] = model_data['created_at']
-            models['subject_feature_cols'] = feature_cols
+            models['subject_feature_cols'] = feature_cols.tolist()
             models['subject_model_info']['filename'] = model_filename
         else:
             models['gpa_model'] = model_result
-            models['gpa_model_info'] = model_data['performance_metrics']
+            models['gpa_model_info'] = model_data['performance_metrics'].copy()
             models['gpa_model_info']['created_at'] = model_data['created_at']
-            models['gpa_feature_cols'] = feature_cols
+            models['gpa_feature_cols'] = feature_cols.tolist()
             models['gpa_model_info']['filename'] = model_filename
 
         logger.info("Model training successful.")
@@ -1085,9 +1094,10 @@ def train_model():
         })
 
     except Exception as e:
-        logger.error(f"Error during model training: {str(e)}")
+        logger.error(f"Error during model training: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': f'An error occurred during model training: {str(e)}'})
-
+    
+    
 @app.route('/predict', methods=['POST'])
 def predict():
     """Predicts outcome from an uploaded CSV/Excel file using a specified model."""
@@ -1098,8 +1108,18 @@ def predict():
 
         if not filename:
             return jsonify({'success': False, 'error': 'No filename provided for prediction data.'})
+        
+        # ถ้าไม่ระบุโมเดล ให้หาโมเดลล่าสุด
         if not model_filename:
-            return jsonify({'success': False, 'error': 'No model filename provided for prediction.'})
+            # หาโมเดล subject_based ล่าสุด
+            subject_models = sorted([f for f in os.listdir(app.config['MODEL_FOLDER']) 
+                                   if f.startswith('subject_based_model') and f.endswith('.joblib')], 
+                                  reverse=True)
+            if subject_models:
+                model_filename = subject_models[0]
+                logger.info(f"Auto-selected latest model: {model_filename}")
+            else:
+                return jsonify({'success': False, 'error': 'No trained model found. Please train a model first.'})
 
         data_filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         if not os.path.exists(data_filepath):
@@ -1107,8 +1127,9 @@ def predict():
 
         model_filepath = os.path.join(app.config['MODEL_FOLDER'], model_filename)
         if not os.path.exists(model_filepath):
-            return jsonify({'success': False, 'error': 'Specified model file not found.'})
+            return jsonify({'success': False, 'error': f'Model file {model_filename} not found.'})
 
+        # โหลดโมเดล
         try:
             loaded_model_data = joblib.load(model_filepath)
             model_info = {
@@ -1121,6 +1142,7 @@ def predict():
         except Exception as e:
             return jsonify({'success': False, 'error': f'Failed to load model {model_filename}: {str(e)}'})
 
+        # อ่านไฟล์ข้อมูล
         file_extension = filename.rsplit('.', 1)[1].lower()
         df = None
         if file_extension == 'csv':
@@ -1142,11 +1164,13 @@ def predict():
         if df is None:
             return jsonify({'success': False, 'error': 'Could not read prediction data file.'})
 
+        # ตรวจสอบรูปแบบข้อมูล
         detected_data_format_for_prediction = detect_data_format(df)
         if detected_data_format_for_prediction != data_format:
             return jsonify({'success': False, 'error': f'Prediction data format ({detected_data_format_for_prediction}) does not match model format ({data_format}).'})
         logger.info(f"Predicting with data format: {detected_data_format_for_prediction}")
 
+        # ประมวลผลข้อมูล
         if data_format == 'subject_based':
             processed_df = process_subject_data(df)
         else:
@@ -1155,6 +1179,7 @@ def predict():
         if len(processed_df) == 0:
             return jsonify({'success': False, 'error': 'No data could be processed for prediction.'})
 
+        # เตรียมข้อมูลสำหรับการทำนาย
         X_predict = pd.DataFrame(columns=feature_cols)
         for col in feature_cols:
             if col in processed_df.columns:
@@ -1163,6 +1188,7 @@ def predict():
                 X_predict[col] = 0
         X_predict = X_predict.fillna(0)
 
+        # ทำนายผล
         trained_models = model_info['models']
         scaler = model_info['scaler']
 
@@ -1186,6 +1212,7 @@ def predict():
         if not predictions_proba_list:
             return jsonify({'success': False, 'error': 'Could not make predictions with any loaded sub-models.'})
 
+        # คำนวณผลลัพธ์
         results = []
         high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
         medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
@@ -1208,6 +1235,7 @@ def predict():
             else:
                 risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
 
+            # สร้างการวิเคราะห์และคำแนะนำ
             analysis = []
             recommendations = []
 
@@ -1233,6 +1261,7 @@ def predict():
                 if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
                     recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
 
+            # ตรวจสอบหมวดวิชาที่อ่อน
             if data_format == 'subject_based':
                 weak_categories = []
                 for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
@@ -1254,6 +1283,7 @@ def predict():
                 'คำแนะนำ': list(set(recommendations))
             })
 
+        # สรุปผล
         total = len(results)
         predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
         predicted_fail = total - predicted_pass
@@ -1276,12 +1306,14 @@ def predict():
                 'high_risk': high_risk,
                 'medium_risk': medium_risk,
                 'low_risk': low_risk
-            }
+            },
+            'model_used': model_filename
         })
 
     except Exception as e:
-        logger.error(f"Error during prediction: {str(e)}")
+        logger.error(f"Error during prediction: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
+
     
     
     
@@ -2556,7 +2588,12 @@ def model_status():
 def load_existing_models():
     """Loads existing trained models from the models folder."""
     try:
-        subject_models = sorted([f for f in os.listdir(app.config['MODEL_FOLDER']) if f.startswith('subject_based_model') and f.endswith('.joblib')], reverse=True)
+        logger.info("🔍 Searching for existing models...")
+        
+        # โหลดโมเดล subject_based
+        subject_models = sorted([f for f in os.listdir(app.config['MODEL_FOLDER']) 
+                               if f.startswith('subject_based_model') and f.endswith('.joblib')], 
+                              reverse=True)
         if subject_models:
             subject_model_path = os.path.join(app.config['MODEL_FOLDER'], subject_models[0])
             try:
@@ -2566,15 +2603,19 @@ def load_existing_models():
                     'scaler': loaded_data['scaler']
                 }
                 models['subject_feature_cols'] = loaded_data['feature_columns']
-                models['subject_model_info'] = loaded_data.get('performance_metrics', {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
+                models['subject_model_info'] = loaded_data.get('performance_metrics', 
+                    {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
                 models['subject_model_info']['created_at'] = loaded_data.get('created_at', datetime.now().isoformat())
                 models['subject_model_info']['loaded_from_file'] = True
                 models['subject_model_info']['filename'] = subject_models[0]
-                logger.info("✅ Loaded latest subject model successfully.")
+                logger.info(f"✅ Loaded latest subject model: {subject_models[0]}")
             except Exception as e:
                 logger.error(f"❌ Could not load subject model: {str(e)}")
 
-        gpa_models = sorted([f for f in os.listdir(app.config['MODEL_FOLDER']) if f.startswith('gpa_based_model') and f.endswith('.joblib')], reverse=True)
+        # โหลดโมเดล gpa_based
+        gpa_models = sorted([f for f in os.listdir(app.config['MODEL_FOLDER']) 
+                           if f.startswith('gpa_based_model') and f.endswith('.joblib')], 
+                          reverse=True)
         if gpa_models:
             gpa_model_path = os.path.join(app.config['MODEL_FOLDER'], gpa_models[0])
             try:
@@ -2584,23 +2625,35 @@ def load_existing_models():
                     'scaler': loaded_data['scaler']
                 }
                 models['gpa_feature_cols'] = loaded_data['feature_columns']
-                models['gpa_model_info'] = loaded_data.get('performance_metrics', {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
+                models['gpa_model_info'] = loaded_data.get('performance_metrics', 
+                    {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
                 models['gpa_model_info']['created_at'] = loaded_data.get('created_at', datetime.now().isoformat())
                 models['gpa_model_info']['loaded_from_file'] = True
                 models['gpa_model_info']['filename'] = gpa_models[0]
-                logger.info("✅ Loaded latest GPA model successfully.")
+                logger.info(f"✅ Loaded latest GPA model: {gpa_models[0]}")
             except Exception as e:
                 logger.error(f"❌ Could not load GPA model: {str(e)}")
 
     except Exception as e:
         logger.error(f"❌ Error loading existing models: {str(e)}")
-
+load_existing_models()
 if __name__ == '__main__':
     logger.info("=== FLASK APP CONFIGURATION ===")
     logger.info(f"App name: {app.name}")
     logger.info(f"App debug: {app.debug}")
     logger.info(f"App testing: {app.testing}")
     logger.info(f"Config keys: {list(app.config.keys())}")
+    logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
+    logger.info(f"Model folder: {app.config['MODEL_FOLDER']}")
+    
+    # สร้างโฟลเดอร์ถ้ายังไม่มี
+    for folder in [app.config['UPLOAD_FOLDER'], app.config['MODEL_FOLDER']]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            logger.info(f"✅ Created folder: {folder}")
+    
+    # โหลดโมเดลที่มีอยู่
+    load_existing_models()
     
     logger.info("🚀 Starting server...")
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
