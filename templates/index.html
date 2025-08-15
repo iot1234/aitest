@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}ฝึกโมเดล AI - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div id="alertContainer"></div>
+
+    <div class="row mb-5">
+        <div class="col-12 text-center text-white">
+            <h1 class="display-4 fw-bold mb-3">
+                <i class="bi bi-cpu-fill"></i> ฝึกฝนและทดสอบโมเดล AI
+            </h1>
+            <p class="lead text-white-50">
+                อัปโหลดข้อมูล, ฝึกโมเดลเพื่อทำนายผลการเรียน, และวิเคราะห์ข้อมูลเชิงลึก
+            </p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body p-5">
+            <div class="row align-items-center mb-5 pb-4 border-bottom">
+                <div class="col-lg-7 mb-4 mb-lg-0">
+                    <h5 class="fw-bold mb-3 text-primary">
+                        <i class="bi bi-cloud-arrow-up-fill me-2"></i> อัปโหลดข้อมูลและเลือกการทำงาน
+                    </h5>
+                    <p class="text-muted">
+                        เลือกไฟล์ข้อมูล (.csv, .xlsx) เพื่อเริ่มต้นการฝึกโมเดล, การทำนายผล, หรือการวิเคราะห์เชิงลึก
+                    </p>
+                    <div class="input-group input-group-lg">
+                        <input class="form-control" type="file" id="fileUpload" accept=".csv, .xlsx, .xls">
+                        <button class="btn btn-primary" id="uploadBtn" onclick="uploadFile()">
+                            <span id="uploadSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                            <i class="bi bi-upload"></i> อัปโหลด
+                        </button>
+                    </div>
+                    <div class="form-text mt-2 text-muted">
+                        รองรับไฟล์: CSV, Excel (.xlsx, .xls) | ขนาดสูงสุด: 16MB
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0">สถานะโมเดลที่ใช้งานได้</h6>
+                        <span class="badge bg-secondary-subtle text-secondary">
+                            <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                            กำลังตรวจสอบ...
+                        </span>
+                    </div>
+                    <ul class="list-group list-group-flush border-top">
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                            <div>โมเดลรายวิชา <span class="badge bg-primary-subtle text-primary">Subject-based</span></div>
+                            <div id="subject-model-status">
+                                <span class="badge bg-danger"><i class="bi bi-x-circle-fill"></i> ไม่พร้อม</span>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                            <div>โมเดล GPA <span class="badge bg-success-subtle text-success">GPA-based</span></div>
+                            <div id="gpa-model-status">
+                                <span class="badge bg-danger"><i class="bi bi-x-circle-fill"></i> ไม่พร้อม</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="actionsCard" class="d-none">
+                <h5 class="fw-bold mb-4 text-primary">
+                    <i class="bi bi-tools me-2"></i> เลือกการดำเนินการ
+                </h5>
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <div class="d-grid">
+                            <button class="btn btn-lg btn-primary" id="trainBtn" onclick="trainModel()">
+                                <span id="trainSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                <i class="bi bi-cpu-fill"></i> ฝึกโมเดลใหม่
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="d-grid">
+                            <button class="btn btn-lg btn-success" id="predictBtn" onclick="predictData()" disabled>
+                                <span id="predictSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                <i class="bi bi-magic"></i> ทำนายผล
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="d-grid">
+                            <button class="btn btn-lg btn-info" id="analyzeBtn" onclick="analyzeSubjects()">
+                                <span id="analyzeSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                <i class="bi bi-bar-chart-line-fill"></i> วิเคราะห์ข้อมูล
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 text-center">
+                    <p class="text-muted mb-1">
+                        ไฟล์ที่อัปโหลด: <span id="fileName" class="fw-bold text-dark"></span>
+                    </p>
+                    <p class="text-muted mb-0" id="fileInfo"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="resultsCard" class="card d-none">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i> ผลลัพธ์การประมวลผล</h5>
+        </div>
+        <div class="card-body">
+            <h6 class="fw-bold text-primary mb-3">ภาพรวม</h6>
+            <div id="summary" class="mb-4"></div>
+            
+            <h6 class="fw-bold text-primary mb-3">ผลลัพธ์รายบุคคล</h6>
+            <div id="results" class="mb-4"></div>
+            
+            <h6 class="fw-bold text-primary mb-3">ผลการวิเคราะห์รายวิชา</h6>
+            <div id="analysis-results"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block custom_js %}
+let currentFilename = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    checkModelStatus();
+    
+    document.getElementById('fileUpload').addEventListener('change', () => {
+        document.getElementById('uploadBtn').disabled = !document.getElementById('fileUpload').files.length;
+    });
+});
+
+async function checkModelStatus() {
+    try {
+        const response = await fetch('/model_status');
+        const data = await response.json();
+        updateModelStatusUI(data);
+    } catch (error) {
+        console.error('Error checking model status:', error);
+        showAlert('ไม่สามารถตรวจสอบสถานะโมเดลได้', 'danger');
+    }
+}
+
+function updateModelStatusUI(data) {
+    const subjectStatus = document.getElementById('subject-model-status');
+    const gpaStatus = document.getElementById('gpa-model-status');
+    
+    if (data.subject_model) {
+        subjectStatus.innerHTML = `<span class="badge bg-success">
+            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน (Accuracy: ${(data.subject_model_info.accuracy * 100).toFixed(2)}%)
+        </span>`;
+        document.getElementById('predictBtn').disabled = false;
+    } else {
+        subjectStatus.innerHTML = `<span class="badge bg-danger">
+            <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
+        </span>`;
+        document.getElementById('predictBtn').disabled = true;
+    }
+    
+    if (data.gpa_model) {
+        gpaStatus.innerHTML = `<span class="badge bg-success">
+            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน (Accuracy: ${(data.gpa_model_info.accuracy * 100).toFixed(2)}%)
+        </span>`;
+    } else {
+        gpaStatus.innerHTML = `<span class="badge bg-danger">
+            <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
+        </span>`;
+    }
+
+    // Hide initial "checking" badge
+    document.querySelector('.list-group').previousElementSibling.classList.add('d-none');
+}
+
+async function uploadFile() {
+    const fileInput = document.getElementById('fileUpload');
+    if (fileInput.files.length === 0) {
+        showAlert('กรุณาเลือกไฟล์ก่อนครับ', 'warning');
+        return;
+    }
+    
+    showLoading('กำลังอัปโหลดไฟล์...');
+    toggleSpinner('uploadBtn', true);
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            currentFilename = result.filename;
+            document.getElementById('fileName').textContent = result.filename;
+            document.getElementById('fileInfo').innerHTML = `
+                <span class="badge bg-light text-dark me-2">${result.rows} แถว</span>
+                <span class="badge bg-light text-dark me-2">${result.columns} คอลัมน์</span>
+                <span class="badge bg-primary-subtle text-primary">${result.data_format}</span>
+            `;
+            document.getElementById('actionsCard').classList.remove('d-none');
+            showAlert('อัปโหลดไฟล์สำเร็จ!', 'success');
+        } else {
+            showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Upload error:', error);
+        showAlert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'danger');
+    } finally {
+        hideLoading();
+        toggleSpinner('uploadBtn', false);
+    }
+}
+
+async function trainModel() {
+    if (!currentFilename) {
+        showAlert('กรุณาอัปโหลดไฟล์ก่อนครับ', 'warning');
+        return;
+    }
+
+    const trainBtn = document.getElementById('trainBtn');
+    if (trainBtn.disabled) return;
+
+    showLoading('กำลังฝึกโมเดล...');
+    toggleSpinner('trainBtn', true);
+
+    try {
+        const response = await fetch('/train', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: currentFilename })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showAlert(`ฝึกโมเดลสำเร็จ: ${result.model_filename}`, 'success');
+            checkModelStatus(); // Update model status after training
+        } else {
+            showAlert(`เกิดข้อผิดพลาดในการฝึกโมเดล: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Training error:', error);
+        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อฝึกโมเดล', 'danger');
+    } finally {
+        hideLoading();
+        toggleSpinner('trainBtn', false);
+    }
+}
+
+async function predictData() {
+    if (!currentFilename) {
+        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
+        return;
+    }
+    
+    showLoading('กำลังทำนายผล...');
+    toggleSpinner('predictBtn', true);
+
+    try {
+        const response = await fetch('/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: currentFilename, model_filename: 'subject_based_model_latest.joblib' }) // Use a dynamic model or latest
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            displayPredictionResults(result.results, result.summary);
+            showAlert('ทำนายผลสำเร็จ!', 'success');
+        } else {
+            showAlert(`เกิดข้อผิดพลาดในการทำนาย: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Prediction error:', error);
+        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อทำนาย', 'danger');
+    } finally {
+        hideLoading();
+        toggleSpinner('predictBtn', false);
+    }
+}
+
+function displayPredictionResults(results, summary) {
+    const resultsCard = document.getElementById('resultsCard');
+    resultsCard.classList.remove('d-none');
+    
+    const summaryDiv = document.getElementById('summary');
+    summaryDiv.innerHTML = `
+        <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${summary.total} คน</p>
+        <p class="mb-1"><strong>คาดว่าจะจบ:</strong> ${summary.predicted_pass} คน (${summary.pass_rate.toFixed(2)}%)</p>
+        <p class="mb-1"><strong>คาดว่าจะไม่จบ:</strong> ${summary.predicted_fail} คน</p>
+    `;
+
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ชื่อ</th>
+                        <th>การทำนาย</th>
+                        <th>เกรดเฉลี่ย</th>
+                        <th>ความน่าจะเป็น (จบ)</th>
+                        <th>คำแนะนำ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${results.map(r => `
+                        <tr>
+                            <td>${r.ชื่อ}</td>
+                            <td><span class="badge bg-${r.การทำนาย === 'จบ' ? 'success' : 'danger'}">${r.การทำนาย}</span></td>
+                            <td>${r.เกรดเฉลี่ย.toFixed(2)}</td>
+                            <td>${(r.ความน่าจะเป็น.จบ * 100).toFixed(2)}%</td>
+                            <td>${r.คำแนะนำ.join(', ')}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    resultsCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function analyzeSubjects() {
+    if (!currentFilename) {
+        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
+        return;
+    }
+
+    showLoading('กำลังวิเคราะห์รายวิชา...');
+    toggleSpinner('analyzeBtn', true);
+    
+    try {
+        const response = await fetch('/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: currentFilename })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            displayAnalysisResults(result.analysis);
+            showAlert('วิเคราะห์รายวิชาสำเร็จ!', 'success');
+        } else {
+            showAlert(`เกิดข้อผิดพลาดในการวิเคราะห์: ${result.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Analysis error:', error);
+        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อวิเคราะห์', 'danger');
+    } finally {
+        hideLoading();
+        toggleSpinner('analyzeBtn', false);
+    }
+}
+
+function displayAnalysisResults(analysis) {
+    const resultsCard = document.getElementById('resultsCard');
+    resultsCard.classList.remove('d-none');
+    
+    const analysisDiv = document.getElementById('analysis-results');
+    analysisDiv.innerHTML = `
+        <h6 class="fw-bold text-primary mb-3 mt-4">ผลการวิเคราะห์รายวิชา</h6>
+        <p class="mb-1"><strong>เกรดเฉลี่ยโดยรวม:</strong> ${analysis.overall_stats.avg_gpa.toFixed(2)}</p>
+        <p class="mb-1"><strong>วิชาที่มีอัตราตกสูง:</strong> ${analysis.overall_stats.high_fail_subjects.join(', ') || 'ไม่มี'}</p>
+    `;
+    
+    resultsCard.scrollIntoView({ behavior: 'smooth' });
+}
+
+function toggleSpinner(buttonId, show) {
+   const button = document.getElementById(buttonId);
+   const spinner = button.querySelector('.spinner-border');
+   if (show) {
+       spinner.classList.remove('d-none');
+       button.disabled = true;
+   } else {
+       spinner.classList.add('d-none');
+       button.disabled = false;
+   }
+}
+{% endblock %}
