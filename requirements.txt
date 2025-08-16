@@ -8,4 +8,4 @@ imbalanced-learn==0.11.0
 Werkzeug==2.3.7
 gunicorn==21.2.0
 boto3==1.28.57
-python-dotenv==1.0.0
+botocore==1.31.57
