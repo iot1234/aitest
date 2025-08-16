@@ -109,14 +109,51 @@
             <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i> ผลลัพธ์การประมวลผล</h5>
         </div>
         <div class="card-body">
-            <h6 class="fw-bold text-primary mb-3">ภาพรวม</h6>
-            <div id="summary" class="mb-4"></div>
+            <div id="predictionResults" class="d-none">
+                <h6 class="fw-bold text-primary mb-3">ภาพรวมการทำนาย</h6>
+                <div id="summary" class="mb-4"></div>
+                
+                <h6 class="fw-bold text-primary mb-3">ผลลัพธ์รายบุคคล</h6>
+                <div id="results" class="mb-4"></div>
+            </div>
             
-            <h6 class="fw-bold text-primary mb-3">ผลลัพธ์รายบุคคล</h6>
-            <div id="results" class="mb-4"></div>
-            
-            <h6 class="fw-bold text-primary mb-3">ผลการวิเคราะห์รายวิชา</h6>
-            <div id="analysis-results"></div>
+            <div id="analysisResults" class="d-none">
+                <h6 class="fw-bold text-primary mb-3">ผลการวิเคราะห์รายวิชา</h6>
+                <div id="analysis-summary" class="mb-3"></div>
+                <div id="analysis-recommendations" class="mb-3"></div>
+                <div id="analysis-tables" class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-danger text-white">
+                                <i class="bi bi-x-circle-fill"></i> วิชาที่มีอัตราตกสูง
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled" id="highFailSubjects"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-warning text-dark">
+                                <i class="bi bi-bar-chart-fill"></i> วิชาที่มีเกรดเฉลี่ยต่ำ
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled" id="lowGpaSubjects"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <i class="bi bi-award-fill"></i> วิชาที่มีผลการเรียนดีเยี่ยม
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-unstyled" id="excellentSubjects"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -326,6 +363,13 @@ function displayPredictionResults(results, summary) {
     const resultsCard = document.getElementById('resultsCard');
     resultsCard.classList.remove('d-none');
     
+    // ซ่อนผลลัพธ์การวิเคราะห์
+    document.getElementById('analysisResults').classList.add('d-none');
+
+    // แสดงผลลัพธ์การทำนาย
+    const predictionResultsDiv = document.getElementById('predictionResults');
+    predictionResultsDiv.classList.remove('d-none');
+
     const summaryDiv = document.getElementById('summary');
     summaryDiv.innerHTML = `
         <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${summary.total} คน</p>
@@ -382,7 +426,7 @@ async function analyzeSubjects() {
         const result = await response.json();
         
         if (result.success) {
-            displayAnalysisResults(result.analysis);
+            displayAnalysisResults(result);
             showAlert('วิเคราะห์รายวิชาสำเร็จ!', 'success');
         } else {
             showAlert(`เกิดข้อผิดพลาดในการวิเคราะห์: ${result.error}`, 'danger');
@@ -396,16 +440,54 @@ async function analyzeSubjects() {
     }
 }
 
-function displayAnalysisResults(analysis) {
+function displayAnalysisResults(data) {
     const resultsCard = document.getElementById('resultsCard');
     resultsCard.classList.remove('d-none');
     
-    const analysisDiv = document.getElementById('analysis-results');
-    analysisDiv.innerHTML = `
-        <h6 class="fw-bold text-primary mb-3 mt-4">ผลการวิเคราะห์รายวิชา</h6>
-        <p class="mb-1"><strong>เกรดเฉลี่ยโดยรวม:</strong> ${analysis.overall_stats.avg_gpa.toFixed(2)}</p>
-        <p class="mb-1"><strong>วิชาที่มีอัตราตกสูง:</strong> ${analysis.overall_stats.high_fail_subjects.join(', ') || 'ไม่มี'}</p>
+    // ซ่อนผลลัพธ์การทำนาย
+    document.getElementById('predictionResults').classList.add('d-none');
+
+    // แสดงผลลัพธ์การวิเคราะห์
+    const analysisResultsDiv = document.getElementById('analysisResults');
+    analysisResultsDiv.classList.remove('d-none');
+    
+    const summaryDiv = document.getElementById('analysis-summary');
+    summaryDiv.innerHTML = `
+        <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${data.overall_stats.total_students} คน</p>
+        <p class="mb-1"><strong>จำนวนวิชาที่วิเคราะห์:</strong> ${data.overall_stats.total_subjects} วิชา</p>
+        <p class="mb-1"><strong>เกรดเฉลี่ยรวม:</strong> ${data.overall_stats.avg_gpa.toFixed(2)}</p>
+        <p class="mb-1"><strong>อัตราการตกโดยรวม:</strong> ${(data.overall_stats.overall_fail_rate * 100).toFixed(1)}%</p>
     `;
+
+    const recommendationsDiv = document.getElementById('analysis-recommendations');
+    if (data.recommendations && data.recommendations.length > 0) {
+        recommendationsDiv.innerHTML = `
+            <h6 class="fw-bold text-primary mb-2">คำแนะนำจากผลการวิเคราะห์</h6>
+            <ul>
+                ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+            </ul>
+        `;
+    } else {
+        recommendationsDiv.innerHTML = `<p class="text-muted">ไม่มีคำแนะนำพิเศษ</p>`;
+    }
+
+    const highFailSubjectsList = document.getElementById('highFailSubjects');
+    highFailSubjectsList.innerHTML = data.problem_subjects.high_fail_rate.length > 0 ?
+        data.problem_subjects.high_fail_rate.map(s => 
+            `<li>${s.subject} <span class="badge bg-danger">${(s.fail_rate * 100).toFixed(1)}%</span></li>`
+        ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีอัตราตกสูง</p>';
+    
+    const lowGpaSubjectsList = document.getElementById('lowGpaSubjects');
+    lowGpaSubjectsList.innerHTML = data.problem_subjects.low_gpa.length > 0 ?
+        data.problem_subjects.low_gpa.map(s => 
+            `<li>${s.subject} <span class="badge bg-warning">${s.average.toFixed(2)}</span></li>`
+        ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีเกรดเฉลี่ยต่ำ</p>';
+    
+    const excellentSubjectsList = document.getElementById('excellentSubjects');
+    excellentSubjectsList.innerHTML = data.excellent_subjects.length > 0 ?
+        data.excellent_subjects.map(s => 
+            `<li>${s.subject} <span class="badge bg-success">${s.average.toFixed(2)}</span></li>`
+        ).join('') : '<p class="text-muted mb-0">ไม่พบวิชาที่ผลการเรียนดีเยี่ยม</p>';
     
     resultsCard.scrollIntoView({ behavior: 'smooth' });
 }
