@@ -48,9 +48,11 @@ app.config.from_object(config.get_config())
 
 # Create necessary folders
 for folder in [app.config['UPLOAD_FOLDER'], app.config['MODEL_FOLDER']]:
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-        logger.info(f"Created folder: {folder}")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        logger.info(f"Ensured folder exists: {folder}")
+    except Exception as e:
+        logger.error(f"Error creating folder {folder}: {str(e)}")
 
 # Variables to store loaded models
 models = {
