@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import (
     Flask,
     request,
@@ -27,9 +30,6 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from typing import Any, Dict, Optional, List
 
 import config
-
-
-
 
 warnings.filterwarnings('ignore')
 
@@ -82,7 +82,7 @@ class S3Storage:
             self.endpoint_url = os.environ.get('CLOUDFLARE_R2_ENDPOINT')
             self.bucket_name = os.environ.get('CLOUDFLARE_R2_BUCKET_NAME')
             
-            # สำหรับ debugging
+            # For debugging
             logger.info(f"🔧 R2 Configuration:")
             logger.info(f"  - Endpoint: {self.endpoint_url}")
             logger.info(f"  - Bucket: {self.bucket_name}")
@@ -143,29 +143,6 @@ class S3Storage:
             # ใช้ local storage เป็น fallback
             self.use_local = True
             self.s3_client = None
-    
-    def _verify_bucket(self):
-        """Verify bucket exists and is accessible"""
-        try:
-            self.s3_client.head_bucket(Bucket=self.bucket_name)
-            logger.info(f"Bucket {self.bucket_name} verified successfully")
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == '404':
-                logger.info(f"Bucket {self.bucket_name} not found, creating...")
-                self._create_bucket()
-            else:
-                logger.error(f"Error accessing bucket: {str(e)}")
-                raise
-    
-    def _create_bucket(self):
-        """Create S3 bucket if it doesn't exist"""
-        try:
-            self.s3_client.create_bucket(Bucket=self.bucket_name)
-            logger.info(f"Bucket {self.bucket_name} created successfully")
-        except ClientError as e:
-            logger.error(f"Error creating bucket: {str(e)}")
-            raise
     
     def save_model(self, model_data: Dict[str, Any], filename: str) -> bool:
         """
@@ -849,6 +826,8 @@ def train_ensemble_model(X, y):
 
         try:
             logger.info("Performing GridSearchCV for GradientBoosting...")
+            base_max_iter = app.config['MODEL_HYPERPARAMETERS']['LogisticRegression'].get('max_iter', [1000])[0]
+
             grid_search_gb = GridSearchCV(
                 GradientBoostingClassifier(random_state=app.config['ML_CONFIG']['random_state']),
                 param_grid_gb,
@@ -1118,7 +1097,6 @@ def train_model():
         logger.error(f"❌ Error during model training: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': f'An error occurred during model training: {str(e)}'})
     
-
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -1390,7 +1368,7 @@ def delete_model(filename):
             return jsonify({'success': True, 'message': f'Model {filename} deleted successfully.'})
         else:
             return jsonify({'success': False, 'error': 'Could not delete model file.'}), 404
-                
+            
     except Exception as e:
         logger.error(f"Error deleting model {filename}: {str(e)}")
         return jsonify({'success': False, 'error': f'An error occurred while deleting the model: {str(e)}'}), 500
@@ -1443,9 +1421,6 @@ def load_existing_models():
                 models['gpa_model_info']['filename'] = latest_gpa['filename']
                 logger.info(f"✅ Loaded latest GPA model: {latest_gpa['filename']}")
 
-    except Exception as e:
-        logger.error(f"❌ Error loading existing models: {str(e)}")
-
 # ==========================================
 # Keep all other original functions unchanged
 # ==========================================
@@ -1474,6 +1449,7 @@ def calculate_gpa_and_failed_courses_backend(course_grades, courses_data):
 
             if numeric_grade > 0:
                 total_points += numeric_grade * course['credit']
+            if numeric_grade > 0:
                 completed_credits += course['credit']
             
             if numeric_grade == 0.0:
@@ -2263,7 +2239,7 @@ def analyze_curriculum():
                 if affected_in_loaded_curriculum:
                     blocked_chain_texts.append(
                         f"วิชา {failed_course_name} ({failed_cid}) ไม่ผ่าน ส่งผลกระทบต่อวิชาอื่นๆ ดังนี้:\n" +
-                        "\n".join([f"  - {name} ({aid})" for name, aid in affected_in_loaded_curriculum])
+                        "\n".join([f"  - {name} ({aid})" for name, aid in affected_in_loaded_curriculum])
                     )
         
         courses_subset_for_topo = [c for c in courses_data if c['id'] in all_loaded_course_ids]
@@ -2382,7 +2358,7 @@ def analyze_curriculum():
                         logger.info(f"Prediction successful: {prediction} (confidence: {confidence:.3f})")
                     else:
                         logger.warning(f"No prediction could be made with model {model_filename}.")
-            
+                
             except Exception as e:
                 logger.error(f"Error during prediction with model {model_filename}: {str(e)}")
 
@@ -2491,201 +2467,201 @@ def models_page():
     return render_template('model_management.html')
 @app.route('/predict_manual_input', methods=['POST'])
 def predict_manual_input():
-   """Predicts outcome from manually entered subject data."""
-   try:
-       data = request.json
-       student_name = data.pop('student_name', 'ผู้ใช้งาน')
-       model_filename = data.get('model_filename')
+    """Predicts outcome from manually entered subject data."""
+    try:
+        data = request.json
+        student_name = data.pop('student_name', 'ผู้ใช้งาน')
+        model_filename = data.get('model_filename')
 
-       if not model_filename:
-           return jsonify({'success': False, 'error': 'No model filename provided for manual prediction.'})
+        if not model_filename:
+            return jsonify({'success': False, 'error': 'No model filename provided for manual prediction.'})
 
-       model_filepath = os.path.join(app.config['MODEL_FOLDER'], model_filename)
-       if not os.path.exists(model_filepath):
-           return jsonify({'success': False, 'error': 'Specified model file not found for manual prediction.'})
+        model_filepath = os.path.join(app.config['MODEL_FOLDER'], model_filename)
+        if not os.path.exists(model_filepath):
+            return jsonify({'success': False, 'error': 'Specified model file not found for manual prediction.'})
 
-       try:
-           loaded_model_data = joblib.load(model_filepath)
-           model_info = {
-               'models': loaded_model_data['models'],
-               'scaler': loaded_model_data['scaler']
-           }
-           feature_cols = loaded_model_data['feature_columns']
-           data_format_used = loaded_model_data['data_format']
-           logger.info(f"Loaded model '{model_filename}' (format: {data_format_used}) for manual prediction.")
-       except Exception as e:
-           return jsonify({'success': False, 'error': f'Failed to load model {model_filename} for manual input: {str(e)}'})
+        try:
+            loaded_model_data = joblib.load(model_filepath)
+            model_info = {
+                'models': loaded_model_data['models'],
+                'scaler': loaded_model_data['scaler']
+            }
+            feature_cols = loaded_model_data['feature_columns']
+            data_format_used = loaded_model_data['data_format']
+            logger.info(f"Loaded model '{model_filename}' (format: {data_format_used}) for manual prediction.")
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Failed to load model {model_filename} for manual input: {str(e)}'})
 
-       input_grades_raw = {cid: grade for cid, grade in data.items() if cid != 'model_filename'}
+        input_grades_raw = {cid: grade for cid, grade in data.items() if cid != 'model_filename'}
 
-       student_data_for_prediction = {}
-       grade_mapping = app.config['DATA_CONFIG']['grade_mapping']
-       subject_categories = app.config['SUBJECT_CATEGORIES']
-       all_known_courses_from_config = app.config['COURSES_DATA']
+        student_data_for_prediction = {}
+        grade_mapping = app.config['DATA_CONFIG']['grade_mapping']
+        subject_categories = app.config['SUBJECT_CATEGORIES']
+        all_known_courses_from_config = app.config['COURSES_DATA']
 
-       all_grades_entered = []
-       subject_categories_grades = {cat: [] for cat in subject_categories.keys()}
-       subject_categories_grades['อื่นๆ'] = []
+        all_grades_entered = []
+        subject_categories_grades = {cat: [] for cat in subject_categories.keys()}
+        subject_categories_grades['อื่นๆ'] = []
 
-       for course_id, grade_str in input_grades_raw.items():
-           if grade_str and grade_str.strip():
-               numeric_grade = None
-               try:
-                   numeric_grade = float(grade_str)
-                   if not (0.0 <= numeric_grade <= 4.0):
-                       numeric_grade = 0.0
-               except ValueError:
-                   numeric_grade = grade_mapping.get(str(grade_str).upper(), 0.0)
-               
-               all_grades_entered.append(numeric_grade)
+        for course_id, grade_str in input_grades_raw.items():
+            if grade_str and grade_str.strip():
+                numeric_grade = None
+                try:
+                    numeric_grade = float(grade_str)
+                    if not (0.0 <= numeric_grade <= 4.0):
+                        numeric_grade = 0.0
+                except ValueError:
+                    numeric_grade = grade_mapping.get(str(grade_str).upper(), 0.0)
+                
+                all_grades_entered.append(numeric_grade)
 
-               course_name = ""
-               for c_data in all_known_courses_from_config:
-                   if c_data['id'] == course_id:
-                       course_name = c_data['thaiName']
-                       break
+                course_name = ""
+                for c_data in all_known_courses_from_config:
+                    if c_data['id'] == course_id:
+                        course_name = c_data['thaiName']
+                        break
 
-               category = 'อื่นๆ'
-               if course_name:
-                   for cat, info in subject_categories.items():
-                       if any(keyword in course_name.lower() for keyword in info['keywords']):
-                           category = cat
-                           break
-                   
-               subject_categories_grades.get(category, subject_categories_grades['อื่นๆ']).append(numeric_grade)
+                category = 'อื่นๆ'
+                if course_name:
+                    for cat, info in subject_categories.items():
+                        if any(keyword in course_name.lower() for keyword in info['keywords']):
+                            category = cat
+                            break
+                    
+                subject_categories_grades.get(category, subject_categories_grades['อื่นๆ']).append(numeric_grade)
 
-       gpa = np.mean(all_grades_entered) if all_grades_entered else 0.0
-       min_grade = np.min(all_grades_entered) if all_grades_entered else 0.0
-       max_grade = np.max(all_grades_entered) if all_grades_entered else 0.0
-       std_grade = np.std(all_grades_entered) if len(all_grades_entered) > 1 else 0.0
-       fail_count = sum(1 for g in all_grades_entered if g <= app.config['DATA_CONFIG']['grade_mapping'].get('D', 1.0) - 0.01)
-       fail_rate = fail_count / len(all_grades_entered) if all_grades_entered else 0.0
-       total_subjects = len(all_grades_entered)
+        gpa = np.mean(all_grades_entered) if all_grades_entered else 0.0
+        min_grade = np.min(all_grades_entered) if all_grades_entered else 0.0
+        max_grade = np.max(all_grades_entered) if all_grades_entered else 0.0
+        std_grade = np.std(all_grades_entered) if len(all_grades_entered) > 1 else 0.0
+        fail_count = sum(1 for g in all_grades_entered if g <= app.config['DATA_CONFIG']['grade_mapping'].get('D', 1.0) - 0.01)
+        fail_rate = fail_count / len(all_grades_entered) if all_grades_entered else 0.0
+        total_subjects = len(all_grades_entered)
 
-       student_data_for_prediction = {
-           'gpa': gpa,
-           'min_grade': min_grade,
-           'max_grade': max_grade,
-           'std_grade': std_grade,
-           'fail_count': fail_count,
-           'fail_rate': fail_rate,
-           'total_subjects': total_subjects,
-           'year_in': 0,
-           'year_out': 0,
-           'total_terms': 0
-       }
+        student_data_for_prediction = {
+            'gpa': gpa,
+            'min_grade': min_grade,
+            'max_grade': max_grade,
+            'std_grade': std_grade,
+            'fail_count': fail_count,
+            'fail_rate': fail_rate,
+            'total_subjects': total_subjects,
+            'year_in': 0,
+            'year_out': 0,
+            'total_terms': 0
+        }
 
-       for cat, cat_grades in subject_categories_grades.items():
-           if cat_grades:
-               student_data_for_prediction[f'gpa_{cat}'] = np.mean(cat_grades)
-               student_data_for_prediction[f'min_{cat}'] = np.min(cat_grades)
-               student_data_for_prediction[f'max_{cat}'] = np.max(cat_grades)
-               student_data_for_prediction[f'fail_rate_{cat}'] = sum(1 for g in cat_grades if g <= app.config['DATA_CONFIG']['grade_mapping'].get('D', 1.0) - 0.01) / len(cat_grades)
-           else:
-               student_data_for_prediction[f'gpa_{cat}'] = 0.0
-               student_data_for_prediction[f'min_{cat}'] = 0.0
-               student_data_for_prediction[f'max_{cat}'] = 0.0
-               student_data_for_prediction[f'fail_rate_{cat}'] = 0.0
+        for cat, cat_grades in subject_categories_grades.items():
+            if cat_grades:
+                student_data_for_prediction[f'gpa_{cat}'] = np.mean(cat_grades)
+                student_data_for_prediction[f'min_{cat}'] = np.min(cat_grades)
+                student_data_for_prediction[f'max_{cat}'] = np.max(cat_grades)
+                student_data_for_prediction[f'fail_rate_{cat}'] = sum(1 for g in cat_grades if g <= app.config['DATA_CONFIG']['grade_mapping'].get('D', 1.0) - 0.01) / len(cat_grades)
+            else:
+                student_data_for_prediction[f'gpa_{cat}'] = 0.0
+                student_data_for_prediction[f'min_{cat}'] = 0.0
+                student_data_for_prediction[f'max_{cat}'] = 0.0
+                student_data_for_prediction[f'fail_rate_{cat}'] = 0.0
 
-       processed_input_for_df = {}
-       for feature in feature_cols:
-           processed_input_for_df[feature] = [student_data_for_prediction.get(feature, 0.0)]
+        processed_input_for_df = {}
+        for feature in feature_cols:
+            processed_input_for_df[feature] = [student_data_for_prediction.get(feature, 0.0)]
 
-       input_df = pd.DataFrame(processed_input_for_df)
+        input_df = pd.DataFrame(processed_input_for_df)
 
-       trained_models = model_info['models']
-       scaler = model_info['scaler']
+        trained_models = model_info['models']
+        scaler = model_info['scaler']
 
-       predictions_proba_list = []
-       for name, model in trained_models.items():
-           try:
-               if name == 'lr':
-                   X_scaled = scaler.transform(input_df)
-                   pred_proba = model.predict_proba(X_scaled)
-               else:
-                   pred_proba = model.predict_proba(input_df)
-               
-               if pred_proba.shape[1] == 1:
-                   pred_proba = np.hstack((1 - pred_proba, pred_proba))
-               
-               predictions_proba_list.append(pred_proba)
-           except Exception as e:
-               logger.warning(f"Could not predict with model {name} from manual input: {str(e)}")
-               continue
+        predictions_proba_list = []
+        for name, model in trained_models.items():
+            try:
+                if name == 'lr':
+                    X_scaled = scaler.transform(input_df)
+                    pred_proba = model.predict_proba(X_scaled)
+                else:
+                    pred_proba = model.predict_proba(input_df)
+                
+                if pred_proba.shape[1] == 1:
+                    pred_proba = np.hstack((1 - pred_proba, pred_proba))
+                
+                predictions_proba_list.append(pred_proba)
+            except Exception as e:
+                logger.warning(f"Could not predict with model {name} from manual input: {str(e)}")
+                continue
 
-       if not predictions_proba_list:
-           return jsonify({'success': False, 'error': 'Could not make predictions with manual input.'})
+        if not predictions_proba_list:
+            return jsonify({'success': False, 'error': 'Could not make predictions with manual input.'})
 
-       avg_prob_per_student = np.mean([pred_proba_array[0] for pred_proba_array in predictions_proba_list], axis=0)
-       avg_prob_fail = avg_prob_per_student[0]
-       avg_prob_pass = avg_prob_per_student[1]
+        avg_prob_per_student = np.mean([pred_proba_array[0] for pred_proba_array in predictions_proba_list], axis=0)
+        avg_prob_fail = avg_prob_per_student[0]
+        avg_prob_pass = avg_prob_per_student[1]
 
-       prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
+        prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
 
-       confidence = max(avg_prob_pass, avg_prob_fail)
-       high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
-       medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
+        confidence = max(avg_prob_pass, avg_prob_fail)
+        high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
+        medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
 
-       if confidence > high_confidence_threshold:
-           risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-       elif confidence > medium_confidence_threshold:
-           risk_level = 'ปานกลาง'
-       else:
-           risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
+        if confidence > high_confidence_threshold:
+            risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
+        elif confidence > medium_confidence_threshold:
+            risk_level = 'ปานกลาง'
+        else:
+            risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
 
-       gpa_for_analysis = student_data_for_prediction.get('gpa', 0.0)
+        gpa_for_analysis = student_data_for_prediction.get('gpa', 0.0)
 
-       analysis = []
-       recommendations = []
+        analysis = []
+        recommendations = []
 
-       low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
-       warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
-       high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
+        low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
+        warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
+        high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
 
-       if gpa_for_analysis < low_gpa_threshold:
-           analysis.append(f"GPA ต่ำมาก ({float(gpa_for_analysis):.2f})")
-           recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
-       elif gpa_for_analysis < warning_gpa_threshold:
-           analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({float(gpa_for_analysis):.2f})")
-           recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
-       elif gpa_for_analysis < 3.0:
-           analysis.append(f"GPA พอใช้ ({float(gpa_for_analysis):.2f})")
-           recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
-       else:
-           analysis.append(f"GPA ดี ({float(gpa_for_analysis):.2f})")
-           recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
+        if gpa_for_analysis < low_gpa_threshold:
+            analysis.append(f"GPA ต่ำมาก ({float(gpa_for_analysis):.2f})")
+            recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
+        elif gpa_for_analysis < warning_gpa_threshold:
+            analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({float(gpa_for_analysis):.2f})")
+            recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
+        elif gpa_for_analysis < 3.0:
+            analysis.append(f"GPA พอใช้ ({float(gpa_for_analysis):.2f})")
+            recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
+        else:
+            analysis.append(f"GPA ดี ({float(gpa_for_analysis):.2f})")
+            recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
 
-       if prediction == 'ไม่จบ':
-           recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือ")
-           if student_data_for_prediction.get('fail_rate', 0) > high_fail_rate_threshold:
-               recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
+        if prediction == 'ไม่จบ':
+            recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือ")
+            if student_data_for_prediction.get('fail_rate', 0) > high_fail_rate_threshold:
+                recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
 
-       if data_format_used == 'subject_based':
-           weak_categories = []
-           for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
-               cat_gpa_key = f'gpa_{cat_key}'
-               if student_data_for_prediction.get(cat_gpa_key, 0) < low_gpa_threshold:
-                   weak_categories.append(cat_key)
-           if weak_categories:
-               recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
+        if data_format_used == 'subject_based':
+            weak_categories = []
+            for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
+                cat_gpa_key = f'gpa_{cat_key}'
+                if student_data_for_prediction.get(cat_gpa_key, 0) < low_gpa_threshold:
+                    weak_categories.append(cat_key)
+            if weak_categories:
+                recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
 
-       return jsonify({
-           'success': True,
-           'student_name': student_name,
-           'prediction': prediction,
-           'prob_pass': float(avg_prob_pass),
-           'prob_fail': float(avg_prob_fail),
-           'gpa_input': float(gpa_for_analysis),
-           'risk_level': risk_level,
-           'confidence': float(confidence),
-           'analysis': list(set(analysis)),
-           'recommendations': list(set(recommendations)),
-           'data_format_used': data_format_used
-       })
+        return jsonify({
+            'success': True,
+            'student_name': student_name,
+            'prediction': prediction,
+            'prob_pass': float(avg_prob_pass),
+            'prob_fail': float(avg_prob_fail),
+            'gpa_input': float(gpa_for_analysis),
+            'risk_level': risk_level,
+            'confidence': float(confidence),
+            'analysis': list(set(analysis)),
+            'recommendations': list(set(recommendations)),
+            'data_format_used': data_format_used
+        })
 
-   except Exception as e:
-       logger.error(f"Error during manual input prediction: {str(e)}")
-       return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
+    except Exception as e:
+        logger.error(f"Error during manual input prediction: {str(e)}")
+        return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
 
 
 def load_existing_models():
