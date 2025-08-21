@@ -25,7 +25,7 @@ import json
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from typing import Any, Dict, Optional, List
-
+from s3_storage import CloudflareR2Storage
 import config
 
 warnings.filterwarnings('ignore')
