@@ -1689,6 +1689,94 @@ def curriculum_prediction_form():
         grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
     )
 
+
+@app.route('/status')
+def status_page():
+    """หน้าแสดงสถานะระบบ"""
+    return render_template('status.html')
+
+@app.route('/api/system/status')
+def system_status():
+    """API สำหรับตรวจสอบสถานะระบบ"""
+    import sys
+    import flask
+    
+    try:
+        # ตรวจสอบ R2 connection
+        r2_connected = False
+        storage_provider = 'Local'
+        bucket_name = None
+        
+        if hasattr(storage, 's3_client') and storage.s3_client:
+            try:
+                storage.s3_client.head_bucket(Bucket=storage.bucket_name)
+                r2_connected = True
+                storage_provider = 'Cloudflare R2'
+                bucket_name = storage.bucket_name
+            except:
+                pass
+        
+        # นับจำนวนโมเดล
+        models_list = storage.list_models()
+        total_size = sum(m.get('size', 0) for m in models_list)
+        
+        # อ่าน logs ล่าสุด
+        recent_logs = []
+        try:
+            with open('app.log', 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                recent_logs = lines[-20:]  # 20 บรรทัดล่าสุด
+        except:
+            pass
+        
+        return jsonify({
+            'success': True,
+            'r2_connected': r2_connected,
+            'storage_provider': storage_provider,
+            'bucket_name': bucket_name,
+            'models_available': len(models_list),
+            'total_size': total_size,
+            'python_version': sys.version.split()[0],
+            'flask_version': flask.__version__,
+            'environment': os.environ.get('FLASK_ENV', 'production'),
+            'server_time': datetime.now().isoformat(),
+            'recent_logs': recent_logs
+        })
+    except Exception as e:
+        logger.error(f"Error getting system status: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/test-r2-connection')
+def test_r2_connection():
+    """ทดสอบการเชื่อมต่อ R2"""
+    try:
+        if not storage.s3_client:
+            return jsonify({
+                'success': False,
+                'error': 'R2 client not initialized - using local storage'
+            })
+        
+        # ทดสอบ list objects
+        response = storage.s3_client.list_objects_v2(
+            Bucket=storage.bucket_name,
+            MaxKeys=1
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'R2 connection successful',
+            'bucket': storage.bucket_name,
+            'endpoint': storage.endpoint_url
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+        
 @app.route('/api/config', methods=['GET'])
 def get_config_for_frontend():
     """Provides frontend with necessary configuration data like courses and terms."""
