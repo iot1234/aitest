@@ -71,44 +71,78 @@ models = {
 # S3 Storage Class for Bucketeer
 # ==========================================
 class S3Storage:
-    """Manager for S3 storage operations using Bucketeer"""
+    """Manager for S3 storage operations using Cloudflare R2"""
     
     def __init__(self):
-        """Initialize S3 client with Bucketeer credentials"""
+        """Initialize S3 client with Cloudflare R2 credentials"""
         try:
-            # Get Bucketeer credentials from environment
-            self.access_key = os.environ.get('BUCKETEER_AWS_ACCESS_KEY_ID')
-            self.secret_key = os.environ.get('BUCKETEER_AWS_SECRET_ACCESS_KEY')
-            self.bucket_name = os.environ.get('BUCKETEER_BUCKET_NAME')
+            # Get Cloudflare R2 credentials from environment
+            self.access_key = os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID')
+            self.secret_key = os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')
+            self.endpoint_url = os.environ.get('CLOUDFLARE_R2_ENDPOINT')
+            self.bucket_name = os.environ.get('CLOUDFLARE_R2_BUCKET_NAME')
             
-            # For local development, fallback to regular AWS credentials
-            if not self.access_key:
-                self.access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-                self.secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-                self.bucket_name = os.environ.get('S3_BUCKET_NAME', 'student-predictor-models')
+            # สำหรับ debugging
+            logger.info(f"🔧 R2 Configuration:")
+            logger.info(f"  - Endpoint: {self.endpoint_url}")
+            logger.info(f"  - Bucket: {self.bucket_name}")
+            logger.info(f"  - Access Key ID: {self.access_key[:10]}..." if self.access_key else "  - Access Key ID: None")
             
-            if not all([self.access_key, self.secret_key, self.bucket_name]):
-                logger.warning("S3 credentials not found. Using local storage fallback.")
+            if not all([self.access_key, self.secret_key, self.endpoint_url, self.bucket_name]):
+                logger.warning("⚠️ R2 credentials incomplete. Using local storage fallback.")
                 self.s3_client = None
                 self.use_local = True
             else:
-                # Initialize S3 client
+                # Initialize S3 client with Cloudflare R2 endpoint
                 self.s3_client = boto3.client(
                     's3',
+                    endpoint_url=self.endpoint_url,
                     aws_access_key_id=self.access_key,
                     aws_secret_access_key=self.secret_key,
-                    region_name='us-east-1'
+                    region_name='auto'  # R2 uses 'auto' region
                 )
                 self.use_local = False
-                logger.info(f"S3 Storage initialized with bucket: {self.bucket_name}")
+                logger.info(f"✅ Cloudflare R2 Storage initialized")
                 
-                # Ensure bucket exists and is accessible
+                # Test connection
                 self._verify_bucket()
                 
         except Exception as e:
-            logger.error(f"Error initializing S3 storage: {str(e)}")
+            logger.error(f"❌ Error initializing R2 storage: {str(e)}")
             self.s3_client = None
             self.use_local = True
+    
+    def _verify_bucket(self):
+        """Verify bucket exists and is accessible"""
+        try:
+            # ทดสอบ list objects แทน head_bucket
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                MaxKeys=1
+            )
+            logger.info(f"✅ R2 Bucket '{self.bucket_name}' verified successfully")
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == 'NoSuchBucket':
+                logger.info(f"🔨 Bucket '{self.bucket_name}' not found, creating...")
+                self._create_bucket()
+            else:
+                logger.error(f"❌ Error accessing bucket: {str(e)}")
+                # ใช้ local storage เป็น fallback
+                self.use_local = True
+                self.s3_client = None
+    
+    def _create_bucket(self):
+        """Create R2 bucket if it doesn't exist"""
+        try:
+            # Cloudflare R2 ไม่ต้องระบุ LocationConstraint
+            self.s3_client.create_bucket(Bucket=self.bucket_name)
+            logger.info(f"✅ Bucket '{self.bucket_name}' created successfully")
+        except ClientError as e:
+            logger.error(f"❌ Error creating bucket: {str(e)}")
+            # ใช้ local storage เป็น fallback
+            self.use_local = True
+            self.s3_client = None
     
     def _verify_bucket(self):
         """Verify bucket exists and is accessible"""
