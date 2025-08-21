@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}สถานะระบบ - {{ super() }}{% endblock %}
+
+{% block custom_css %}
+<style>
+.status-card {
+    background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.status-indicator {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 10px;
+    animation: pulse 2s infinite;
+}
+
+.status-online { background: #28a745; }
+.status-offline { background: #dc3545; }
+.status-warning { background: #ffc107; }
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.metric-box {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.log-viewer {
+    background: #1e1e1e;
+    color: #fff;
+    padding: 15px;
+    border-radius: 10px;
+    font-family: 'Courier New', monospace;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.log-error { color: #ff6b6b; }
+.log-warning { color: #ffd93d; }
+.log-info { color: #6bcf7f; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12 text-center text-white">
+            <h1 class="display-4 fw-bold mb-3">
+                <i class="bi bi-activity"></i> สถานะระบบ
+            </h1>
+            <p class="lead">ตรวจสอบการเชื่อมต่อและประสิทธิภาพของระบบ</p>
+        </div>
+    </div>
+
+    <!-- สถานะการเชื่อมต่อ -->
+    <div class="status-card">
+        <h4 class="mb-4"><i class="bi bi-hdd-network"></i> สถานะการเชื่อมต่อ</h4>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="metric-box">
+                    <h6>เว็บเซิร์ฟเวอร์</h6>
+                    <div id="server-status">
+                        <span class="status-indicator status-online"></span>
+                        <span class="text-success">ออนไลน์</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="metric-box">
+                    <h6>Cloudflare R2</h6>
+                    <div id="r2-status">
+                        <span class="status-indicator status-warning"></span>
+                        <span>กำลังตรวจสอบ...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="metric-box">
+                    <h6>โมเดล AI</h6>
+                    <div id="model-status">
+                        <span class="status-indicator status-warning"></span>
+                        <span>กำลังตรวจสอบ...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ข้อมูล Storage -->
+    <div class="status-card">
+        <h4 class="mb-4"><i class="bi bi-database"></i> ข้อมูล Storage</h4>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <h6>Storage Provider</h6>
+                    <div class="metric-value" id="storage-provider">-</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <h6>Bucket Name</h6>
+                    <div class="metric-value" id="bucket-name">-</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <h6>จำนวนโมเดล</h6>
+                    <div class="metric-value" id="model-count">0</div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="metric-box">
+                    <h6>ขนาดรวม</h6>
+                    <div class="metric-value" id="total-size">0 MB</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Info -->
+    <div class="status-card">
+        <h4 class="mb-4"><i class="bi bi-info-circle"></i> ข้อมูลระบบ</h4>
+        <div id="system-info">
+            <table class="table">
+                <tbody>
+                    <tr>
+                        <td><strong>Python Version:</strong></td>
+                        <td id="python-version">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Flask Version:</strong></td>
+                        <td id="flask-version">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Environment:</strong></td>
+                        <td id="environment">-</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Server Time:</strong></td>
+                        <td id="server-time">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Recent Logs -->
+    <div class="status-card">
+        <h4 class="mb-4"><i class="bi bi-terminal"></i> บันทึกล่าสุด</h4>
+        <div class="log-viewer" id="log-viewer">
+            <div class="text-center text-muted">กำลังโหลด...</div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="text-center mt-4">
+        <button class="btn btn-primary btn-lg me-2" onclick="checkAllStatus()">
+            <i class="bi bi-arrow-clockwise"></i> รีเฟรชสถานะ
+        </button>
+        <button class="btn btn-warning btn-lg" onclick="testConnection()">
+            <i class="bi bi-plugin"></i> ทดสอบการเชื่อมต่อ R2
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block custom_js %}
+<script>
+async function checkAllStatus() {
+    try {
+        const response = await fetch('/api/system/status');
+        const data = await response.json();
+        
+        // Update R2 Status
+        const r2Status = document.getElementById('r2-status');
+        if (data.r2_connected) {
+            r2Status.innerHTML = '<span class="status-indicator status-online"></span><span class="text-success">เชื่อมต่อแล้ว</span>';
+        } else {
+            r2Status.innerHTML = '<span class="status-indicator status-offline"></span><span class="text-danger">ไม่สามารถเชื่อมต่อ</span>';
+        }
+        
+        // Update Model Status
+        const modelStatus = document.getElementById('model-status');
+        if (data.models_available > 0) {
+            modelStatus.innerHTML = `<span class="status-indicator status-online"></span><span class="text-success">${data.models_available} โมเดล</span>`;
+        } else {
+            modelStatus.innerHTML = '<span class="status-indicator status-warning"></span><span class="text-warning">ไม่มีโมเดล</span>';
+        }
+        
+        // Update Storage Info
+        document.getElementById('storage-provider').textContent = data.storage_provider || 'Local';
+        document.getElementById('bucket-name').textContent = data.bucket_name || 'N/A';
+        document.getElementById('model-count').textContent = data.models_available || 0;
+        document.getElementById('total-size').textContent = formatBytes(data.total_size || 0);
+        
+        // Update System Info
+        document.getElementById('python-version').textContent = data.python_version || '-';
+        document.getElementById('flask-version').textContent = data.flask_version || '-';
+        document.getElementById('environment').textContent = data.environment || 'production';
+        document.getElementById('server-time').textContent = new Date(data.server_time).toLocaleString('th-TH');
+        
+        // Update Logs
+        if (data.recent_logs) {
+            const logViewer = document.getElementById('log-viewer');
+            logViewer.innerHTML = data.recent_logs.map(log => {
+                let className = 'log-info';
+                if (log.includes('ERROR')) className = 'log-error';
+                else if (log.includes('WARNING')) className = 'log-warning';
+                return `<div class="${className}">${log}</div>`;
+            }).join('');
+        }
+        
+    } catch (error) {
+        console.error('Error checking status:', error);
+        showAlert('ไม่สามารถตรวจสอบสถานะได้', 'danger');
+    }
+}
+
+async function testConnection() {
+    try {
+        showLoading('กำลังทดสอบการเชื่อมต่อ...');
+        const response = await fetch('/api/test-r2-connection');
+        const result = await response.json();
+        
+        if (result.success) {
+            showAlert('เชื่อมต่อ Cloudflare R2 สำเร็จ!', 'success');
+        } else {
+            showAlert('ไม่สามารถเชื่อมต่อ R2: ' + result.error, 'danger');
+        }
+    } catch (error) {
+        showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+    } finally {
+        hideLoading();
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Auto refresh every 30 seconds
+setInterval(checkAllStatus, 30000);
+
+// Initial load
+document.addEventListener('DOMContentLoaded', checkAllStatus);
+</script>
+{% endblock %}
