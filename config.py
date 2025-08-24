@@ -222,7 +222,7 @@ class Config:
         'max_features': 'sqrt',
         'bootstrap': True,
         'oob_score': True,
-        'n_jobs': -1,
+        'n_jobs': 1,
         'verbose': 0
     }
 
