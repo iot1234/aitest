@@ -1,3 +1,4 @@
+from advanced_training import AdvancedFeatureEngineer, ModelEvaluator
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -971,9 +972,10 @@ def train_ensemble_model(X, y):
 def train_model():
     """Handles model training with the uploaded file."""
     try:
-        logger.info("🚀 Starting model training process...")
+        logger.info("🚀 Starting ADVANCED model training process...")
         data = request.get_json()
         filename = data.get('filename')
+        use_advanced = data.get('use_advanced_training', True)  # Default to advanced
 
         if not filename:
             logger.warning("No filename provided for training")
@@ -1014,51 +1016,80 @@ def train_model():
         data_format = detect_data_format(df)
         logger.info(f"📊 Detected data format for training: {data_format}")
 
-        if data_format == 'subject_based':
-            processed_df = process_subject_data(df)
-        elif data_format == 'gpa_based':
-            processed_df = process_gpa_data(df)
+        # เลือกวิธีการประมวลผล
+        if use_advanced and data_format == 'subject_based':
+            logger.info("🧬 Using ADVANCED Context-Aware Training Strategy")
+            
+            # ใช้ Advanced Feature Engineering
+            engineer = AdvancedFeatureEngineer(
+                grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+            )
+            
+            # เตรียมข้อมูลแบบ Advanced
+            X, y = engineer.prepare_training_data(df)
+            
+            if len(X) == 0:
+                return jsonify({'success': False, 'error': 'Could not prepare training data'})
+            
+            # บันทึก course profiles สำหรับใช้ในการ predict
+            course_profiles = engineer.course_profiles
+            
         else:
-            return jsonify({'success': False, 'error': 'Unsupported data format. Please check file columns.'})
+            # ใช้วิธีเดิม
+            logger.info("📊 Using standard training strategy")
+            if data_format == 'subject_based':
+                processed_df = process_subject_data(df)
+            elif data_format == 'gpa_based':
+                processed_df = process_gpa_data(df)
+            else:
+                return jsonify({'success': False, 'error': 'Unsupported data format.'})
+
+            feature_cols = [col for col in processed_df.columns if col not in ['ชื่อ', 'graduated']]
+            X = processed_df[feature_cols].fillna(0)
+            y = processed_df['graduated']
+            course_profiles = None
 
         min_students_for_training = app.config['DATA_CONFIG']['min_students_for_training']
-        if len(processed_df) < min_students_for_training:
-            return jsonify({'success': False, 'error': f'Insufficient data for model training (at least {min_students_for_training} samples required).'})
+        if len(X) < min_students_for_training:
+            return jsonify({'success': False, 
+                          'error': f'Insufficient data ({min_students_for_training} samples required).'})
 
-        # เตรียมข้อมูลสำหรับการเทรน
-        feature_cols = [col for col in processed_df.columns if col not in ['ชื่อ', 'graduated']]
-        X = processed_df[feature_cols].fillna(0)
-        y = processed_df['graduated']
-
-        logger.info(f"🎯 Training data prepared: {len(X)} samples, {len(feature_cols)} features")
+        logger.info(f"🎯 Training data prepared: {len(X)} samples, {X.shape[1]} features")
         logger.info(f"📈 Label distribution: {y.value_counts().to_dict()}")
 
         # เทรนโมเดล
-        logger.info("🤖 Starting model training...")
+        logger.info("🤖 Starting ensemble model training...")
         model_result = train_ensemble_model(X, y)
-
-        # สร้างชื่อไฟล์โมเดล
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        model_filename = f'{data_format}_model_{timestamp}.joblib'
 
         # คำนวณ feature importance
         feature_importances = {}
         if 'rf' in model_result['models']:
             rf_model = model_result['models']['rf']
             if hasattr(rf_model, 'feature_importances_'):
-                importances = pd.Series(rf_model.feature_importances_, index=feature_cols).sort_values(ascending=False)
-                feature_importances = importances.head(5).to_dict()
+                feature_cols = X.columns.tolist()
+                importances = pd.Series(
+                    rf_model.feature_importances_, 
+                    index=feature_cols
+                ).sort_values(ascending=False)
+                feature_importances = importances.head(10).to_dict()
+
+        # สร้างชื่อไฟล์โมเดล
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        training_type = 'advanced' if use_advanced else 'standard'
+        model_filename = f'{data_format}_model_{training_type}_{timestamp}.joblib'
 
         # สร้างข้อมูลโมเดลสำหรับบันทึก
         model_data = {
             'models': model_result['models'],
             'scaler': model_result['scaler'],
-            'feature_columns': feature_cols.tolist(),
+            'feature_columns': X.columns.tolist(),
             'data_format': data_format,
+            'training_type': training_type,
+            'course_profiles': course_profiles,  # บันทึก course DNA
             'created_at': datetime.now().isoformat(),
             'training_data_info': {
-                'rows': len(processed_df),
-                'features': len(feature_cols),
+                'rows': len(X),
+                'features': X.shape[1],
                 'graduated_count': int(y.sum()),
                 'not_graduated_count': int(len(y) - y.sum()),
                 'source_file': filename
@@ -1086,32 +1117,19 @@ def train_model():
         else:
             logger.warning(f"⚠️ Model save failed, but continuing...")
 
-        # อัปเดตโมเดลในหน่วยความจำ
-        if data_format == 'subject_based':
-            models['subject_model'] = model_result
-            models['subject_model_info'] = model_data['performance_metrics'].copy()
-            models['subject_model_info']['created_at'] = model_data['created_at']
-            models['subject_feature_cols'] = feature_cols.tolist()
-            models['subject_model_info']['filename'] = model_filename
-        else:
-            models['gpa_model'] = model_result
-            models['gpa_model_info'] = model_data['performance_metrics'].copy()
-            models['gpa_model_info']['created_at'] = model_data['created_at']
-            models['gpa_feature_cols'] = feature_cols.tolist()
-            models['gpa_model_info']['filename'] = model_filename
-
         logger.info("🎉 Model training completed successfully!")
 
         return jsonify({
             'success': True,
             'model_filename': model_filename,
+            'training_type': training_type,
             'accuracy': model_result['accuracy'],
             'precision': model_result['precision'],
             'recall': model_result['recall'],
             'f1_score': model_result['f1_score'],
-            'training_samples': model_result['training_samples'],
-            'validation_samples': model_result['validation_samples'],
-            'features_count': model_result['features_count'],
+            'training_samples': len(X),
+            'validation_samples': model_result.get('validation_samples', 0),
+            'features_count': X.shape[1],
             'data_format': data_format,
             'feature_importances': feature_importances,
             'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
@@ -1119,8 +1137,7 @@ def train_model():
 
     except Exception as e:
         logger.error(f"❌ Error during model training: {str(e)}", exc_info=True)
-        return jsonify({'success': False, 'error': f'An error occurred during model training: {str(e)}'})
-    
+        return jsonify({'success': False, 'error': f'Training error: {str(e)}'})
 
 
 @app.route('/predict', methods=['POST'])
