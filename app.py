@@ -1,19 +1,8 @@
 from advanced_training import AdvancedFeatureEngineer, ModelEvaluator
 from dotenv import load_dotenv
 
-# ค้นหาและโหลด .env ไฟล์
-env_path = Path('.') / '.env'
-if env_path.exists():
-    load_dotenv(env_path, override=True)
-    print(f"✅ Loaded .env from: {env_path.absolute()}")
-else:
-    print(f"⚠️ .env file not found at: {env_path.absolute()}")
-    
-    # ตรวจสอบว่าโหลดค่าได้
-print(f"🔧 R2 Config Check:")
-print(f"  - Access Key: {os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', 'NOT FOUND')[:10]}...")
-print(f"  - Endpoint: {os.environ.get('CLOUDFLARE_R2_ENDPOINT', 'NOT FOUND')}")
-
+# โหลด environment variables จาก .env
+load_dotenv(override=True)
 
 from flask import (
     Flask,
@@ -45,9 +34,6 @@ from typing import Any, Dict, Optional, List
 
 import config
 
-
-
-
 warnings.filterwarnings('ignore')
 
 # Set up logging
@@ -61,6 +47,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ตรวจสอบ environment variables
+logger.info("=" * 50)
+logger.info("🔧 Environment Check")
+logger.info("=" * 50)
+logger.info(f"📁 Working Directory: {os.getcwd()}")
+logger.info(f"📄 .env exists: {os.path.exists('.env')}")
+logger.info(f"🔑 R2 Access Key: {os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', 'NOT FOUND')[:10] if os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID') else 'NOT FOUND'}...")
+logger.info(f"🪣 R2 Bucket: {os.environ.get('CLOUDFLARE_R2_BUCKET_NAME', 'NOT FOUND')}")
+logger.info("=" * 50)
 # Create Flask app
 app = Flask(__name__)
 # Load settings from config.py
