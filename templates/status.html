@@ -10,6 +10,7 @@
     border-radius: 15px;
     padding: 25px;
     margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .status-indicator {
@@ -26,37 +27,150 @@
 .status-warning { background: #ffc107; }
 
 @keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+    0% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; box-shadow: 0 0 0 8px transparent; }
 }
 
 .metric-box {
     background: #f8f9fa;
     border-radius: 10px;
-    padding: 15px;
+    padding: 20px;
     text-align: center;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.metric-box:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .metric-value {
-    font-size: 2rem;
+    font-size: 1.8rem;
     font-weight: bold;
     color: #667eea;
+    word-break: break-all;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-top: 5px;
 }
 
 .log-viewer {
     background: #1e1e1e;
-    color: #fff;
-    padding: 15px;
+    color: #d4d4d4;
+    padding: 20px;
     border-radius: 10px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
     max-height: 400px;
     overflow-y: auto;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
-.log-error { color: #ff6b6b; }
+.log-viewer::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.log-viewer::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+.log-viewer::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+.log-viewer::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+.log-error { color: #ff6b6b; font-weight: bold; }
 .log-warning { color: #ffd93d; }
 .log-info { color: #6bcf7f; }
+.log-debug { color: #a0a0a0; }
+
+.env-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.env-status-item {
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.env-status-item .status-icon {
+    font-size: 1.2rem;
+}
+
+.refresh-btn {
+    animation: none;
+    transition: transform 0.3s ease;
+}
+
+.refresh-btn.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.alert-inline {
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alert-inline.alert-danger {
+    background: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    color: #721c24;
+}
+
+.alert-inline.alert-warning {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: #856404;
+}
+
+.connection-details {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0,0,0,0.05);
+    border-radius: 5px;
+    font-size: 0.85rem;
+}
+
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    height: 20px;
+    border-radius: 4px;
+}
+
+@keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
 </style>
 {% endblock %}
 
@@ -71,35 +185,41 @@
         </div>
     </div>
 
+    <!-- Alert Container -->
+    <div id="statusAlertContainer"></div>
+
     <!-- สถานะการเชื่อมต่อ -->
     <div class="status-card">
         <h4 class="mb-4"><i class="bi bi-hdd-network"></i> สถานะการเชื่อมต่อ</h4>
         <div class="row">
             <div class="col-md-4 mb-3">
                 <div class="metric-box">
-                    <h6>เว็บเซิร์ฟเวอร์</h6>
+                    <div class="metric-label">เว็บเซิร์ฟเวอร์</div>
                     <div id="server-status">
                         <span class="status-indicator status-online"></span>
                         <span class="text-success">ออนไลน์</span>
                     </div>
+                    <small class="text-muted">Flask Application</small>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="metric-box">
-                    <h6>Cloudflare R2</h6>
+                    <div class="metric-label">Cloudflare R2 Storage</div>
                     <div id="r2-status">
                         <span class="status-indicator status-warning"></span>
-                        <span>กำลังตรวจสอบ...</span>
+                        <span class="text-muted">กำลังตรวจสอบ...</span>
                     </div>
+                    <div id="r2-details" class="mt-2"></div>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="metric-box">
-                    <h6>โมเดล AI</h6>
+                    <div class="metric-label">โมเดล AI</div>
                     <div id="model-status">
                         <span class="status-indicator status-warning"></span>
-                        <span>กำลังตรวจสอบ...</span>
+                        <span class="text-muted">กำลังตรวจสอบ...</span>
                     </div>
+                    <div id="model-details" class="mt-2"></div>
                 </div>
             </div>
         </div>
@@ -111,27 +231,58 @@
         <div class="row">
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <h6>Storage Provider</h6>
-                    <div class="metric-value" id="storage-provider">-</div>
+                    <div class="metric-label">Storage Provider</div>
+                    <div class="metric-value" id="storage-provider">
+                        <div class="loading-skeleton"></div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <h6>Bucket Name</h6>
-                    <div class="metric-value" id="bucket-name">-</div>
+                    <div class="metric-label">Bucket Name</div>
+                    <div class="metric-value" id="bucket-name" style="font-size: 1.2rem;">
+                        <div class="loading-skeleton"></div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <h6>จำนวนโมเดล</h6>
-                    <div class="metric-value" id="model-count">0</div>
+                    <div class="metric-label">จำนวนโมเดล</div>
+                    <div class="metric-value" id="model-count">
+                        <div class="loading-skeleton"></div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
                 <div class="metric-box">
-                    <h6>ขนาดรวม</h6>
-                    <div class="metric-value" id="total-size">0 MB</div>
+                    <div class="metric-label">ขนาดรวม</div>
+                    <div class="metric-value" id="total-size">
+                        <div class="loading-skeleton"></div>
+                    </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Environment Variables Status -->
+    <div class="status-card">
+        <h4 class="mb-4"><i class="bi bi-shield-check"></i> สถานะ Environment Variables</h4>
+        <div id="env-status" class="env-status-grid">
+            <div class="env-status-item">
+                <span>R2 Access Key</span>
+                <span id="env-r2-access" class="status-icon">⏳</span>
+            </div>
+            <div class="env-status-item">
+                <span>R2 Secret Key</span>
+                <span id="env-r2-secret" class="status-icon">⏳</span>
+            </div>
+            <div class="env-status-item">
+                <span>R2 Endpoint</span>
+                <span id="env-r2-endpoint" class="status-icon">⏳</span>
+            </div>
+            <div class="env-status-item">
+                <span>R2 Bucket</span>
+                <span id="env-r2-bucket" class="status-icon">⏳</span>
             </div>
         </div>
     </div>
@@ -140,23 +291,35 @@
     <div class="status-card">
         <h4 class="mb-4"><i class="bi bi-info-circle"></i> ข้อมูลระบบ</h4>
         <div id="system-info">
-            <table class="table">
+            <table class="table table-hover">
                 <tbody>
                     <tr>
-                        <td><strong>Python Version:</strong></td>
-                        <td id="python-version">-</td>
+                        <td width="200"><strong>Python Version:</strong></td>
+                        <td id="python-version"><div class="loading-skeleton" style="width: 100px;"></div></td>
                     </tr>
                     <tr>
                         <td><strong>Flask Version:</strong></td>
-                        <td id="flask-version">-</td>
+                        <td id="flask-version"><div class="loading-skeleton" style="width: 100px;"></div></td>
                     </tr>
                     <tr>
                         <td><strong>Environment:</strong></td>
-                        <td id="environment">-</td>
+                        <td id="environment"><div class="loading-skeleton" style="width: 100px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Debug Mode:</strong></td>
+                        <td id="debug-mode"><div class="loading-skeleton" style="width: 100px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Upload Folder:</strong></td>
+                        <td id="upload-folder"><div class="loading-skeleton" style="width: 200px;"></div></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Model Folder:</strong></td>
+                        <td id="model-folder"><div class="loading-skeleton" style="width: 200px;"></div></td>
                     </tr>
                     <tr>
                         <td><strong>Server Time:</strong></td>
-                        <td id="server-time">-</td>
+                        <td id="server-time"><div class="loading-skeleton" style="width: 200px;"></div></td>
                     </tr>
                 </tbody>
             </table>
@@ -165,19 +328,27 @@
 
     <!-- Recent Logs -->
     <div class="status-card">
-        <h4 class="mb-4"><i class="bi bi-terminal"></i> บันทึกล่าสุด</h4>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0"><i class="bi bi-terminal"></i> บันทึกล่าสุด</h4>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">
+                <i class="bi bi-trash"></i> ล้างบันทึก
+            </button>
+        </div>
         <div class="log-viewer" id="log-viewer">
-            <div class="text-center text-muted">กำลังโหลด...</div>
+            <div class="text-center text-muted">กำลังโหลดบันทึก...</div>
         </div>
     </div>
 
     <!-- Actions -->
-    <div class="text-center mt-4">
-        <button class="btn btn-primary btn-lg me-2" onclick="checkAllStatus()">
-            <i class="bi bi-arrow-clockwise"></i> รีเฟรชสถานะ
+    <div class="text-center mt-4 mb-5">
+        <button class="btn btn-primary btn-lg me-2" onclick="checkAllStatus()" id="refreshBtn">
+            <i class="bi bi-arrow-clockwise refresh-btn"></i> รีเฟรชสถานะ
         </button>
-        <button class="btn btn-warning btn-lg" onclick="testConnection()">
+        <button class="btn btn-warning btn-lg me-2" onclick="testR2Connection()">
             <i class="bi bi-plugin"></i> ทดสอบการเชื่อมต่อ R2
+        </button>
+        <button class="btn btn-info btn-lg" onclick="downloadSystemInfo()">
+            <i class="bi bi-download"></i> ดาวน์โหลดข้อมูลระบบ
         </button>
     </div>
 </div>
@@ -185,74 +356,210 @@
 
 {% block custom_js %}
 <script>
+let autoRefreshInterval = null;
+
+// Main function to check all system status
 async function checkAllStatus() {
+    const refreshBtn = document.getElementById('refreshBtn');
+    const refreshIcon = refreshBtn.querySelector('.refresh-btn');
+    refreshIcon.classList.add('spinning');
+    
     try {
         const response = await fetch('/api/system/status');
         const data = await response.json();
         
-        // Update R2 Status
-        const r2Status = document.getElementById('r2-status');
-        if (data.r2_connected) {
-            r2Status.innerHTML = '<span class="status-indicator status-online"></span><span class="text-success">เชื่อมต่อแล้ว</span>';
-        } else {
-            r2Status.innerHTML = '<span class="status-indicator status-offline"></span><span class="text-danger">ไม่สามารถเชื่อมต่อ</span>';
+        if (!data.success) {
+            showStatusAlert('เกิดข้อผิดพลาดในการตรวจสอบสถานะ: ' + (data.error || 'Unknown error'), 'danger');
+            console.error('Status check failed:', data);
+            return;
         }
+        
+        // Update R2 Status
+        updateR2Status(data);
         
         // Update Model Status
-        const modelStatus = document.getElementById('model-status');
-        if (data.models_available > 0) {
-            modelStatus.innerHTML = `<span class="status-indicator status-online"></span><span class="text-success">${data.models_available} โมเดล</span>`;
-        } else {
-            modelStatus.innerHTML = '<span class="status-indicator status-warning"></span><span class="text-warning">ไม่มีโมเดล</span>';
-        }
+        updateModelStatus(data);
         
         // Update Storage Info
-        document.getElementById('storage-provider').textContent = data.storage_provider || 'Local';
-        document.getElementById('bucket-name').textContent = data.bucket_name || 'N/A';
-        document.getElementById('model-count').textContent = data.models_available || 0;
-        document.getElementById('total-size').textContent = formatBytes(data.total_size || 0);
+        updateStorageInfo(data);
+        
+        // Update Environment Variables Status
+        updateEnvStatus(data);
         
         // Update System Info
-        document.getElementById('python-version').textContent = data.python_version || '-';
-        document.getElementById('flask-version').textContent = data.flask_version || '-';
-        document.getElementById('environment').textContent = data.environment || 'production';
-        document.getElementById('server-time').textContent = new Date(data.server_time).toLocaleString('th-TH');
+        updateSystemInfo(data);
         
         // Update Logs
-        if (data.recent_logs) {
-            const logViewer = document.getElementById('log-viewer');
-            logViewer.innerHTML = data.recent_logs.map(log => {
-                let className = 'log-info';
-                if (log.includes('ERROR')) className = 'log-error';
-                else if (log.includes('WARNING')) className = 'log-warning';
-                return `<div class="${className}">${log}</div>`;
-            }).join('');
-        }
+        updateLogs(data);
+        
+        // Clear any previous error alerts
+        document.getElementById('statusAlertContainer').innerHTML = '';
         
     } catch (error) {
         console.error('Error checking status:', error);
-        showAlert('ไม่สามารถตรวจสอบสถานะได้', 'danger');
+        showStatusAlert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: ' + error.message, 'danger');
+    } finally {
+        refreshIcon.classList.remove('spinning');
     }
 }
 
-async function testConnection() {
+function updateR2Status(data) {
+    const r2Status = document.getElementById('r2-status');
+    const r2Details = document.getElementById('r2-details');
+    
+    if (data.r2_connected) {
+        r2Status.innerHTML = `
+            <span class="status-indicator status-online"></span>
+            <span class="text-success">เชื่อมต่อแล้ว</span>
+        `;
+        r2Details.innerHTML = `<small class="text-success">✓ พร้อมใช้งาน</small>`;
+    } else {
+        r2Status.innerHTML = `
+            <span class="status-indicator status-offline"></span>
+            <span class="text-danger">ไม่สามารถเชื่อมต่อ</span>
+        `;
+        if (data.error_message) {
+            r2Details.innerHTML = `<small class="text-danger">${escapeHtml(data.error_message)}</small>`;
+        } else {
+            r2Details.innerHTML = `<small class="text-warning">ใช้ Local Storage</small>`;
+        }
+    }
+}
+
+function updateModelStatus(data) {
+    const modelStatus = document.getElementById('model-status');
+    const modelDetails = document.getElementById('model-details');
+    
+    if (data.models_available > 0) {
+        modelStatus.innerHTML = `
+            <span class="status-indicator status-online"></span>
+            <span class="text-success">${data.models_available} โมเดล</span>
+        `;
+        modelDetails.innerHTML = `<small class="text-muted">พร้อมใช้งาน</small>`;
+    } else {
+        modelStatus.innerHTML = `
+            <span class="status-indicator status-warning"></span>
+            <span class="text-warning">ไม่มีโมเดล</span>
+        `;
+        modelDetails.innerHTML = `<small class="text-muted">กรุณาฝึกโมเดลใหม่</small>`;
+    }
+}
+
+function updateStorageInfo(data) {
+    document.getElementById('storage-provider').innerHTML = `<span class="${data.r2_connected ? 'text-primary' : 'text-secondary'}">${data.storage_provider || 'Local'}</span>`;
+    document.getElementById('bucket-name').innerHTML = data.bucket_name || 'N/A';
+    document.getElementById('model-count').textContent = data.models_available || 0;
+    document.getElementById('total-size').textContent = formatBytes(data.total_size || 0);
+}
+
+function updateEnvStatus(data) {
+    if (data.env_vars_status) {
+        const statusIcons = {
+            true: '<span class="text-success">✓</span>',
+            false: '<span class="text-danger">✗</span>'
+        };
+        
+        document.getElementById('env-r2-access').innerHTML = statusIcons[data.env_vars_status.R2_ACCESS_KEY];
+        document.getElementById('env-r2-secret').innerHTML = statusIcons[data.env_vars_status.R2_SECRET_KEY];
+        document.getElementById('env-r2-endpoint').innerHTML = statusIcons[data.env_vars_status.R2_ENDPOINT];
+        document.getElementById('env-r2-bucket').innerHTML = statusIcons[data.env_vars_status.R2_BUCKET];
+    }
+}
+
+function updateSystemInfo(data) {
+    document.getElementById('python-version').textContent = data.python_version || '-';
+    document.getElementById('flask-version').textContent = data.flask_version || '-';
+    document.getElementById('environment').innerHTML = `<span class="badge bg-${data.environment === 'production' ? 'success' : 'warning'}">${data.environment || 'production'}</span>`;
+    document.getElementById('debug-mode').innerHTML = data.debug_mode ? 
+        '<span class="badge bg-warning">เปิด</span>' : 
+        '<span class="badge bg-success">ปิด</span>';
+    
+    if (data.app_folders) {
+        document.getElementById('upload-folder').innerHTML = `
+            ${data.app_folders.upload_folder} 
+            ${data.app_folders.upload_exists ? '<span class="text-success">✓</span>' : '<span class="text-danger">✗</span>'}
+        `;
+        document.getElementById('model-folder').innerHTML = `
+            ${data.app_folders.model_folder} 
+            ${data.app_folders.model_exists ? '<span class="text-success">✓</span>' : '<span class="text-danger">✗</span>'}
+        `;
+    }
+    
+    if (data.server_time) {
+        const serverTime = new Date(data.server_time);
+        document.getElementById('server-time').textContent = serverTime.toLocaleString('th-TH');
+    }
+}
+
+function updateLogs(data) {
+    const logViewer = document.getElementById('log-viewer');
+    
+    if (data.recent_logs && data.recent_logs.length > 0) {
+        logViewer.innerHTML = data.recent_logs.map(log => {
+            let className = 'log-info';
+            if (log.includes('ERROR') || log.includes('❌')) className = 'log-error';
+            else if (log.includes('WARNING') || log.includes('⚠️')) className = 'log-warning';
+            else if (log.includes('DEBUG')) className = 'log-debug';
+            else if (log.includes('✅') || log.includes('SUCCESS')) className = 'log-info';
+            
+            return `<div class="${className}">${escapeHtml(log)}</div>`;
+        }).join('');
+        
+        // Auto scroll to bottom
+        logViewer.scrollTop = logViewer.scrollHeight;
+    } else {
+        logViewer.innerHTML = '<div class="text-center text-muted">ไม่มีบันทึกล่าสุด</div>';
+    }
+}
+
+// Test R2 Connection
+async function testR2Connection() {
     try {
-        showLoading('กำลังทดสอบการเชื่อมต่อ...');
+        showStatusAlert('กำลังทดสอบการเชื่อมต่อ Cloudflare R2...', 'info');
+        
         const response = await fetch('/api/test-r2-connection');
         const result = await response.json();
         
         if (result.success) {
-            showAlert('เชื่อมต่อ Cloudflare R2 สำเร็จ!', 'success');
+            showStatusAlert(`✅ เชื่อมต่อ Cloudflare R2 สำเร็จ! (Bucket: ${result.bucket})`, 'success');
         } else {
-            showAlert('ไม่สามารถเชื่อมต่อ R2: ' + result.error, 'danger');
+            showStatusAlert(`❌ ไม่สามารถเชื่อมต่อ R2: ${result.error}`, 'danger');
         }
+        
+        // Refresh status after test
+        setTimeout(checkAllStatus, 1000);
+        
     } catch (error) {
-        showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
-    } finally {
-        hideLoading();
+        showStatusAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
     }
 }
 
+// Download System Info
+function downloadSystemInfo() {
+    fetch('/api/system/status')
+        .then(response => response.json())
+        .then(data => {
+            const dataStr = JSON.stringify(data, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `system_info_${new Date().toISOString().slice(0,10)}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        })
+        .catch(error => {
+            showStatusAlert('ไม่สามารถดาวน์โหลดข้อมูลได้: ' + error.message, 'danger');
+        });
+}
+
+// Clear Logs
+function clearLogs() {
+    document.getElementById('log-viewer').innerHTML = '<div class="text-center text-muted">บันทึกถูกล้างแล้ว</div>';
+}
+
+// Utility Functions
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -261,10 +568,68 @@ function formatBytes(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Auto refresh every 30 seconds
-setInterval(checkAllStatus, 30000);
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.toString().replace(/[&<>"']/g, m => map[m]);
+}
+
+function showStatusAlert(message, type) {
+    const alertContainer = document.getElementById('statusAlertContainer');
+    const alertId = 'alert-' + Date.now();
+    
+    const alertHtml = `
+        <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    alertContainer.innerHTML = alertHtml;
+    
+    // Auto dismiss after 5 seconds
+    if (type !== 'danger') {
+        setTimeout(() => {
+            const alertElement = document.getElementById(alertId);
+            if (alertElement) {
+                alertElement.classList.remove('show');
+                setTimeout(() => alertElement.remove(), 150);
+            }
+        }, 5000);
+    }
+}
+
+// Auto refresh toggle
+function toggleAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        showStatusAlert('ปิดการรีเฟรชอัตโนมัติ', 'info');
+    } else {
+        autoRefreshInterval = setInterval(checkAllStatus, 30000); // 30 seconds
+        showStatusAlert('เปิดการรีเฟรชอัตโนมัติทุก 30 วินาที', 'info');
+    }
+}
 
 // Initial load
-document.addEventListener('DOMContentLoaded', checkAllStatus);
+document.addEventListener('DOMContentLoaded', function() {
+    checkAllStatus();
+    
+    // Enable auto refresh by default
+    autoRefreshInterval = setInterval(checkAllStatus, 30000);
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+});
 </script>
 {% endblock %}
