@@ -886,11 +886,11 @@ def train_ensemble_model(X, y):
         try:
             logger.info("Performing GridSearchCV for RandomForest...")
             grid_search_rf = GridSearchCV(
-                RandomForestClassifier(random_state=app.config['ML_CONFIG']['random_state'], n_jobs=app.config['ML_CONFIG']['n_jobs']),
+                RandomForestClassifier(random_state=app.config['ML_CONFIG']['random_state'], n_jobs=1),
                 param_grid_rf,
                 cv=app.config['ML_CONFIG']['cv_folds'],
                 scoring='accuracy',
-                n_jobs=app.config['ML_CONFIG']['n_jobs'],
+                n_jobs=1,
                 verbose=app.config['ML_CONFIG']['verbose']
             )
             grid_search_rf.fit(X_train, y_train)
@@ -903,7 +903,7 @@ def train_ensemble_model(X, y):
                 n_estimators=app.config['ML_CONFIG']['n_estimators'],
                 max_depth=app.config['ML_CONFIG']['max_depth'],
                 random_state=app.config['ML_CONFIG']['random_state'],
-                n_jobs=app.config['ML_CONFIG']['n_jobs']
+                n_jobs=1
             )
             best_rf.fit(X_train, y_train)
 
@@ -914,7 +914,7 @@ def train_ensemble_model(X, y):
                 param_grid_gb,
                 cv=app.config['ML_CONFIG']['cv_folds'],
                 scoring='accuracy',
-                n_jobs=app.config['ML_CONFIG']['n_jobs'],
+                n_jobs=1,
                 verbose=app.config['ML_CONFIG']['verbose']
             )
             grid_search_gb.fit(X_train, y_train)
@@ -939,7 +939,7 @@ def train_ensemble_model(X, y):
                 param_grid_lr,
                 cv=app.config['ML_CONFIG']['cv_folds'],
                 scoring='accuracy',
-                n_jobs=app.config['ML_CONFIG']['n_jobs'],
+                n_jobs=1,
                 verbose=app.config['ML_CONFIG']['verbose']
             )
             grid_search_lr.fit(X_train_scaled, y_train)
@@ -1726,7 +1726,7 @@ def linear_regression_next_term_gpa_backend(term_gpas):
     sum_xy = np.sum(x_vals * y_vals)
     sum_xx = np.sum(x_vals * x_vals)
 
-    denominator = (n * sum_xx - sum_x * sum_x)
+    denominator = (n * sum_xx - sum_x * sum_y)
     if denominator == 0:
         return y_vals[-1]
 
