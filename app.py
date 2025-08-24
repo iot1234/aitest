@@ -1837,7 +1837,7 @@ def system_status():
         
         if hasattr(storage, 's3_client') and storage.s3_client and not storage.use_local:
             try:
-                storage.s3_client.list_objects_v2(Bucket=storage.bucket_name, MaxKeys=1)
+                response = storage.s3_client.list_objects_v2(Bucket=storage.bucket_name, MaxKeys=1)
                 r2_connected = True
                 storage_provider = 'Cloudflare R2'
                 bucket_name = storage.bucket_name
@@ -1855,18 +1855,6 @@ def system_status():
             models_list = []
             total_size = 0
         
-        # อ่าน logs ล่าสุด
-        recent_logs = []
-        try:
-            log_file = 'app.log'
-            if os.path.exists(log_file):
-                with open(log_file, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                    recent_logs = [line.strip() for line in lines[-20:]]  # 20 บรรทัดล่าสุด
-        except Exception as e:
-            logger.warning(f"Could not read logs: {e}")
-            recent_logs = [f"Could not read logs: {str(e)}"]
-        
         status_data = {
             'success': True,
             'r2_connected': r2_connected,
@@ -1879,7 +1867,6 @@ def system_status():
             'environment': os.environ.get('FLASK_ENV', 'production'),
             'debug_mode': app.debug,
             'server_time': datetime.now().isoformat(),
-            'recent_logs': recent_logs,
             'app_folders': {
                 'upload_folder': app.config['UPLOAD_FOLDER'],
                 'model_folder': app.config['MODEL_FOLDER'],
@@ -1934,6 +1921,32 @@ def test_r2_connection():
             'error': str(e),
             'storage_provider': 'local_fallback'
         })
+        
+@app.route('/api/test-r2')
+def test_r2():
+    try:
+        # ทดสอบเขียนไฟล์
+        test_data = {'test': True, 'timestamp': datetime.now().isoformat()}
+        success = storage.save_model(test_data, 'test_model.joblib')
+        
+        if success:
+            # ทดสอบอ่านไฟล์
+            loaded = storage.load_model('test_model.joblib')
+            if loaded:
+                # ลบไฟล์ทดสอบ
+                storage.delete_model('test_model.joblib')
+                return jsonify({
+                    'success': True,
+                    'message': 'R2 storage working perfectly!',
+                    'can_write': True,
+                    'can_read': True,
+                    'can_delete': True
+                })
+        
+        return jsonify({'success': False, 'message': 'R2 test failed'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
         
 @app.route('/api/config', methods=['GET'])
 def get_config_for_frontend():
