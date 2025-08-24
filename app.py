@@ -105,7 +105,11 @@ class S3Storage:
             
             if os.path.exists('.env'):
                 with open('.env', 'r') as f:
-                    logger.info(f"📄 .env size: {len(f.read())} bytes")
+                    content = f.read()
+                    logger.info(f"📄 .env size: {len(content)} bytes")
+                    # ตรวจสอบว่ามี credentials จริงๆ
+                    if 'CLOUDFLARE_R2_ACCESS_KEY_ID' not in content:
+                        logger.error("❌ CLOUDFLARE_R2_ACCESS_KEY_ID not found in .env")
             
             logger.info(f"🔑 Access Key: {self.access_key[:10]}***" if self.access_key else "❌ Access Key: MISSING")
             logger.info(f"🔑 Secret Key: {'***' + self.secret_key[-5:] if self.secret_key else '❌ MISSING'}")
@@ -126,10 +130,14 @@ class S3Storage:
                 endpoint_url=self.endpoint_url,
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
-                region_name='auto'
+                region_name='auto',
+                config=boto3.session.Config(
+                    signature_version='s3v4',
+                    retries={'max_attempts': 3}
+                )
             )
             
-            # Test connection
+            # Test connection with better error handling
             try:
                 response = self.s3_client.list_objects_v2(
                     Bucket=self.bucket_name,
@@ -139,12 +147,24 @@ class S3Storage:
                 logger.info(f"📦 Objects in bucket: {response.get('KeyCount', 0)}")
                 self.use_local = False
                 
-            except Exception as e:
-                logger.error(f"❌ R2 connection test failed: {str(e)}")
-                logger.info("📁 Falling back to LOCAL storage")
-                self.use_local = True
-                self.s3_client = None
-                
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                if error_code == 'NoSuchBucket':
+                    logger.info(f"🔨 Bucket '{self.bucket_name}' not found, creating...")
+                    try:
+                        self.s3_client.create_bucket(Bucket=self.bucket_name)
+                        logger.info("✅ Bucket created successfully")
+                        self.use_local = False
+                    except Exception as create_error:
+                        logger.error(f"❌ Could not create bucket: {create_error}")
+                        self.use_local = True
+                        self.s3_client = None
+                else:
+                    logger.error(f"❌ R2 connection test failed: {str(e)}")
+                    logger.info("📁 Falling back to LOCAL storage")
+                    self.use_local = True
+                    self.s3_client = None
+                    
         except Exception as e:
             logger.error(f"❌ Critical error in S3Storage init: {str(e)}")
             import traceback
@@ -1834,6 +1854,7 @@ def system_status():
         r2_connected = False
         storage_provider = 'Local'
         bucket_name = None
+        error_message = None
         
         if hasattr(storage, 's3_client') and storage.s3_client and not storage.use_local:
             try:
@@ -1844,7 +1865,10 @@ def system_status():
                 logger.info("✅ R2 connection verified")
             except Exception as e:
                 logger.warning(f"R2 connection failed: {e}")
+                error_message = str(e)
                 r2_connected = False
+        else:
+            error_message = "R2 client not initialized or using local storage"
         
         # นับจำนวนโมเดล
         try:
@@ -1854,6 +1878,17 @@ def system_status():
             logger.warning(f"Could not get models info: {e}")
             models_list = []
             total_size = 0
+        
+        # Get recent logs (ถ้ามี log file)
+        recent_logs = []
+        try:
+            log_file = 'app.log'
+            if os.path.exists(log_file):
+                with open(log_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    recent_logs = lines[-20:]  # Last 20 lines
+        except Exception as e:
+            logger.warning(f"Could not read logs: {e}")
         
         status_data = {
             'success': True,
@@ -1872,6 +1907,14 @@ def system_status():
                 'model_folder': app.config['MODEL_FOLDER'],
                 'upload_exists': os.path.exists(app.config['UPLOAD_FOLDER']),
                 'model_exists': os.path.exists(app.config['MODEL_FOLDER'])
+            },
+            'recent_logs': recent_logs,
+            'error_message': error_message,
+            'env_vars_status': {
+                'R2_ACCESS_KEY': bool(os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID')),
+                'R2_SECRET_KEY': bool(os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')),
+                'R2_ENDPOINT': bool(os.environ.get('CLOUDFLARE_R2_ENDPOINT')),
+                'R2_BUCKET': bool(os.environ.get('CLOUDFLARE_R2_BUCKET_NAME'))
             }
         }
         
@@ -1880,9 +1923,11 @@ def system_status():
         
     except Exception as e:
         logger.error(f"❌ Error getting system status: {str(e)}")
+        import traceback
         return jsonify({
             'success': False,
             'error': str(e),
+            'traceback': traceback.format_exc(),
             'server_time': datetime.now().isoformat()
         }), 500
 
