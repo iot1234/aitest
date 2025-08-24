@@ -1,6 +1,19 @@
 from advanced_training import AdvancedFeatureEngineer, ModelEvaluator
 from dotenv import load_dotenv
-load_dotenv()
+
+# ค้นหาและโหลด .env ไฟล์
+env_path = Path('.') / '.env'
+if env_path.exists():
+    load_dotenv(env_path, override=True)
+    print(f"✅ Loaded .env from: {env_path.absolute()}")
+else:
+    print(f"⚠️ .env file not found at: {env_path.absolute()}")
+    
+    # ตรวจสอบว่าโหลดค่าได้
+print(f"🔧 R2 Config Check:")
+print(f"  - Access Key: {os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', 'NOT FOUND')[:10]}...")
+print(f"  - Endpoint: {os.environ.get('CLOUDFLARE_R2_ENDPOINT', 'NOT FOUND')}")
+
 
 from flask import (
     Flask,
@@ -75,44 +88,72 @@ models = {
 # S3 Storage Class for Bucketeer
 # ==========================================
 class S3Storage:
-    """Manager for S3 storage operations using Cloudflare R2"""
-    
     def __init__(self):
-        """Initialize S3 client with Cloudflare R2 credentials"""
+        """Initialize S3 client with Cloudflare R2 credentials from .env"""
         try:
-            # Get Cloudflare R2 credentials from environment
+            # Force reload .env
+            from dotenv import load_dotenv
+            load_dotenv(override=True)
+            
+            # Get credentials
             self.access_key = os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID')
             self.secret_key = os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')
             self.endpoint_url = os.environ.get('CLOUDFLARE_R2_ENDPOINT')
             self.bucket_name = os.environ.get('CLOUDFLARE_R2_BUCKET_NAME')
             
-            # สำหรับ debugging
-            logger.info(f"🔧 R2 Configuration:")
-            logger.info(f"  - Endpoint: {self.endpoint_url}")
-            logger.info(f"  - Bucket: {self.bucket_name}")
-            logger.info(f"  - Access Key ID: {self.access_key[:10]}..." if self.access_key else "  - Access Key ID: None")
+            # Debug output
+            logger.info("=" * 50)
+            logger.info("🔧 R2 Storage Initialization")
+            logger.info("=" * 50)
+            logger.info(f"📁 Working Directory: {os.getcwd()}")
+            logger.info(f"📄 .env exists: {os.path.exists('.env')}")
+            
+            if os.path.exists('.env'):
+                with open('.env', 'r') as f:
+                    logger.info(f"📄 .env size: {len(f.read())} bytes")
+            
+            logger.info(f"🔑 Access Key: {self.access_key[:10]}***" if self.access_key else "❌ Access Key: MISSING")
+            logger.info(f"🔑 Secret Key: {'***' + self.secret_key[-5:] if self.secret_key else '❌ MISSING'}")
+            logger.info(f"🌐 Endpoint: {self.endpoint_url or '❌ MISSING'}")
+            logger.info(f"🪣 Bucket: {self.bucket_name or '❌ MISSING'}")
+            logger.info("=" * 50)
             
             if not all([self.access_key, self.secret_key, self.endpoint_url, self.bucket_name]):
-                logger.warning("⚠️ R2 credentials incomplete. Using local storage fallback.")
+                logger.error("❌ R2 credentials incomplete - using LOCAL storage")
                 self.s3_client = None
                 self.use_local = True
-            else:
-                # Initialize S3 client with Cloudflare R2 endpoint
-                self.s3_client = boto3.client(
-                    's3',
-                    endpoint_url=self.endpoint_url,
-                    aws_access_key_id=self.access_key,
-                    aws_secret_access_key=self.secret_key,
-                    region_name='auto'  # R2 uses 'auto' region
+                return
+            
+            # Create S3 client
+            import boto3
+            self.s3_client = boto3.client(
+                's3',
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                region_name='auto'
+            )
+            
+            # Test connection
+            try:
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket_name,
+                    MaxKeys=1
                 )
+                logger.info("✅ R2 connection successful!")
+                logger.info(f"📦 Objects in bucket: {response.get('KeyCount', 0)}")
                 self.use_local = False
-                logger.info(f"✅ Cloudflare R2 Storage initialized")
                 
-                # Test connection
-                self._verify_bucket()
+            except Exception as e:
+                logger.error(f"❌ R2 connection test failed: {str(e)}")
+                logger.info("📁 Falling back to LOCAL storage")
+                self.use_local = True
+                self.s3_client = None
                 
         except Exception as e:
-            logger.error(f"❌ Error initializing R2 storage: {str(e)}")
+            logger.error(f"❌ Critical error in S3Storage init: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             self.s3_client = None
             self.use_local = True
     
