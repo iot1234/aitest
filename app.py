@@ -934,11 +934,11 @@ def train_ensemble_model(X, y):
         try:
             logger.info("Performing GridSearchCV for RandomForest...")
             grid_search_rf = GridSearchCV(
-                RandomForestClassifier(random_state=app.config['ML_CONFIG']['random_state'], n_jobs=1),
+                RandomForestClassifier(random_state=app.config['ML_CONFIG']['random_state'], n_jobs=4),
                 param_grid_rf,
                 cv=min(app.config['ML_CONFIG']['cv_folds'], len(X_train) // 2) if len(X_train) >= 4 else 2,
                 scoring='accuracy',
-                n_jobs=1,
+                n_jobs=4,
                 verbose=0
             )
             grid_search_rf.fit(X_train, y_train)
@@ -951,7 +951,7 @@ def train_ensemble_model(X, y):
                 n_estimators=app.config['ML_CONFIG']['n_estimators'],
                 max_depth=app.config['ML_CONFIG']['max_depth'],
                 random_state=app.config['ML_CONFIG']['random_state'],
-                n_jobs=1
+                n_jobs=4
             )
             best_rf.fit(X_train, y_train)
 
@@ -962,7 +962,7 @@ def train_ensemble_model(X, y):
                 param_grid_gb,
                 cv=min(app.config['ML_CONFIG']['cv_folds'], len(X_train) // 2) if len(X_train) >= 4 else 2,
                 scoring='accuracy',
-                n_jobs=1,
+                n_jobs=4,
                 verbose=0
             )
             grid_search_gb.fit(X_train, y_train)
@@ -987,7 +987,7 @@ def train_ensemble_model(X, y):
                 param_grid_lr,
                 cv=min(app.config['ML_CONFIG']['cv_folds'], len(X_train) // 2) if len(X_train) >= 4 else 2,
                 scoring='accuracy',
-                n_jobs=1,
+                n_jobs=4,
                 verbose=0
             )
             grid_search_lr.fit(X_train_scaled, y_train)
