@@ -1,4 +1,4 @@
-from advanced_training import AdvancedFeatureEngineer, ModelEvaluator
+from advanced_training import AdvancedFeatureEngineer
 from dotenv import load_dotenv
 
 # โหลด environment variables จาก .env
@@ -38,7 +38,7 @@ warnings.filterwarnings('ignore')
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # เปลี่ยนจาก INFO เป็น WARNING
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('app_startup.log', encoding='utf-8'),
@@ -891,7 +891,7 @@ def train_ensemble_model(X, y):
                 cv=app.config['ML_CONFIG']['cv_folds'],
                 scoring='accuracy',
                 n_jobs=1,
-                verbose=app.config['ML_CONFIG']['verbose']
+                verbose=0 
             )
             grid_search_rf.fit(X_train, y_train)
             best_rf = grid_search_rf.best_estimator_
@@ -915,7 +915,7 @@ def train_ensemble_model(X, y):
                 cv=app.config['ML_CONFIG']['cv_folds'],
                 scoring='accuracy',
                 n_jobs=1,
-                verbose=app.config['ML_CONFIG']['verbose']
+                verbose=0
             )
             grid_search_gb.fit(X_train, y_train)
             best_gb = grid_search_gb.best_estimator_
@@ -940,7 +940,7 @@ def train_ensemble_model(X, y):
                 cv=app.config['ML_CONFIG']['cv_folds'],
                 scoring='accuracy',
                 n_jobs=1,
-                verbose=app.config['ML_CONFIG']['verbose']
+                verbose=0
             )
             grid_search_lr.fit(X_train_scaled, y_train)
             best_lr = grid_search_lr.best_estimator_
