@@ -716,6 +716,33 @@ class AdvancedFeatureEngineer:
         else:
             logger.error("❌ No 'graduated' column found")
             return pd.DataFrame(), pd.Series()
+class ModelEvaluator:
+    """
+    Model Evaluation Helper Class
+    """
+    def __init__(self):
+        self.models = {}
+        self.results = {}
+    
+    def evaluate_model(self, model, X_test, y_test):
+        """Evaluate model performance"""
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+        
+        predictions = model.predict(X_test)
+        
+        return {
+            'accuracy': accuracy_score(y_test, predictions),
+            'precision': precision_score(y_test, predictions, average='weighted'),
+            'recall': recall_score(y_test, predictions, average='weighted'),
+            'f1_score': f1_score(y_test, predictions, average='weighted')
+        }
+    
+    def compare_models(self, models_dict, X_test, y_test):
+        """Compare multiple models"""
+        comparison = {}
+        for name, model in models_dict.items():
+            comparison[name] = self.evaluate_model(model, X_test, y_test)
+        return comparison
 
 
 # For backward compatibility
