@@ -1,1 +1,1 @@
-web: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 32 --threads 32 --worker-class sync --log-level warning --access-logfile - --error-logfile -
+web: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 2 --threads 1 --worker-class sync --log-level warning --access-logfile - --error-logfile -
