@@ -62,10 +62,19 @@ app = Flask(__name__)
 app.config.from_object(config.get_config())
 
 # Create necessary folders
-for folder in [app.config['UPLOAD_FOLDER'], app.config['MODEL_FOLDER']]:
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+MODEL_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MODEL_FOLDER'] = MODEL_FOLDER
+
+for folder in [UPLOAD_FOLDER, MODEL_FOLDER]:
     try:
-        os.makedirs(folder, exist_ok=True)
-        logger.info(f"Ensured folder exists: {folder}")
+        if not os.path.exists(folder):
+            os.makedirs(folder, exist_ok=True)
+            logger.info(f"Created folder: {folder}")
+        else:
+            logger.info(f"Folder exists: {folder}")
     except Exception as e:
         logger.error(f"Error creating folder {folder}: {str(e)}")
 
@@ -2008,43 +2017,57 @@ def upload_file():
             logger.warning(f"Invalid file extension")
             return jsonify({'success': False, 'error': 'รองรับเฉพาะไฟล์ .csv, .xlsx, .xls เท่านั้น'})
 
+        # สร้าง filename ที่ปลอดภัย
+        from werkzeug.utils import secure_filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename_on_disk = f"{timestamp}_{file.filename}"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename_on_disk)
-
+        safe_filename = secure_filename(file.filename)
+        filename_on_disk = f"{timestamp}_{safe_filename}"
+        
+        # ใช้ absolute path
+        upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+        if not os.path.exists(upload_folder):
+            os.makedirs(upload_folder, exist_ok=True)
+            
+        filepath = os.path.join(upload_folder, filename_on_disk)
+        
         logger.info(f"Saving file to: {filepath}")
         file.save(filepath)
+        
+        # ตรวจสอบว่าไฟล์ถูกบันทึกจริง
+        if not os.path.exists(filepath):
+            raise ValueError("ไฟล์ไม่ถูกบันทึก")
+            
         logger.info(f"File saved successfully: {filename_on_disk}")
 
         # อ่านและตรวจสอบไฟล์
         try:
-            if not os.path.exists(filepath):
-                raise ValueError("ไฟล์ไม่ถูกบันทึกลงดิสก์")
-                
-            file_size = os.path.getsize(filepath)
-            logger.info(f"File size: {file_size} bytes")
-            
             df = None
-            if file.filename.lower().endswith('.csv'):
+            if safe_filename.lower().endswith('.csv'):
                 # ลองหลาย encoding สำหรับไฟล์ CSV
-                encodings = ['utf-8-sig', 'utf-8', 'cp874', 'iso-8859-1', 'windows-1252']
+                encodings = ['utf-8-sig', 'utf-8', 'cp874', 'tis-620', 'iso-8859-1']
                 for encoding in encodings:
                     try:
                         df = pd.read_csv(filepath, encoding=encoding)
                         logger.info(f"Successfully read CSV with encoding: {encoding}")
                         break
                     except Exception as e:
-                        logger.debug(f"Failed to read CSV with {encoding}: {e}")
+                        logger.debug(f"Failed with {encoding}: {e}")
                         continue
+                        
                 if df is None:
-                    raise ValueError("ไม่สามารถอ่านไฟล์ CSV ด้วย encoding ที่รองรับได้")
+                    # ถ้าอ่านไม่ได้ ลองใช้ engine python
+                    try:
+                        df = pd.read_csv(filepath, encoding='utf-8', engine='python')
+                    except:
+                        df = pd.read_csv(filepath, encoding='cp874', engine='python')
+                        
             else:  # Excel files
-                df = pd.read_excel(filepath)
+                df = pd.read_excel(filepath, engine='openpyxl')
                 logger.info(f"Successfully read Excel file")
 
-            if df.empty:
+            if df is None or df.empty:
                 os.remove(filepath)
-                raise ValueError("ไฟล์ข้อมูลว่างเปล่า")
+                raise ValueError("ไม่สามารถอ่านไฟล์ได้ หรือไฟล์ว่างเปล่า")
 
             data_format = detect_data_format(df)
             logger.info(f"Detected data format: {data_format}")
@@ -2070,6 +2093,8 @@ def upload_file():
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาดในการอัปโหลด: {str(e)}'})
 
 # Keep all other routes unchanged...
