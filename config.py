@@ -216,53 +216,48 @@ class Config:
         'max_features': 'sqrt',
         'bootstrap': True,
         'oob_score': True,
-        'n_jobs': -1,  # ใช้ CPU ทั้งหมด
+        'n_jobs': 4,  # เปลี่ยนเป็นค่าที่แน่นอนเพื่อแก้ปัญหา
         'verbose': 0  # ปิด verbose เพื่อหลีกเลี่ยง rate limit
     }
 
     # Hyperparameters สำหรับ GridSearchCV - FULL RANGE สำหรับ High Spec
     MODEL_HYPERPARAMETERS: Dict[str, Dict[str, List[Any]]] = {
         'RandomForest': {
-            'n_estimators': [100, 200, 300, 500],  # เพิ่มจำนวน estimators
-            'max_depth': [5, 10, 15, 20, None],    # เพิ่ม depth options
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['sqrt', 'log2', None],
-            'bootstrap': [True, False],
-            'class_weight': ['balanced', 'balanced_subsample', None]
+            'n_estimators': [100, 200],  # ลดลง
+            'max_depth': [5, 10, None],  # ลดลง
+            'min_samples_split': [2, 5],
+            'min_samples_leaf': [1, 2],
+            'max_features': ['sqrt', None], # ลดลง
+            'bootstrap': [True],
+            'class_weight': ['balanced', None]
         },
         'GradientBoosting': {
-            'n_estimators': [100, 200, 300, 500],
-            'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2],
-            'max_depth': [3, 5, 7, 9, 11],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'subsample': [0.7, 0.8, 0.9, 1.0],
-            'max_features': ['sqrt', 'log2', None]
+            'n_estimators': [100, 200], # ลดลง
+            'learning_rate': [0.05, 0.1, 0.2], # ลดลง
+            'max_depth': [3, 5, 7], # ลดลง
+            'min_samples_split': [2, 5],
+            'min_samples_leaf': [1, 2],
+            'subsample': [0.8, 1.0],
+            'max_features': ['sqrt', None] # ลดลง
         },
         'LogisticRegression': {
-            'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000],
-            'penalty': ['l1', 'l2', 'elasticnet'],
-            'solver': ['liblinear', 'lbfgs', 'newton-cg', 'sag', 'saga'],
-            'max_iter': [1000, 2000, 3000, 5000],
+            'C': [0.1, 1, 10], # ลดลง
+            'penalty': ['l1', 'l2'], # ลดลง
+            'solver': ['liblinear'], # ลดลง
+            'max_iter': [1000, 2000], # ลดลง
             'class_weight': ['balanced', None]
         },
         'SVM': {
-            'C': [0.1, 1, 10, 100, 1000],
-            'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
-            'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
-            'degree': [2, 3, 4, 5],
+            'C': [1, 10], # ลดลง
+            'kernel': ['linear', 'rbf'], # ลดลง
+            'gamma': ['scale'], # ลดลง
             'class_weight': ['balanced', None]
         },
-        'XGBoost': {  # เพิ่ม XGBoost สำหรับ performance สูงสุด
-            'n_estimators': [100, 200, 300, 500],
-            'learning_rate': [0.01, 0.05, 0.1, 0.15, 0.2],
-            'max_depth': [3, 5, 7, 9, 11],
-            'min_child_weight': [1, 2, 3, 5],
-            'subsample': [0.7, 0.8, 0.9, 1.0],
-            'colsample_bytree': [0.7, 0.8, 0.9, 1.0],
-            'reg_alpha': [0, 0.01, 0.1, 1],
-            'reg_lambda': [1, 1.5, 2, 3]
+        'XGBoost': {  # ลดลง
+            'n_estimators': [100, 200],
+            'learning_rate': [0.05, 0.1],
+            'max_depth': [3, 5],
+            'subsample': [0.8, 1.0],
         }
     }
 
@@ -519,6 +514,46 @@ class ProductionConfig(Config):
     LOGGING_CONFIG = Config.LOGGING_CONFIG.copy()
     LOGGING_CONFIG['loggers']['']['level'] = 'WARNING'  # ลด log level
     
+    # ML Config for Production
+    ML_CONFIG: Dict[str, Any] = Config.ML_CONFIG.copy()
+    ML_CONFIG.update({
+        'n_jobs': 4, # Fix for parallel processing on Railway
+        'cv_folds': 5, # Reduce for faster training and less memory usage
+    })
+
+    MODEL_HYPERPARAMETERS: Dict[str, Dict[str, List[Any]]] = {
+        'RandomForest': {
+            'n_estimators': [100, 200],  # Reduced
+            'max_depth': [5, 10],    # Reduced
+            'min_samples_split': [2, 5],
+            'min_samples_leaf': [1, 2],
+            'max_features': ['sqrt', None],
+            'bootstrap': [True],
+            'class_weight': ['balanced', None]
+        },
+        'GradientBoosting': {
+            'n_estimators': [100, 200], # Reduced
+            'learning_rate': [0.1],
+            'max_depth': [3, 5],
+            'subsample': [0.8, 1.0],
+        },
+        'LogisticRegression': {
+            'C': [1, 10], # Reduced
+            'penalty': ['l2'],
+            'solver': ['liblinear'],
+        },
+        'XGBoost': {
+            'n_estimators': [100, 200],
+            'max_depth': [3, 5],
+        }
+    }
+    
+    # Parallel Processing Config
+    PARALLEL_CONFIG: Dict[str, Any] = Config.PARALLEL_CONFIG.copy()
+    PARALLEL_CONFIG.update({
+        'n_jobs': 4, # Fix for parallel processing
+        'backend': 'threading',
+    })
 
 class TestingConfig(Config):
     """การตั้งค่าสำหรับการทดสอบ"""
