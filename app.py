@@ -510,6 +510,7 @@ class S3Storage:
 
 # Create global S3 storage instance
 storage = S3Storage()
+storage.use_local = True  # บังคับใช้ local storage
 
 # ==========================================
 # Original Functions (keep unchanged)
