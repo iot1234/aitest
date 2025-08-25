@@ -890,40 +890,34 @@ def train_ensemble_model(X, y):
         logger.info(f"Data split: Training {len(X_train)} samples, Testing {len(X_test)} samples.")
         logger.info(f"Before SMOTE - Label distribution in Training Set: {Counter(y_train)}")
 
-        # ======== แก้ไขส่วน SMOTE ========
         if len(np.unique(y_train)) > 1 and np.min(list(Counter(y_train).values())) > 0:
             try:
-                # ตรวจสอบจำนวน samples ของแต่ละ class
                 min_class_samples = min(Counter(y_train).values())
                 
-                # ปรับ k_neighbors ตามจำนวน samples ที่มี
                 if min_class_samples >= 6:
-                    # ใช้ SMOTE ปกติ
                     smote = SMOTE(random_state=app.config['ML_CONFIG']['random_state'])
                     X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
-                    logger.info(f"After SMOTE - Label distribution in Training Set: {Counter(y_train_resampled)}")
-                    X_train = X_train_resampled
-                    y_train = y_train_resampled
                 elif min_class_samples >= 2:
-                    # ปรับ k_neighbors ให้เหมาะสม
                     k_neighbors = min(5, min_class_samples - 1)
+                    k_neighbors = max(1, k_neighbors)
                     smote = SMOTE(
                         random_state=app.config['ML_CONFIG']['random_state'],
                         k_neighbors=k_neighbors
                     )
                     X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
-                    logger.info(f"After SMOTE with k_neighbors={k_neighbors} - Label distribution: {Counter(y_train_resampled)}")
-                    X_train = X_train_resampled
-                    y_train = y_train_resampled
                 else:
-                    # ข้อมูลน้อยเกินไป ไม่ใช้ SMOTE
-                    logger.warning(f"Not enough samples for SMOTE (min class: {min_class_samples}). Training with original data.")
-                    
+                    logger.warning("Not enough samples for SMOTE, using original data.")
+                    X_train_resampled, y_train_resampled = X_train, y_train
+                
+                X_train = X_train_resampled
+                y_train = y_train_resampled
+                logger.info(f"After SMOTE - Label distribution: {Counter(y_train)}")
+                
             except Exception as e:
-                logger.warning(f"Could not apply SMOTE: {str(e)}. Training with original data.")
+                logger.warning(f"SMOTE failed: {str(e)}. Using original data.")
+                
         else:
             logger.warning("SMOTE not applied (single class or empty class in training set).")
-        # ======== จบการแก้ไข ========
 
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
@@ -945,7 +939,7 @@ def train_ensemble_model(X, y):
                 cv=min(app.config['ML_CONFIG']['cv_folds'], len(X_train) // 2) if len(X_train) >= 4 else 2,
                 scoring='accuracy',
                 n_jobs=1,
-                verbose=0  
+                verbose=0
             )
             grid_search_rf.fit(X_train, y_train)
             best_rf = grid_search_rf.best_estimator_
