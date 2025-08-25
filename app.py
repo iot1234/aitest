@@ -90,85 +90,64 @@ class S3Storage:
             from dotenv import load_dotenv
             load_dotenv(override=True)
             
-            # Get credentials
-            self.access_key = os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID')
-            self.secret_key = os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')
-            self.endpoint_url = os.environ.get('CLOUDFLARE_R2_ENDPOINT')
-            self.bucket_name = os.environ.get('CLOUDFLARE_R2_BUCKET_NAME')
+            # Get credentials with fallback
+            self.access_key = os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', '')
+            self.secret_key = os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY', '')
+            self.endpoint_url = os.environ.get('CLOUDFLARE_R2_ENDPOINT', '')
+            self.bucket_name = os.environ.get('CLOUDFLARE_R2_BUCKET_NAME', 'pjai')
             
-            # Debug output
-            logger.info("=" * 50)
-            logger.info("🔧 R2 Storage Initialization")
-            logger.info("=" * 50)
-            logger.info(f"📁 Working Directory: {os.getcwd()}")
-            logger.info(f"📄 .env exists: {os.path.exists('.env')}")
-            
-            if os.path.exists('.env'):
-                with open('.env', 'r') as f:
-                    content = f.read()
-                    logger.info(f"📄 .env size: {len(content)} bytes")
-                    # ตรวจสอบว่ามี credentials จริงๆ
-                    if 'CLOUDFLARE_R2_ACCESS_KEY_ID' not in content:
-                        logger.error("❌ CLOUDFLARE_R2_ACCESS_KEY_ID not found in .env")
-            
-            logger.info(f"🔑 Access Key: {self.access_key[:10]}***" if self.access_key else "❌ Access Key: MISSING")
-            logger.info(f"🔑 Secret Key: {'***' + self.secret_key[-5:] if self.secret_key else '❌ MISSING'}")
-            logger.info(f"🌐 Endpoint: {self.endpoint_url or '❌ MISSING'}")
-            logger.info(f"🪣 Bucket: {self.bucket_name or '❌ MISSING'}")
-            logger.info("=" * 50)
-            
-            if not all([self.access_key, self.secret_key, self.endpoint_url, self.bucket_name]):
-                logger.error("❌ R2 credentials incomplete - using LOCAL storage")
+            # ถ้าไม่มี credentials ให้ใช้ local storage ทันที
+            if not all([self.access_key, self.secret_key, self.endpoint_url]):
+                logger.info("R2 credentials not complete - using LOCAL storage")
                 self.s3_client = None
                 self.use_local = True
                 return
             
-            # Create S3 client
-            import boto3
-            self.s3_client = boto3.client(
-                's3',
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
-                region_name='auto',
-                config=boto3.session.Config(
-                    signature_version='s3v4',
-                    retries={'max_attempts': 3}
-                )
-            )
-            
-            # Test connection with better error handling
+            # Create S3 client with better error handling
             try:
-                response = self.s3_client.list_objects_v2(
-                    Bucket=self.bucket_name,
-                    MaxKeys=1
-                )
-                logger.info("✅ R2 connection successful!")
-                logger.info(f"📦 Objects in bucket: {response.get('KeyCount', 0)}")
-                self.use_local = False
+                import boto3
+                from botocore.config import Config
                 
-            except ClientError as e:
-                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-                if error_code == 'NoSuchBucket':
-                    logger.info(f"🔨 Bucket '{self.bucket_name}' not found, creating...")
-                    try:
-                        self.s3_client.create_bucket(Bucket=self.bucket_name)
-                        logger.info("✅ Bucket created successfully")
-                        self.use_local = False
-                    except Exception as create_error:
-                        logger.error(f"❌ Could not create bucket: {create_error}")
-                        self.use_local = True
-                        self.s3_client = None
-                else:
-                    logger.error(f"❌ R2 connection test failed: {str(e)}")
-                    logger.info("📁 Falling back to LOCAL storage")
+                # Config สำหรับ timeout
+                config = Config(
+                    region_name='auto',
+                    signature_version='s3v4',
+                    retries={
+                        'max_attempts': 2,
+                        'mode': 'standard'
+                    },
+                    connect_timeout=5,
+                    read_timeout=5
+                )
+                
+                self.s3_client = boto3.client(
+                    's3',
+                    endpoint_url=self.endpoint_url,
+                    aws_access_key_id=self.access_key,
+                    aws_secret_access_key=self.secret_key,
+                    config=config
+                )
+                
+                # Quick test with timeout
+                try:
+                    self.s3_client.list_objects_v2(
+                        Bucket=self.bucket_name,
+                        MaxKeys=1
+                    )
+                    logger.info("✅ R2 connection successful!")
+                    self.use_local = False
+                except:
+                    logger.info("R2 not accessible - using LOCAL storage")
                     self.use_local = True
                     self.s3_client = None
                     
+            except ImportError:
+                logger.error("boto3 not installed - using LOCAL storage")
+                self.use_local = True
+                self.s3_client = None
+                
         except Exception as e:
-            logger.error(f"❌ Critical error in S3Storage init: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Storage init error: {str(e)}")
             self.s3_client = None
             self.use_local = True
     
