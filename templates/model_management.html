@@ -4,174 +4,181 @@
 
 {% block custom_css %}
 <style>
-/* ==========================================
-   Global Styles
-   ========================================== */
-.display-4 {
-    font-size: 2.5rem;
+:root {
+    --primary-color: #4f46e5;
+    --secondary-color: #06b6d4;
+    --card-bg: rgba(255, 255, 255, 0.98);
+    --shadow-color: rgba(0, 0, 0, 0.08);
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
 }
 
-@media (min-width: 768px) {
-    .display-4 {
-        font-size: 3.5rem;
-    }
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e7eb 100%);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ==========================================
-   Model Card Styles
-   ========================================== */
 .model-card {
-    transition: all 0.3s ease;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    border: none;
-    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .model-card:hover {
     transform: translateY(-8px);
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 20px 40px var(--shadow-color);
 }
 
-.model-card .card-header {
-    background: var(--primary-gradient);
-    color: white;
-    font-weight: 600;
-    border-radius: 15px 15px 0 0 !important;
+.card-header {
+    background: linear-gradient(90deg, rgba(79, 70, 229, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
     padding: 1.25rem;
 }
 
-.model-card .card-body {
-    padding: 1.5rem;
-}
-
-.metric-item {
-    padding: 0.5rem 0;
-}
-
-.metric-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
 .performance-chart {
-    height: 150px; /* ลดความสูงเพื่อประหยัดพื้นที่บนมือถือ */
+    height: 220px;
+    padding: 1rem;
 }
 
-.overall-score .badge {
-    font-size: 1rem;
-    padding: 0.5em 1em;
+.feature-importance-bar {
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    height: 24px;
+    border-radius: 12px;
+    transition: width 0.4s ease-in-out;
 }
 
 .model-actions {
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-    padding-top: 1rem;
-    margin-top: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 1.25rem;
+    margin-top: 1.25rem;
 }
 
-.model-actions .btn {
-    border-radius: 20px;
-}
-
-/* ==========================================
-   Comparison Section Styles
-   ========================================== */
 .comparison-chart-container {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
     border-radius: 20px;
     padding: 2rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 15px 35px var(--shadow-color);
+    margin-bottom: 2rem;
 }
 
-.comparison-chart-container h4 {
-    font-weight: bold;
-    color: #333;
+.btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
 }
 
-.comparison-stats h6 {
-    color: #6c757d;
-    font-weight: bold;
+.btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
 }
 
-/* ==========================================
-   Empty State Styles
-   ========================================== */
+.btn-outline-light:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #fff;
+}
+
+.btn-success {
+    background: var(--primary-color);
+    border: none;
+}
+
+.btn-success:hover {
+    background: #4338ca;
+}
+
+h1.display-4 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.lead {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
+.badge {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.table {
+    background: var(--card-bg);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table-hover tbody tr:hover {
+    background: rgba(79, 70, 229, 0.05);
+}
+
 #emptyState {
     background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
+    border-radius: 16px;
+    padding: 3rem;
+    backdrop-filter: blur(12px);
 }
 
-/* ==========================================
-   Responsive Utilities
-   ========================================== */
-@media (max-width: 767.98px) {
-    .text-end-md {
-        text-align: center !important;
-    }
-    .btn-group {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        width: 100%;
-    }
-    .btn-group .btn {
-        width: 100%;
-    }
+.btn-lg.rounded-pill {
+    padding: 0.75rem 2rem;
+    font-size: 1.1rem;
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container py-5">
     <div id="alertContainer"></div>
-
-    <div class="row mb-5">
-        <div class="col-md-8 text-center text-md-start mb-4 mb-md-0">
-            <h1 class="display-4 fw-bold text-white mb-2">
-                <i class="bi bi-folder-fill"></i> จัดการโมเดล AI
+    
+    <div class="row mb-5 align-items-center">
+        <div class="col-md-8">
+            <h1 class="display-4 fw-bold mb-2">
+                <i class="bi bi-folder-fill me-2"></i> จัดการโมเดล AI
             </h1>
-            <p class="lead text-white opacity-75">เปรียบเทียบ วิเคราะห์ และจัดการโมเดลที่ได้ฝึกไว้</p>
+            <p class="lead">เปรียบเทียบ วิเคราะห์ และจัดการโมเดลที่ได้ฝึกไว้</p>
         </div>
-        <div class="col-md-4 text-end text-end-md d-flex align-items-center justify-content-center justify-content-md-end">
+        <div class="col-md-4 text-end">
             <div class="btn-group" role="group">
                 <a href="{{ url_for('index') }}" class="btn btn-outline-light">
-                    <i class="bi bi-plus-circle"></i> ฝึกโมเดลใหม่
+                    <i class="bi bi-plus-circle me-2"></i> ฝึกโมเดลใหม่
                 </a>
                 <button class="btn btn-success" id="compareBtn" onclick="compareSelectedModels()" disabled>
-                    <i class="bi bi-bar-chart-line"></i> เปรียบเทียบ (เลือก 2+ โมเดล)
+                    <i class="bi bi-bar-chart-line me-2"></i> เปรียบเทียบ (เลือก 2+ โมเดล)
                 </button>
             </div>
         </div>
     </div>
 
-    <div class="comparison-chart-container mb-4 d-none" id="comparisonChartContainer">
-        <h4 class="mb-3">
-            <i class="bi bi-graph-up"></i> การเปรียบเทียบประสิทธิภาพโมเดล
+    <div class="comparison-chart-container mb-5 d-none" id="comparisonChartContainer">
+        <h4 class="mb-4">
+            <i class="bi bi-graph-up me-2"></i> การเปรียบเทียบประสิทธิภาพโมเดล
         </h4>
         <div class="row">
-            <div class="col-md-8 mb-4 mb-md-0">
-                <canvas id="comparisonChart" class="w-100 h-100"></canvas>
+            <div class="col-md-8">
+                <canvas id="comparisonChart"></canvas>
             </div>
             <div class="col-md-4">
                 <div class="comparison-stats">
-                    <h6 class="mb-3">สถิติการเปรียบเทียบ</h6>
+                    <h6 class="fw-bold">สถิติการเปรียบเทียบ</h6>
                     <div id="comparisonStats"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="modelsList" class="row">
-        </div>
+    <div id="modelsList" class="row"></div>
 
-    <div class="card mt-4 d-none" id="comparisonTableContainer">
-        <div class="card-header bg-info text-white">
+    <div class="card mt-5 d-none" id="comparisonTableContainer">
+        <div class="card-header bg-primary text-white">
             <h5 class="mb-0">
-                <i class="bi bi-table"></i> ตารางเปรียบเทียบโดยละเอียด
+                <i class="bi bi-table me-2"></i> ตารางเปรียบเทียบโดยละเอียด
             </h5>
         </div>
         <div class="table-responsive">
@@ -195,304 +202,282 @@
         <h4 class="text-white mt-3">ยังไม่มีโมเดลที่ฝึกแล้ว</h4>
         <p class="text-white opacity-75">กรุณาฝึกโมเดลใหม่ก่อนใช้งาน</p>
         <a href="{{ url_for('index') }}" class="btn btn-light btn-lg rounded-pill">
-            <i class="bi bi-plus-circle"></i> ฝึกโมเดลใหม่
+            <i class="bi bi-plus-circle me-2"></i> ฝึกโมเดลใหม่
         </a>
     </div>
 </div>
 {% endblock %}
 
 {% block custom_js %}
-<script>
-    let availableModels = [];
-    let selectedModels = [];
-    let comparisonChart = null;
+let availableModels = [];
+let selectedModels = [];
+let comparisonChart = null;
 
-    document.addEventListener('DOMContentLoaded', function() {
-        loadModels();
-    });
+document.addEventListener('DOMContentLoaded', function() {
+    loadModels();
+});
 
-    async function loadModels() {
-        try {
-            showLoading('กำลังโหลดโมเดล...');
-            const response = await fetch('/api/models');
-            const data = await response.json();
-            const container = document.getElementById('modelsList');
-
-            if (data.success && data.models.length > 0) {
-                availableModels = data.models.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-                displayModels(availableModels);
-                document.getElementById('emptyState').classList.add('d-none');
-                container.classList.remove('d-none');
-            } else {
-                document.getElementById('emptyState').classList.remove('d-none');
-                container.classList.add('d-none');
-            }
-        } catch (error) {
-            console.error('Error loading models:', error);
-            showAlert('เกิดข้อผิดพลาดในการโหลดโมเดล', 'danger');
-        } finally {
-            hideLoading();
-        }
-    }
-
-    function displayModels(models) {
+async function loadModels() {
+    try {
+        showLoading('กำลังโหลดโมเดล...');
+        const response = await fetch('/api/models');
+        const data = await response.json();
         const container = document.getElementById('modelsList');
-        container.innerHTML = '';
+        
+        if (data.success && data.models.length > 0) {
+            availableModels = data.models.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            displayModels(availableModels);
+            document.getElementById('emptyState').classList.add('d-none');
+            container.classList.remove('d-none');
+        } else {
+            document.getElementById('emptyState').classList.remove('d-none');
+            container.classList.add('d-none');
+        }
+    } catch (error) {
+        console.error('Error loading models:', error);
+        showAlert('เกิดข้อผิดพลาดในการโหลดโมเดล', 'danger');
+    } finally {
+        hideLoading();
+    }
+}
 
-        models.forEach((model, index) => {
-            const accuracy = (model.performance.accuracy || 0) * 100;
-            const precision = (model.performance.precision || 0) * 100;
-            const recall = (model.performance.recall || 0) * 100;
-            const f1Score = (model.performance.f1_score || 0) * 100;
+function displayModels(models) {
+    const container = document.getElementById('modelsList');
+    container.innerHTML = '';
 
-            const averageScore = (accuracy + precision + recall + f1Score) / 4;
-            const createdDate = new Date(model.created_at).toLocaleDateString('th-TH');
+    models.forEach((model, index) => {
+        const accuracy = (model.performance.accuracy || 0) * 100;
+        const precision = (model.performance.precision || 0) * 100;
+        const recall = (model.performance.recall || 0) * 100;
+        const f1Score = (model.performance.f1_score || 0) * 100;
+        
+        const averageScore = (accuracy + precision + recall + f1Score) / 4;
+        const createdDate = new Date(model.created_at).toLocaleDateString('th-TH');
 
-            const modelCard = document.createElement('div');
-            modelCard.className = 'col-lg-6 col-xl-4 mb-4';
-            modelCard.innerHTML = `
-                <div class="card model-card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">${model.filename.replace('.joblib', '')}</h6>
-                            <small class="text-white opacity-75">${model.data_format}</small>
+        const modelCard = document.createElement('div');
+        modelCard.className = 'col-lg-6 col-xl-4 mb-4';
+        modelCard.innerHTML = `
+            <div class="card model-card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1 fw-bold">${model.filename}</h6>
+                        <small class="text-muted">${model.data_format}</small>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="model_${index}" 
+                               onchange="toggleModelSelection('${model.filename}', this.checked)">
+                        <label class="form-check-label" for="model_${index}">เลือก</label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-4">
+                        <div class="col-6 col-md-3">
+                            <div class="metric-item">
+                                <div class="metric-value text-primary fw-bold">${accuracy.toFixed(1)}%</div>
+                                <small class="text-muted">Accuracy</small>
+                            </div>
                         </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="model_${index}"
-                                   onchange="toggleModelSelection('${model.filename}', this.checked)">
-                            <label class="form-check-label text-white opacity-75" for="model_${index}">เลือก</label>
+                        <div class="col-6 col-md-3">
+                            <div class="metric-item">
+                                <div class="metric-value text-success fw-bold">${precision.toFixed(1)}%</div>
+                                <small class="text-muted">Precision</small>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="metric-item">
+                                <div class="metric-value text-warning fw-bold">${recall.toFixed(1)}%</div>
+                                <small class="text-muted">Recall</small>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="metric-item">
+                                <div class="metric-value text-info fw-bold">${f1Score.toFixed(1)}%</div>
+                                <small class="text-muted">F1-Score</small>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row text-center mb-3">
-                            <div class="col-6 col-md-3">
-                                <div class="metric-item">
-                                    <div class="metric-value text-primary">${accuracy.toFixed(1)}%</div>
-                                    <small class="text-muted">Accuracy</small>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="metric-item">
-                                    <div class="metric-value text-success">${precision.toFixed(1)}%</div>
-                                    <small class="text-muted">Precision</small>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="metric-item">
-                                    <div class="metric-value text-warning">${recall.toFixed(1)}%</div>
-                                    <small class="text-muted">Recall</small>
-                                </div>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <div class="metric-item">
-                                    <div class="metric-value text-info">${f1Score.toFixed(1)}%</div>
-                                    <small class="text-muted">F1-Score</small>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="performance-chart mb-3">
-                            <canvas id="chart_${index}"></canvas>
+                    <div class="performance-chart mb-4">
+                        <canvas id="chart_${index}"></canvas>
+                    </div>
+                    
+                    <div class="text-center mb-3">
+                        <div class="overall-score">
+                            <span class="badge bg-${getScoreColor(averageScore)} fs-6">
+                                คะแนนรวม: ${averageScore.toFixed(1)}%
+                            </span>
                         </div>
-                        
-                        <div class="text-center mb-3">
-                            <div class="overall-score">
-                                <span class="badge bg-${getScoreColor(averageScore)} fs-6">
-                                    คะแนนรวม: ${averageScore.toFixed(1)}%
-                                </span>
-                            </div>
-                        </div>
+                    </div>
 
-                        <div class="model-actions">
-                            <div class="d-flex gap-2 justify-content-center justify-content-md-between flex-wrap">
-                                <a href="{{ url_for('curriculum_page') }}?model=${model.filename}" class="btn btn-outline-info btn-sm">
-                                    <i class="bi bi-play-circle"></i> ทดสอบ
-                                </a>
-                                <button class="btn btn-outline-danger btn-sm" onclick="deleteModel('${model.filename}')">
-                                    <i class="bi bi-trash"></i> ลบ
-                                </button>
-                            </div>
-                            <div class="text-center mt-2">
-                                <small class="text-muted">สร้างเมื่อ: ${createdDate}</small>
-                            </div>
+                    <div class="model-actions">
+                        <div class="d-flex gap-2 justify-content-between">
+                            <a href="{{ url_for('curriculum_page') }}?model=${model.filename}" class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-play-circle me-1"></i> ทดสอบ
+                            </a>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteModel('${model.filename}')">
+                                <i class="bi bi-trash me-1"></i> ลบ
+                            </button>
+                        </div>
+                        <div class="text-center mt-3">
+                            <small class="text-muted">สร้างเมื่อ: ${createdDate}</small>
                         </div>
                     </div>
                 </div>
-            `;
+            </div>
+        `;
 
-            container.appendChild(modelCard);
+        container.appendChild(modelCard);
+        
+        setTimeout(() => createPerformanceChart(`chart_${index}`, model.performance), 100);
+    });
+}
 
-            setTimeout(() => createPerformanceChart(`chart_${index}`, model.performance), 100);
-        });
-    }
-
-    function createPerformanceChart(canvasId, performance) {
-        const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-                datasets: [{
-                    data: [
-                        (performance.accuracy || 0) * 100,
-                        (performance.precision || 0) * 100,
-                        (performance.recall || 0) * 100,
-                        (performance.f1_score || 0) * 100
-                    ],
-                    backgroundColor: [
-                        '#667eea', '#28a745', '#ffc107', '#17a2b8'
-                    ],
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => `${context.label}: ${context.parsed.toFixed(1)}%`
-                        }
-                    }
-                }
+function createPerformanceChart(canvasId, performance) {
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+            datasets: [{
+                data: [
+                    (performance.accuracy || 0) * 100,
+                    (performance.precision || 0) * 100,
+                    (performance.recall || 0) * 100,
+                    (performance.f1_score || 0) * 100
+                ],
+                backgroundColor: [
+                    '#4f46e5', '#06b6d4', '#f59e0b', '#10b981'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (context) => `${context.label}: ${context.parsed.toFixed(1)}%` } }
             }
-        });
-    }
+        }
+    });
+}
 
-    function getScoreColor(score) {
-        if (score >= 90) return 'success';
-        if (score >= 80) return 'primary';
-        if (score >= 70) return 'info';
-        if (score >= 60) return 'warning';
-        return 'danger';
-    }
+function getScoreColor(score) {
+    if (score >= 90) return 'success';
+    if (score >= 80) return 'primary';
+    if (score >= 70) return 'info';
+    if (score >= 60) return 'warning';
+    return 'danger';
+}
 
-    function toggleModelSelection(filename, checked) {
-        if (checked) {
-            if (!selectedModels.includes(filename)) {
-                selectedModels.push(filename);
+function toggleModelSelection(filename, checked) {
+    if (checked) {
+        if (!selectedModels.includes(filename)) {
+            selectedModels.push(filename);
+        }
+    } else {
+        selectedModels = selectedModels.filter(f => f !== filename);
+    }
+    
+    const compareBtn = document.getElementById('compareBtn');
+    compareBtn.disabled = selectedModels.length < 2;
+    compareBtn.innerHTML = selectedModels.length < 2 
+        ? '<i class="bi bi-bar-chart-line me-2"></i> เปรียบเทียบ (เลือก 2+ โมเดล)'
+        : `<i class="bi bi-bar-chart-line me-2"></i> เปรียบเทียบ (${selectedModels.length})`;
+}
+
+async function compareSelectedModels() {
+    if (selectedModels.length < 2) {
+        showAlert('กรุณาเลือกอย่างน้อย 2 โมเดลเพื่อเปรียบเทียบ', 'warning');
+        return;
+    }
+    const selectedModelData = availableModels.filter(m => selectedModels.includes(m.filename));
+    displayComparisonChart(selectedModelData);
+    displayComparisonTable(selectedModelData);
+    document.getElementById('comparisonChartContainer').classList.remove('d-none');
+    document.getElementById('comparisonTableContainer').classList.remove('d-none');
+    document.getElementById('comparisonChartContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function displayComparisonChart(models) {
+    const ctx = document.getElementById('comparisonChart');
+    if (comparisonChart) comparisonChart.destroy();
+    
+    const datasets = models.map((model, index) => ({
+        label: model.filename.replace('.joblib', ''),
+        data: [
+            (model.performance.accuracy || 0) * 100,
+            (model.performance.precision || 0) * 100,
+            (model.performance.recall || 0) * 100,
+            (model.performance.f1_score || 0) * 100
+        ],
+        backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.2)`,
+        borderColor: `hsla(${index * 60}, 70%, 50%, 1)`,
+        pointBackgroundColor: `hsla(${index * 60}, 70%, 50%, 1)`,
+    }));
+
+    comparisonChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+            datasets: datasets
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { r: { beginAtZero: true, max: 100 } } }
+    });
+}
+
+function displayComparisonTable(models) {
+    const tbody = document.querySelector('#comparisonTable tbody');
+    tbody.innerHTML = '';
+    models.forEach(model => {
+        const performance = model.performance || {};
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td class="fw-bold">${model.filename.replace('.joblib', '')}</td>
+            <td>
+                <div class="d-flex flex-wrap gap-1">
+                    <span class="badge bg-primary">${((performance.accuracy || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-success">${((performance.precision || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-warning">${((performance.recall || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-info">${((performance.f1_score || 0) * 100).toFixed(1)}%</span>
+                </div>
+            </td>
+            <td>${model.data_format}</td>
+            <td>${new Date(model.created_at).toLocaleDateString('th-TH')}</td>
+            <td>
+                <span class="badge bg-${getScoreColor(((performance.accuracy + performance.precision + performance.recall + performance.f1_score) / 4) * 100)} fs-6">
+                    ${(((performance.accuracy + performance.precision + performance.recall + performance.f1_score) / 4) * 100).toFixed(1)}%
+                </span>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function deleteModel(filename) {
+    if (!confirm(`คุณแน่ใจหรือไม่ที่จะลบโมเดล '${filename}'?`)) return;
+    try {
+        showLoading('กำลังลบโมเดล...');
+        const response = await fetch(`/api/models/${filename}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (result.success) {
+            showAlert('ลบโมเดลสำเร็จ', 'success');
+            loadModels();
+            selectedModels = selectedModels.filter(f => f !== filename);
+            if (selectedModels.length < 2) {
+                document.getElementById('comparisonChartContainer').classList.add('d-none');
+                document.getElementById('comparisonTableContainer').classList.add('d-none');
             }
         } else {
-            selectedModels = selectedModels.filter(f => f !== filename);
+            showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
-
-        const compareBtn = document.getElementById('compareBtn');
-        compareBtn.disabled = selectedModels.length < 2;
-        compareBtn.innerHTML = selectedModels.length < 2 ?
-            '<i class="bi bi-bar-chart-line"></i> เปรียบเทียบ (เลือก 2+ โมเดล)' :
-            `<i class="bi bi-bar-chart-line"></i> เปรียบเทียบ (${selectedModels.length})`;
+    } catch (error) {
+        console.error('Delete error:', error);
+        showAlert('เกิดข้อผิดพลาดในการลบโมเดล', 'danger');
+    } finally {
+        hideLoading();
     }
-
-    async function compareSelectedModels() {
-        if (selectedModels.length < 2) {
-            showAlert('กรุณาเลือกอย่างน้อย 2 โมเดลเพื่อเปรียบเทียบ', 'warning');
-            return;
-        }
-        const selectedModelData = availableModels.filter(m => selectedModels.includes(m.filename));
-        displayComparisonChart(selectedModelData);
-        displayComparisonTable(selectedModelData);
-        document.getElementById('comparisonChartContainer').classList.remove('d-none');
-        document.getElementById('comparisonTableContainer').classList.remove('d-none');
-        document.getElementById('comparisonChartContainer').scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-        });
-    }
-
-    function displayComparisonChart(models) {
-        const ctx = document.getElementById('comparisonChart');
-        if (comparisonChart) comparisonChart.destroy();
-
-        const datasets = models.map((model, index) => ({
-            label: model.filename.replace('.joblib', ''),
-            data: [
-                (model.performance.accuracy || 0) * 100,
-                (model.performance.precision || 0) * 100,
-                (model.performance.recall || 0) * 100,
-                (model.performance.f1_score || 0) * 100
-            ],
-            backgroundColor: `hsla(${index * 60}, 70%, 50%, 0.2)`,
-            borderColor: `hsla(${index * 60}, 70%, 50%, 1)`,
-            pointBackgroundColor: `hsla(${index * 60}, 70%, 50%, 1)`,
-        }));
-
-        comparisonChart = new Chart(ctx, {
-            type: 'radar',
-            data: {
-                labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    r: {
-                        beginAtZero: true,
-                        max: 100
-                    }
-                }
-            }
-        });
-    }
-
-    function displayComparisonTable(models) {
-        const tbody = document.querySelector('#comparisonTable tbody');
-        tbody.innerHTML = '';
-        models.forEach(model => {
-            const performance = model.performance || {};
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td class="fw-bold">${model.filename.replace('.joblib', '')}</td>
-                <td>
-                    <div class="d-flex flex-wrap gap-1">
-                        <span class="badge bg-primary">${((performance.accuracy || 0) * 100).toFixed(1)}%</span>
-                        <span class="badge bg-success">${((performance.precision || 0) * 100).toFixed(1)}%</span>
-                        <span class="badge bg-warning">${((performance.recall || 0) * 100).toFixed(1)}%</span>
-                        <span class="badge bg-info">${((performance.f1_score || 0) * 100).toFixed(1)}%</span>
-                    </div>
-                </td>
-                <td>${model.data_format}</td>
-                <td>${new Date(model.created_at).toLocaleDateString('th-TH')}</td>
-                <td>
-                    <span class="badge bg-${getScoreColor(((performance.accuracy + performance.precision + performance.recall + performance.f1_score) / 4) * 100)} fs-6">
-                        ${(((performance.accuracy + performance.precision + performance.recall + performance.f1_score) / 4) * 100).toFixed(1)}%
-                    </span>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
-
-    async function deleteModel(filename) {
-        if (!confirm(`คุณแน่ใจหรือไม่ที่จะลบโมเดล '${filename}'?`)) return;
-        try {
-            showLoading('กำลังลบโมเดล...');
-            const response = await fetch(`/api/models/${filename}`, {
-                method: 'DELETE'
-            });
-            const result = await response.json();
-            if (result.success) {
-                showAlert('ลบโมเดลสำเร็จ', 'success');
-                loadModels();
-                selectedModels = selectedModels.filter(f => f !== filename);
-                if (selectedModels.length < 2) {
-                    document.getElementById('comparisonChartContainer').classList.add('d-none');
-                    document.getElementById('comparisonTableContainer').classList.add('d-none');
-                }
-            } else {
-                showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
-            }
-        } catch (error) {
-            console.error('Delete error:', error);
-            showAlert('เกิดข้อผิดพลาดในการลบโมเดล', 'danger');
-        } finally {
-            hideLoading();
-        }
-    }
-</script>
+}
 {% endblock %}
