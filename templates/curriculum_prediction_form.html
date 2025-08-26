@@ -556,15 +556,35 @@ async function loadModels() {
 function setupEventListeners() {
     // Update stats when grades change
     document.addEventListener('change', function(e) {
-        if (e.target.classList.contains('grade-select')) {
-            const courseId = e.target.dataset.courseId;
-            courseGrades[courseId] = e.target.value;
-            updateLiveStats();
-            updatePrerequisites();
+    if (e.target.classList.contains('grade-select')) {
+        const courseId = e.target.dataset.courseId;
+        courseGrades[courseId] = e.target.value;
+        
+        // บันทึกเกรดและอัพเดต
+        updateLiveStats();
+        updatePrerequisites();
+        
+        // ตรวจสอบวิชาที่อาจถูกปลดบล็อก
+        checkUnlockedCourses();
+    }
+    });
+}
+function checkUnlockedCourses() {
+    const lockedCards = document.querySelectorAll('.course-card.locked');
+    
+    lockedCards.forEach(card => {
+        const courseId = card.dataset.courseId;
+        const course = coursesData.find(c => c.id === courseId);
+        
+        if (course && checkPrerequisites(course, courseGrades)) {
+            // แสดง animation เมื่อปลดบล็อก
+            card.classList.add('unlocking');
+            setTimeout(() => {
+                card.classList.remove('unlocking');
+            }, 500);
         }
     });
 }
-
 // Load Terms
 function loadNextTerm() {
     if (loadedTermsCount >= allTermsData.length) {
@@ -626,25 +646,46 @@ function createCourseCard(course, isFuture = false, isRepeated = false) {
     if (isFuture) classNames += ' future';
     if (isRepeated) classNames += ' repeated';
     
-    return `
-        <div class="${classNames}" data-course-id="${course.id}">
-            <div class="course-name fw-bold">${course.thaiName}</div>
-            <div class="text-muted small">${course.id} (${course.credit} หน่วยกิต)</div>
-            <div class="text-muted small">เงื่อนไข: ${prereqText}</div>
-            <select class="grade-select" data-course-id="${course.id}">
-                <option value="">-- เลือกเกรด --</option>
-                ${Object.keys(gradeMapping).map(grade => 
-                    `<option value="${grade}">${grade}</option>`
-                ).join('')}
-            </select>
-            ${(isFuture || isRepeated) ? `
-                <button class="btn btn-sm btn-danger mt-2 w-100" onclick="removeCourse('${course.id}')">
-                    <i class="bi bi-x"></i> ลบวิชานี้
-                </button>
-            ` : ''}
+    // สร้าง card HTML
+    const cardDiv = document.createElement('div');
+    cardDiv.className = classNames;
+    cardDiv.dataset.courseId = course.id;
+    cardDiv.style.position = 'relative';
+    
+    cardDiv.innerHTML = `
+        <div class="course-header d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <h6 class="course-name fw-bold mb-1">${course.thaiName}</h6>
+                <small class="text-muted d-block">${course.id}</small>
+                <small class="text-primary">${course.credit} หน่วยกิต</small>
+            </div>
+            ${isFuture ? '<span class="badge bg-info">วิชาอนาคต</span>' : ''}
+            ${isRepeated ? '<span class="badge bg-warning">เรียนซ้ำ</span>' : ''}
         </div>
+        
+        <div class="prerequisite-info mb-2">
+            <small class="text-muted">
+                <i class="bi bi-link-45deg"></i> เงื่อนไข: ${prereqText}
+            </small>
+        </div>
+        
+        <select class="grade-select form-select" data-course-id="${course.id}">
+            <option value="">-- เลือกเกรด --</option>
+            ${Object.keys(gradeMapping).map(grade => 
+                `<option value="${grade}">${grade}</option>`
+            ).join('')}
+        </select>
+        
+        ${(isFuture || isRepeated) ? `
+            <button class="btn btn-sm btn-danger mt-2 w-100" onclick="removeCourse('${course.id}')">
+                <i class="bi bi-x-circle"></i> ลบวิชานี้
+            </button>
+        ` : ''}
     `;
+    
+    return cardDiv;
 }
+
 
 // Update Functions
 function updateLiveStats() {
@@ -706,24 +747,111 @@ function updateLiveStats() {
 }
 
 function updatePrerequisites() {
-    document.querySelectorAll('.course-card').forEach(card => {
-        const courseId = card.dataset.courseId;
+    const allSelects = document.querySelectorAll('.grade-select');
+    const currentTermSelects = document.querySelectorAll('.term-section:last-child .grade-select');
+    const currentTermCourseIds = Array.from(currentTermSelects).map(s => s.dataset.courseId);
+    
+    allSelects.forEach(select => {
+        const courseCard = select.closest('.course-card');
+        const courseId = select.dataset.courseId;
         const course = coursesData.find(c => c.id === courseId);
-        const select = card.querySelector('.grade-select');
         
-        if (course && select) {
-            const canTake = checkPrerequisites(course, courseGrades);
-            
-            if (canTake) {
-                card.classList.remove('locked');
-                select.disabled = false;
-            } else {
-                card.classList.add('locked');
-                select.disabled = true;
-                select.value = '';
+        if (!course) return;
+        
+        // ลบ warning เก่า
+        const oldWarning = courseCard.querySelector('.prerequisite-warning');
+        if (oldWarning) oldWarning.remove();
+        
+        // ตรวจสอบว่าเป็นวิชาในเทอมปัจจุบันหรือไม่
+        const isCurrentTerm = currentTermCourseIds.includes(courseId);
+        
+        // ถ้าเป็นเทอมที่ผ่านมาแล้ว ไม่ต้องตรวจสอบ
+        if (!isCurrentTerm && select.disabled) {
+            return;
+        }
+        
+        // ตรวจสอบ prerequisites
+        let isBlocked = false;
+        let unmetPrereqs = [];
+        
+        if (course.prereq && course.prereq.length > 0) {
+            for (let prereqId of course.prereq) {
+                const prereqGrade = courseGrades[prereqId];
+                const prereqCourse = coursesData.find(c => c.id === prereqId);
+                
+                // ตรวจสอบว่า prerequisite อยู่ในเทอมเดียวกันหรือไม่
+                if (currentTermCourseIds.includes(prereqId)) {
+                    // กรณีพิเศษ: แลปกับทฤษฎีในเทอมเดียวกัน
+                    if (!canTakeTogetherInSameTerm(course, prereqCourse)) {
+                        isBlocked = true;
+                        unmetPrereqs.push(`ไม่สามารถลงพร้อม ${prereqCourse.thaiName} ในเทอมเดียวกัน`);
+                    }
+                } else {
+                    // ตรวจสอบว่าผ่าน prerequisite หรือไม่
+                    if (!prereqGrade || gradeMapping[prereqGrade] === 0) {
+                        isBlocked = true;
+                        unmetPrereqs.push(prereqCourse ? prereqCourse.thaiName : prereqId);
+                    }
+                }
             }
         }
+        
+        // อัพเดต UI
+        if (isBlocked && !courseGrades[courseId]) {
+            courseCard.classList.add('locked');
+            courseCard.style.opacity = '0.7';
+            courseCard.style.background = '#fff5f5';
+            select.disabled = true;
+            select.value = '';
+            
+            // เพิ่มข้อความเตือน
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'prerequisite-warning alert alert-danger mt-2 p-2 small';
+            warningDiv.innerHTML = `
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>วิชาถูกบล็อก:</strong> ต้องผ่าน ${unmetPrereqs.join(', ')} ก่อน
+            `;
+            courseCard.appendChild(warningDiv);
+            
+            // เพิ่ม badge "Locked"
+            if (!courseCard.querySelector('.locked-badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'locked-badge position-absolute top-0 end-0 badge bg-danger m-2';
+                badge.textContent = 'Locked';
+                courseCard.style.position = 'relative';
+                courseCard.appendChild(badge);
+            }
+        } else {
+            courseCard.classList.remove('locked');
+            courseCard.style.opacity = '1';
+            courseCard.style.background = '';
+            select.disabled = false;
+            
+            // ลบ badge "Locked"
+            const lockedBadge = courseCard.querySelector('.locked-badge');
+            if (lockedBadge) lockedBadge.remove();
+        }
     });
+    
+    // อัพเดตสถิติ
+    updateLiveStats();
+}
+
+
+function canTakeTogetherInSameTerm(courseA, courseB) {
+    const labKeywords = ['ปฏิบัติการ', 'การฝึกพื้นฐาน'];
+    
+    const isLabA = labKeywords.some(kw => courseA.thaiName.includes(kw));
+    const isLabB = labKeywords.some(kw => courseB.thaiName.includes(kw));
+    
+    // ถ้าทั้งคู่เป็นแลปหรือทฤษฎีทั้งคู่
+    if (isLabA === isLabB) return false;
+    
+    // ตรวจสอบว่าแลปมีทฤษฎีเป็น prerequisite
+    const labCourse = isLabA ? courseA : courseB;
+    const theoryCourse = isLabA ? courseB : courseA;
+    
+    return labCourse.prereq.includes(theoryCourse.id);
 }
 
 function checkPrerequisites(course, grades) {
