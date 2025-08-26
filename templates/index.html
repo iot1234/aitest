@@ -196,6 +196,9 @@ function hideLoading() {
 document.addEventListener('DOMContentLoaded', function() {
     checkModelStatus();
     
+    // เช็คสถานะซ้ำทุก 5 วินาที
+    setInterval(checkModelStatus, 5000);
+    
     document.getElementById('fileUpload').addEventListener('change', () => {
         document.getElementById('uploadBtn').disabled = !document.getElementById('fileUpload').files.length;
     });
@@ -203,45 +206,102 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function checkModelStatus() {
     try {
-        const response = await fetch('/model_status');
+        // ลองเรียก API ดูรายการโมเดลจาก /api/models แทน
+        const response = await fetch('/api/models');
         const data = await response.json();
         
-        // อัปเดตสถานะโมเดล
-        updateModelStatusUI(data);
-        
-        // Enable/Disable predict button ตามสถานะโมเดล
-        const predictBtn = document.getElementById('predictBtn');
-        if (predictBtn) {
-            if (data.subject_model || data.gpa_model) {
-                predictBtn.disabled = false;
-                predictBtn.title = 'คลิกเพื่อทำนายผล';
+        if (data.success && data.models && data.models.length > 0) {
+            // หาโมเดล subject_based
+            const subjectModels = data.models.filter(m => 
+                m.data_format === 'subject_based' || 
+                m.filename.includes('subject_based')
+            );
+            
+            // อัปเดต UI สำหรับ subject model
+            const subjectStatus = document.getElementById('subject-model-status');
+            if (subjectModels.length > 0) {
+                const latestModel = subjectModels[0];
+                const accuracy = latestModel.performance?.accuracy || latestModel.performance_metrics?.accuracy || 0;
+                
+                subjectStatus.innerHTML = `<span class="badge bg-success">
+                    <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
+                </span>`;
+                
+                // Enable predict button
+                const predictBtn = document.getElementById('predictBtn');
+                if (predictBtn) {
+                    predictBtn.disabled = false;
+                    predictBtn.title = 'คลิกเพื่อทำนายผล';
+                }
             } else {
-                predictBtn.disabled = true;
-                predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
+                subjectStatus.innerHTML = `<span class="badge bg-danger">
+                    <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
+                </span>`;
             }
+        } else {
+            // ถ้าไม่มีโมเดล
+            updateModelStatusUI({
+                subject_model: false,
+                gpa_model: false
+            });
         }
+        
     } catch (error) {
         console.error('Error checking model status:', error);
-        showAlert('ไม่สามารถตรวจสอบสถานะโมเดลได้', 'warning');
+        // ถ้าเกิดข้อผิดพลาด ลองเรียก /model_status อีกครั้ง
+        try {
+            const response2 = await fetch('/model_status');
+            const data2 = await response2.json();
+            updateModelStatusUI(data2);
+            
+            // Enable/Disable predict button
+            const predictBtn = document.getElementById('predictBtn');
+            if (predictBtn) {
+                if (data2.subject_model) {
+                    predictBtn.disabled = false;
+                    predictBtn.title = 'คลิกเพื่อทำนายผล';
+                } else {
+                    predictBtn.disabled = true;
+                    predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
+                }
+            }
+        } catch (error2) {
+            console.error('Error checking model status (fallback):', error2);
+            showAlert('ไม่สามารถตรวจสอบสถานะโมเดลได้', 'warning');
+        }
     }
 }
 
 function updateModelStatusUI(data) {
     const subjectStatus = document.getElementById('subject-model-status');
     
-    if (data.subject_model) {
+    // ตรวจสอบทั้งจาก flag และ model info
+    if (data.subject_model || (data.subject_model_info && data.subject_model_info.accuracy)) {
+        const accuracy = data.subject_model_info?.accuracy || 0;
         subjectStatus.innerHTML = `<span class="badge bg-success">
-            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน (Accuracy: ${(data.subject_model_info.accuracy * 100).toFixed(2)}%)
+            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
         </span>`;
+        
+        // Enable predict button
+        const predictBtn = document.getElementById('predictBtn');
+        if (predictBtn) {
+            predictBtn.disabled = false;
+            predictBtn.title = 'คลิกเพื่อทำนายผล';
+        }
     } else {
         subjectStatus.innerHTML = `<span class="badge bg-danger">
             <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
         </span>`;
+        
+        // Disable predict button
+        const predictBtn = document.getElementById('predictBtn');
+        if (predictBtn) {
+            predictBtn.disabled = true;
+            predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
+        }
     }
-
-    // ซ่อนสปินเนอร์ตรวจสอบสถานะ
-    document.querySelector('.list-group').previousElementSibling.classList.add('d-none');
 }
+
 
 async function uploadFile() {
     const fileInput = document.getElementById('fileUpload');
@@ -331,7 +391,11 @@ async function trainModel() {
             `;
             document.getElementById('trainBtn').insertAdjacentHTML('afterend', metricsHtml);
             
-            checkModelStatus();
+            // รอสักครู่แล้วเช็คสถานะโมเดลใหม่
+            setTimeout(() => {
+                checkModelStatus();
+            }, 1000);
+            
         } else {
             showAlert(`❌ เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
@@ -362,11 +426,20 @@ async function predictData() {
         let modelFilename = null;
         if (modelsData.success && modelsData.models.length > 0) {
             // หาโมเดล subject_based ล่าสุด
-            const subjectModels = modelsData.models.filter(m => m.data_format === 'subject_based');
+            const subjectModels = modelsData.models.filter(m => 
+                m.data_format === 'subject_based' || 
+                m.filename.includes('subject_based')
+            );
+            
             if (subjectModels.length > 0) {
-                // เรียงตามวันที่สร้าง
-                subjectModels.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                // เรียงตามวันที่สร้าง และเลือกตัวล่าสุด
+                subjectModels.sort((a, b) => {
+                    const dateA = new Date(a.created_at || 0);
+                    const dateB = new Date(b.created_at || 0);
+                    return dateB - dateA;
+                });
                 modelFilename = subjectModels[0].filename;
+                console.log('Using model:', modelFilename);
             }
         }
         
