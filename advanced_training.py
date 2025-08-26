@@ -412,7 +412,7 @@ class AdvancedFeatureEngineer:
             if 'Dummy StudentNO' in data.columns:
                 students = data['Dummy StudentNO'].unique()
                 
-                for student_id in students[:100]:  # Limit for performance
+                for student_id in students:  # Limit for performance
                     student_data = data[data['Dummy StudentNO'] == student_id].copy()
                     
                     # Calculate basic features
