@@ -40,22 +40,23 @@
                 </div>
 
                 <div class="col-lg-5">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold mb-0">สถานะโมเดลที่ใช้งานได้</h6>
-                        <span class="badge bg-secondary-subtle text-secondary" id="model-check-status">
-                            <div class="spinner-border spinner-border-sm me-1" role="status"></div>
-                            กำลังตรวจสอบ...
-                        </span>
-                    </div>
-                    <ul class="list-group list-group-flush border-top">
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
-                            <div>โมเดลรายวิชา <span class="badge bg-primary-subtle text-primary">Subject-based</span></div>
-                            <div id="subject-model-status">
-                                <span class="badge bg-secondary">กำลังตรวจสอบ...</span>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0">สถานะโมเดลที่ใช้งานได้</h6>
+        <span class="badge bg-secondary-subtle text-secondary" id="model-check-status">
+            <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+            กำลังตรวจสอบ...
+        </span>
+    </div>
+    <ul class="list-group list-group-flush border-top">
+        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+            <div>โมเดลรายวิชา <span class="badge bg-primary-subtle text-primary">Subject-based</span></div>
+            <div id="subject-model-status">
+                <span class="badge bg-secondary">กำลังตรวจสอบ...</span>
+            </div>
+        </li>
+    </ul>
+</div>
+
             </div>
 
             <div id="actionsCard" class="d-none">
@@ -160,33 +161,21 @@
 {% endblock %}
 
 {% block custom_js %}
-<script>
 let currentFilename = '';
-let modelCheckInterval = null;
 
-// Helper functions
+// Helper function สำหรับแสดงข้อความแจ้งเตือน (Alert)
 function showAlert(message, type) {
     const alertContainer = document.getElementById('alertContainer');
-    const alertId = 'alert-' + Date.now();
     const alertHtml = `
-        <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     `;
     alertContainer.innerHTML = alertHtml;
-    
-    // Auto dismiss after 5 seconds except for errors
-    if (type !== 'danger') {
-        setTimeout(() => {
-            const alertElement = document.getElementById(alertId);
-            if (alertElement) {
-                alertElement.remove();
-            }
-        }, 5000);
-    }
 }
 
+// Helper function สำหรับแสดงข้อความโหลด
 function showLoading(message) {
     const alertContainer = document.getElementById('alertContainer');
     alertContainer.innerHTML = `
@@ -199,18 +188,25 @@ function showLoading(message) {
     `;
 }
 
+// Helper function สำหรับซ่อนข้อความโหลด (ใช้ร่วมกับ showAlert)
 function hideLoading() {
-    const alertContainer = document.getElementById('alertContainer');
-    // ลบเฉพาะ loading alert
-    const loadingAlert = alertContainer.querySelector('.alert-info');
-    if (loadingAlert) {
-        loadingAlert.remove();
-    }
+    document.getElementById('alertContainer').innerHTML = '';
 }
 
-// ฟังก์ชันตรวจสอบสถานะโมเดล
+document.addEventListener('DOMContentLoaded', function() {
+    checkModelStatus();
+    
+    // เช็คสถานะซ้ำทุก 5 วินาที
+    setInterval(checkModelStatus, 5000);
+    
+    document.getElementById('fileUpload').addEventListener('change', () => {
+        document.getElementById('uploadBtn').disabled = !document.getElementById('fileUpload').files.length;
+    });
+});
+
 async function checkModelStatus() {
     try {
+        // ลองเรียก API ดูรายการโมเดลจาก /api/models แทน
         const response = await fetch('/api/models');
         const data = await response.json();
         
@@ -221,35 +217,74 @@ async function checkModelStatus() {
                 m.filename.includes('subject_based')
             );
             
-            updateModelStatusUI(subjectModels.length > 0, subjectModels[0]);
+            // อัปเดต UI สำหรับ subject model
+            const subjectStatus = document.getElementById('subject-model-status');
+            if (subjectModels.length > 0) {
+                const latestModel = subjectModels[0];
+                const accuracy = latestModel.performance?.accuracy || latestModel.performance_metrics?.accuracy || 0;
+                
+                subjectStatus.innerHTML = `<span class="badge bg-success">
+                    <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
+                </span>`;
+                
+                // Enable predict button
+                const predictBtn = document.getElementById('predictBtn');
+                if (predictBtn) {
+                    predictBtn.disabled = false;
+                    predictBtn.title = 'คลิกเพื่อทำนายผล';
+                }
+            } else {
+                subjectStatus.innerHTML = `<span class="badge bg-danger">
+                    <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
+                </span>`;
+            }
         } else {
-            updateModelStatusUI(false, null);
+            // ถ้าไม่มีโมเดล
+            updateModelStatusUI({
+                subject_model: false,
+                gpa_model: false
+            });
         }
-        
-        // ซ่อนสถานะกำลังตรวจสอบ
-        hideModelCheckStatus();
         
     } catch (error) {
         console.error('Error checking model status:', error);
-        updateModelStatusUI(false, null);
-        hideModelCheckStatus();
+        // ถ้าเกิดข้อผิดพลาด ลองเรียก /model_status อีกครั้ง
+        try {
+            const response2 = await fetch('/model_status');
+            const data2 = await response2.json();
+            updateModelStatusUI(data2);
+            
+            // Enable/Disable predict button
+            const predictBtn = document.getElementById('predictBtn');
+            if (predictBtn) {
+                if (data2.subject_model) {
+                    predictBtn.disabled = false;
+                    predictBtn.title = 'คลิกเพื่อทำนายผล';
+                } else {
+                    predictBtn.disabled = true;
+                    predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
+                }
+            }
+        } catch (error2) {
+            console.error('Error checking model status (fallback):', error2);
+            showAlert('ไม่สามารถตรวจสอบสถานะโมเดลได้', 'warning');
+        }
     }
 }
 
-// อัปเดต UI สถานะโมเดล
-function updateModelStatusUI(hasModel, modelInfo) {
+function updateModelStatusUI(data) {
     const subjectStatus = document.getElementById('subject-model-status');
-    const predictBtn = document.getElementById('predictBtn');
     
-    if (hasModel && modelInfo) {
-        const accuracy = modelInfo.performance?.accuracy || 
-                        modelInfo.performance_metrics?.accuracy || 0;
-        
+    // ตรวจสอบทั้งจาก flag และ model info
+    if (data.subject_model || (data.subject_model_info && data.subject_model_info.accuracy)) {
+        const accuracy = data.subject_model_info?.accuracy || 0;
         subjectStatus.innerHTML = `<span class="badge bg-success">
-            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(${(accuracy * 100).toFixed(1)}%)` : ''}
+            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
         </span>`;
         
-        if (predictBtn && currentFilename) {
+        // Enable predict button
+        const predictBtn = document.getElementById('predictBtn');
+        if (predictBtn) {
             predictBtn.disabled = false;
             predictBtn.title = 'คลิกเพื่อทำนายผล';
         }
@@ -258,6 +293,8 @@ function updateModelStatusUI(hasModel, modelInfo) {
             <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
         </span>`;
         
+        // Disable predict button
+        const predictBtn = document.getElementById('predictBtn');
         if (predictBtn) {
             predictBtn.disabled = true;
             predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
@@ -265,49 +302,7 @@ function updateModelStatusUI(hasModel, modelInfo) {
     }
 }
 
-// ซ่อนสถานะกำลังตรวจสอบ
-function hideModelCheckStatus() {
-    const statusBadge = document.getElementById('model-check-status');
-    if (statusBadge) {
-        statusBadge.style.display = 'none';
-    }
-}
 
-// แสดงสถานะกำลังตรวจสอบ
-function showModelCheckStatus() {
-    const statusBadge = document.getElementById('model-check-status');
-    if (statusBadge) {
-        statusBadge.style.display = 'inline-flex';
-        statusBadge.innerHTML = `
-            <div class="spinner-border spinner-border-sm me-1" role="status"></div>
-            กำลังตรวจสอบ...
-        `;
-    }
-}
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    // ตรวจสอบสถานะโมเดลทันที
-    checkModelStatus();
-    
-    // ตั้งค่า listener สำหรับ file upload
-    document.getElementById('fileUpload').addEventListener('change', () => {
-        const hasFile = document.getElementById('fileUpload').files.length > 0;
-        document.getElementById('uploadBtn').disabled = !hasFile;
-    });
-    
-    // ตรวจสอบสถานะโมเดลซ้ำทุก 10 วินาที
-    modelCheckInterval = setInterval(checkModelStatus, 10000);
-});
-
-// Clear interval when page unloads
-window.addEventListener('beforeunload', function() {
-    if (modelCheckInterval) {
-        clearInterval(modelCheckInterval);
-    }
-});
-
-// ฟังก์ชันอัปโหลดไฟล์
 async function uploadFile() {
     const fileInput = document.getElementById('fileUpload');
     if (fileInput.files.length === 0) {
@@ -338,9 +333,6 @@ async function uploadFile() {
             `;
             document.getElementById('actionsCard').classList.remove('d-none');
             showAlert('อัปโหลดไฟล์สำเร็จ!', 'success');
-            
-            // เช็คสถานะโมเดลอีกครั้งหลังอัปโหลด
-            checkModelStatus();
         } else {
             showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
@@ -353,7 +345,6 @@ async function uploadFile() {
     }
 }
 
-// ฟังก์ชันฝึกโมเดล
 async function trainModel() {
     if (!currentFilename) {
         showAlert('กรุณาอัปโหลดไฟล์ก่อนครับ', 'warning');
@@ -388,13 +379,8 @@ async function trainModel() {
             showAlert(`✅ ฝึกโมเดลสำเร็จ${trainingType}: ${result.model_filename}`, 'success');
             
             // แสดง metrics
-            const existingMetrics = document.querySelector('.training-metrics');
-            if (existingMetrics) {
-                existingMetrics.remove();
-            }
-            
             const metricsHtml = `
-                <div class="training-metrics mt-2 text-muted">
+                <div class="mt-2 text-muted">
                     <small>
                         Accuracy: ${(result.accuracy * 100).toFixed(2)}% | 
                         Precision: ${(result.precision * 100).toFixed(2)}% | 
@@ -407,7 +393,6 @@ async function trainModel() {
             
             // รอสักครู่แล้วเช็คสถานะโมเดลใหม่
             setTimeout(() => {
-                showModelCheckStatus();
                 checkModelStatus();
             }, 1000);
             
@@ -423,7 +408,7 @@ async function trainModel() {
     }
 }
 
-// ฟังก์ชันทำนาย
+
 async function predictData() {
     if (!currentFilename) {
         showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
@@ -490,7 +475,6 @@ async function predictData() {
     }
 }
 
-// ฟังก์ชันแสดงผลลัพธ์การทำนาย
 function displayPredictionResults(results, summary) {
     const resultsCard = document.getElementById('resultsCard');
     resultsCard.classList.remove('d-none');
@@ -540,7 +524,6 @@ function displayPredictionResults(results, summary) {
     resultsCard.scrollIntoView({ behavior: 'smooth' });
 }
 
-// ฟังก์ชันวิเคราะห์รายวิชา
 async function analyzeSubjects() {
     if (!currentFilename) {
         showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
@@ -573,7 +556,6 @@ async function analyzeSubjects() {
     }
 }
 
-// ฟังก์ชันแสดงผลลัพธ์การวิเคราะห์
 function displayAnalysisResults(data) {
     const resultsCard = document.getElementById('resultsCard');
     resultsCard.classList.remove('d-none');
@@ -626,7 +608,6 @@ function displayAnalysisResults(data) {
     resultsCard.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Toggle spinner function
 function toggleSpinner(buttonId, show) {
     const button = document.getElementById(buttonId);
     const spinner = button.querySelector('.spinner-border');
@@ -638,5 +619,4 @@ function toggleSpinner(buttonId, show) {
         button.disabled = false;
     }
 }
-</script>
 {% endblock %}
