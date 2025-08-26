@@ -1922,9 +1922,9 @@ def curriculum_prediction_form():
     """Page for predicting graduation based on curriculum and prerequisites."""
     return render_template(
         'curriculum_prediction_form.html',
-        all_terms_data=app.config['ALL_TERMS_DATA'],
-        courses_data=app.config['COURSES_DATA'],
-        grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+        coursesData=app.config['COURSES_DATA'],  # เพิ่มบรรทัดนี้
+        allTermsData=app.config['ALL_TERMS_DATA'],
+        gradeMapping=app.config['DATA_CONFIG']['grade_mapping']
     )
 
 
@@ -2708,9 +2708,9 @@ def main_page():
 @app.route('/curriculum')
 def curriculum_page():
     return render_template('curriculum_prediction_form.html',
-        all_terms_data=app.config['ALL_TERMS_DATA'],
-        courses_data=app.config['COURSES_DATA'],
-        grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+        coursesData=app.config['COURSES_DATA'],  # เพิ่มบรรทัดนี้
+        allTermsData=app.config['ALL_TERMS_DATA'],
+        gradeMapping=app.config['DATA_CONFIG']['grade_mapping']
     )
 
 @app.route('/predict-batch')
