@@ -502,7 +502,6 @@ async function loadModels() {
                 modelSelect.appendChild(option);
             });
             
-            // เลือกโมเดลล่าสุดอัตโนมัติ
             if (subjectModels.length > 0) {
                 modelSelect.value = subjectModels[0].filename;
             }
@@ -516,13 +515,11 @@ async function loadModels() {
 
 // Setup Event Listeners
 function setupEventListeners() {
-    // Update stats when grades change
     document.addEventListener('change', function(e) {
         if (e.target.classList.contains('grade-select')) {
             const courseId = e.target.dataset.courseId;
             courseGrades[courseId] = e.target.value;
             
-            // บันทึกเกรดและอัพเดต
             updateLiveStats();
             updatePrerequisites();
         }
@@ -537,19 +534,15 @@ function setupEventListeners() {
         
         if (!course) return;
 
-        // เพิ่มวิชานี้ใน repeatedCourses (ถ้ายังไม่มี)
         if (!repeatedCourses.find(c => c.id === courseId)) {
             repeatedCourses.push(course);
         }
         
-        // อัปเดต UI: เพิ่มการ์ดวิชาเรียนซ้ำในหน้าปัจจุบัน
         addRepeatedCourseCard(course);
         
-        // ปิด Modal
         bootstrap.Modal.getInstance(document.getElementById('repeatCourseModal')).hide();
     });
 }
-
 
 function checkUnlockedCourses() {
     const lockedCards = document.querySelectorAll('.course-card.locked');
@@ -559,7 +552,6 @@ function checkUnlockedCourses() {
         const course = coursesData.find(c => c.id === courseId);
         
         if (course && checkPrerequisites(course, courseGrades)) {
-            // แสดง animation เมื่อปลดบล็อก
             card.classList.remove('locked');
             card.classList.add('unlocked');
             card.querySelector('select').disabled = false;
@@ -859,8 +851,8 @@ function canTakeTogetherInSameTerm(courseA, courseB) {
     
     if (isLabA === isLabB) return false;
     
-    const labCourse = isLabA ? courseA : courseB;
-    const theoryCourse = isLabA ? courseB : courseA;
+    const labCourse = courseA if (a_is_lab) else courseB;
+    const theoryCourse = courseB if (a_is_lab) else courseA;
     
     return labCourse.prereq.includes(theoryCourse.id);
 }
