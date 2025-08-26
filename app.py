@@ -1962,16 +1962,6 @@ def system_status():
             'traceback': traceback.format_exc(),
             'server_time': datetime.now().isoformat()
         }), 500
-        
-    except Exception as e:
-        logger.error(f"❌ Error getting system status: {str(e)}")
-        import traceback
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
-            'server_time': datetime.now().isoformat()
-        }), 500
 
 @app.route('/api/test-r2-connection')
 def test_r2_connection():
