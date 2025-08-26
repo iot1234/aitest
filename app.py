@@ -1898,25 +1898,8 @@ def system_status():
     try:
         logger.info("🔧 Checking system status...")
         
-        # ตรวจสอบ R2 connection
-        r2_connected = False
-        storage_provider = 'Local'
-        bucket_name = None
-        error_message = None
-        
-        if hasattr(storage, 's3_client') and storage.s3_client and not storage.use_local:
-            try:
-                response = storage.s3_client.list_objects_v2(Bucket=storage.bucket_name, MaxKeys=1)
-                r2_connected = True
-                storage_provider = 'Cloudflare R2'
-                bucket_name = storage.bucket_name
-                logger.info("✅ R2 connection verified")
-            except Exception as e:
-                logger.warning(f"R2 connection failed: {e}")
-                error_message = str(e)
-                r2_connected = False
-        else:
-            error_message = "R2 client not initialized or using local storage"
+        # ใช้ instance ที่สร้างไว้แล้ว
+        storage_status = storage.get_connection_status()
         
         # นับจำนวนโมเดล
         try:
@@ -1934,15 +1917,16 @@ def system_status():
             if os.path.exists(log_file):
                 with open(log_file, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
-                    recent_logs = lines[-20:]  # Last 20 lines
+                    recent_logs = lines[-20:]
         except Exception as e:
             logger.warning(f"Could not read logs: {e}")
-        
+
+        # ใช้ข้อมูลจาก storage_status โดยตรง
         status_data = {
             'success': True,
-            'r2_connected': r2_connected,
-            'storage_provider': storage_provider,
-            'bucket_name': bucket_name,
+            'r2_connected': storage_status['connected'],
+            'storage_provider': storage_status['storage_type'],
+            'bucket_name': storage_status['bucket_name'],
             'models_available': len(models_list),
             'total_size': total_size,
             'python_version': sys.version.split()[0],
@@ -1957,7 +1941,7 @@ def system_status():
                 'model_exists': os.path.exists(app.config['MODEL_FOLDER'])
             },
             'recent_logs': recent_logs,
-            'error_message': error_message,
+            'error_message': storage_status.get('errors'),
             'env_vars_status': {
                 'R2_ACCESS_KEY': bool(os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID')),
                 'R2_SECRET_KEY': bool(os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY')),
@@ -1968,6 +1952,16 @@ def system_status():
         
         logger.info("✅ System status check completed")
         return jsonify(status_data)
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting system status: {str(e)}")
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'server_time': datetime.now().isoformat()
+        }), 500
         
     except Exception as e:
         logger.error(f"❌ Error getting system status: {str(e)}")
