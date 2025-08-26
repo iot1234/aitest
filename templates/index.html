@@ -2,6 +2,16 @@
 
 {% block title %}ฝึกโมเดล AI - {{ super() }}{% endblock %}
 
+{% block custom_css %}
+<style>
+/* CSS ที่ต้องการเพิ่มในหน้า index.html */
+.card {
+    border-radius: 1rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container">
     <div id="alertContainer"></div>
@@ -42,7 +52,7 @@
                 <div class="col-lg-5">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold mb-0">สถานะโมเดลที่ใช้งานได้</h6>
-                        <span class="badge bg-secondary-subtle text-secondary">
+                        <span class="badge bg-secondary-subtle text-secondary" id="model-check-status">
                             <div class="spinner-border spinner-border-sm me-1" role="status"></div>
                             กำลังตรวจสอบ...
                         </span>
@@ -51,10 +61,9 @@
                         <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
                             <div>โมเดลรายวิชา <span class="badge bg-primary-subtle text-primary">Subject-based</span></div>
                             <div id="subject-model-status">
-                                <span class="badge bg-danger"><i class="bi bi-x-circle-fill"></i> ไม่พร้อม</span>
+                                <span class="badge bg-secondary">กำลังตรวจสอบ...</span>
                             </div>
                         </li>
-                        
                     </ul>
                 </div>
             </div>
@@ -161,462 +170,492 @@
 {% endblock %}
 
 {% block custom_js %}
-let currentFilename = '';
+<script>
+    let currentFilename = '';
+    let modelCheckInterval = null;
 
-// Helper function สำหรับแสดงข้อความแจ้งเตือน (Alert)
-function showAlert(message, type) {
-    const alertContainer = document.getElementById('alertContainer');
-    const alertHtml = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    `;
-    alertContainer.innerHTML = alertHtml;
-}
-
-// Helper function สำหรับแสดงข้อความโหลด
-function showLoading(message) {
-    const alertContainer = document.getElementById('alertContainer');
-    alertContainer.innerHTML = `
-        <div class="alert alert-info mb-4" role="alert">
-            <div class="spinner-border spinner-border-sm me-2" role="status">
-                <span class="visually-hidden">Loading...</span>
+    // Helper functions
+    function showAlert(message, type) {
+        const alertContainer = document.getElementById('alertContainer');
+        const alertId = 'alert-' + Date.now();
+        const alertHtml = `
+            <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-            <strong>${message}</strong>
-        </div>
-    `;
-}
-
-// Helper function สำหรับซ่อนข้อความโหลด (ใช้ร่วมกับ showAlert)
-function hideLoading() {
-    document.getElementById('alertContainer').innerHTML = '';
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    checkModelStatus();
-    
-    // เช็คสถานะซ้ำทุก 5 วินาที
-    setInterval(checkModelStatus, 5000);
-    
-    document.getElementById('fileUpload').addEventListener('change', () => {
-        document.getElementById('uploadBtn').disabled = !document.getElementById('fileUpload').files.length;
-    });
-});
-
-async function checkModelStatus() {
-    try {
-        // ลองเรียก API ดูรายการโมเดลจาก /api/models แทน
-        const response = await fetch('/api/models');
-        const data = await response.json();
+        `;
+        alertContainer.innerHTML = alertHtml;
         
-        if (data.success && data.models && data.models.length > 0) {
-            // หาโมเดล subject_based
-            const subjectModels = data.models.filter(m => 
-                m.data_format === 'subject_based' || 
-                m.filename.includes('subject_based')
-            );
-            
-            // อัปเดต UI สำหรับ subject model
-            const subjectStatus = document.getElementById('subject-model-status');
-            if (subjectModels.length > 0) {
-                const latestModel = subjectModels[0];
-                const accuracy = latestModel.performance?.accuracy || latestModel.performance_metrics?.accuracy || 0;
-                
-                subjectStatus.innerHTML = `<span class="badge bg-success">
-                    <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
-                </span>`;
-                
-                // Enable predict button
-                const predictBtn = document.getElementById('predictBtn');
-                if (predictBtn) {
-                    predictBtn.disabled = false;
-                    predictBtn.title = 'คลิกเพื่อทำนายผล';
-                }
-            } else {
-                subjectStatus.innerHTML = `<span class="badge bg-danger">
-                    <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
-                </span>`;
-            }
-        } else {
-            // ถ้าไม่มีโมเดล
-            updateModelStatusUI({
-                subject_model: false,
-                gpa_model: false
-            });
-        }
-        
-    } catch (error) {
-        console.error('Error checking model status:', error);
-        // ถ้าเกิดข้อผิดพลาด ลองเรียก /model_status อีกครั้ง
-        try {
-            const response2 = await fetch('/model_status');
-            const data2 = await response2.json();
-            updateModelStatusUI(data2);
-            
-            // Enable/Disable predict button
-            const predictBtn = document.getElementById('predictBtn');
-            if (predictBtn) {
-                if (data2.subject_model) {
-                    predictBtn.disabled = false;
-                    predictBtn.title = 'คลิกเพื่อทำนายผล';
-                } else {
-                    predictBtn.disabled = true;
-                    predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
-                }
-            }
-        } catch (error2) {
-            console.error('Error checking model status (fallback):', error2);
-            showAlert('ไม่สามารถตรวจสอบสถานะโมเดลได้', 'warning');
-        }
-    }
-}
-
-function updateModelStatusUI(data) {
-    const subjectStatus = document.getElementById('subject-model-status');
-    
-    // ตรวจสอบทั้งจาก flag และ model info
-    if (data.subject_model || (data.subject_model_info && data.subject_model_info.accuracy)) {
-        const accuracy = data.subject_model_info?.accuracy || 0;
-        subjectStatus.innerHTML = `<span class="badge bg-success">
-            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
-        </span>`;
-        
-        // Enable predict button
-        const predictBtn = document.getElementById('predictBtn');
-        if (predictBtn) {
-            predictBtn.disabled = false;
-            predictBtn.title = 'คลิกเพื่อทำนายผล';
-        }
-    } else {
-        subjectStatus.innerHTML = `<span class="badge bg-danger">
-            <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
-        </span>`;
-        
-        // Disable predict button
-        const predictBtn = document.getElementById('predictBtn');
-        if (predictBtn) {
-            predictBtn.disabled = true;
-            predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
-        }
-    }
-}
-
-
-async function uploadFile() {
-    const fileInput = document.getElementById('fileUpload');
-    if (fileInput.files.length === 0) {
-        showAlert('กรุณาเลือกไฟล์ก่อนครับ', 'warning');
-        return;
-    }
-    
-    showLoading('กำลังอัปโหลดไฟล์...');
-    toggleSpinner('uploadBtn', true);
-    
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-
-    try {
-        const response = await fetch('/upload', {
-            method: 'POST',
-            body: formData
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            currentFilename = result.filename;
-            document.getElementById('fileName').textContent = result.filename;
-            document.getElementById('fileInfo').innerHTML = `
-                <span class="badge bg-light text-dark me-2">${result.rows} แถว</span>
-                <span class="badge bg-light text-dark me-2">${result.columns} คอลัมน์</span>
-                <span class="badge bg-primary-subtle text-primary">${result.data_format}</span>
-            `;
-            document.getElementById('actionsCard').classList.remove('d-none');
-            showAlert('อัปโหลดไฟล์สำเร็จ!', 'success');
-        } else {
-            showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
-        }
-    } catch (error) {
-        console.error('Upload error:', error);
-        showAlert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'danger');
-    } finally {
-        hideLoading();
-        toggleSpinner('uploadBtn', false);
-    }
-}
-
-async function trainModel() {
-    if (!currentFilename) {
-        showAlert('กรุณาอัปโหลดไฟล์ก่อนครับ', 'warning');
-        return;
-    }
-
-    const useAdvanced = document.getElementById('advancedTraining').checked;
-    const trainBtn = document.getElementById('trainBtn');
-    if (trainBtn.disabled) return;
-
-    const loadingText = useAdvanced ? 
-        'กำลังฝึกโมเดลด้วย Advanced Context-Aware Strategy...' : 
-        'กำลังฝึกโมเดล...';
-    
-    showLoading(loadingText);
-    toggleSpinner('trainBtn', true);
-
-    try {
-        const response = await fetch('/train', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                filename: currentFilename,
-                use_advanced_training: useAdvanced 
-            })
-        });
-        const result = await response.json();
-
-        if (result.success) {
-            const trainingType = result.training_type === 'advanced' ? 
-                ' (Advanced Context-Aware)' : ' (Standard)';
-            showAlert(`✅ ฝึกโมเดลสำเร็จ${trainingType}: ${result.model_filename}`, 'success');
-            
-            // แสดง metrics
-            const metricsHtml = `
-                <div class="mt-2 text-muted">
-                    <small>
-                        Accuracy: ${(result.accuracy * 100).toFixed(2)}% | 
-                        Precision: ${(result.precision * 100).toFixed(2)}% | 
-                        Recall: ${(result.recall * 100).toFixed(2)}% | 
-                        F1: ${(result.f1_score * 100).toFixed(2)}%
-                    </small>
-                </div>
-            `;
-            document.getElementById('trainBtn').insertAdjacentHTML('afterend', metricsHtml);
-            
-            // รอสักครู่แล้วเช็คสถานะโมเดลใหม่
+        // Auto dismiss after 5 seconds except for errors
+        if (type !== 'danger') {
             setTimeout(() => {
-                checkModelStatus();
-            }, 1000);
-            
-        } else {
-            showAlert(`❌ เกิดข้อผิดพลาด: ${result.error}`, 'danger');
+                const alertElement = document.getElementById(alertId);
+                if (alertElement) {
+                    alertElement.remove();
+                }
+            }, 5000);
         }
-    } catch (error) {
-        console.error('Training error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
-    } finally {
-        hideLoading();
-        toggleSpinner('trainBtn', false);
     }
-}
 
-
-async function predictData() {
-    if (!currentFilename) {
-        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
-        return;
+    function showLoading(message) {
+        const alertContainer = document.getElementById('alertContainer');
+        alertContainer.innerHTML = `
+            <div class="alert alert-info mb-4" role="alert">
+                <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <strong>${message}</strong>
+            </div>
+        `;
     }
-    
-    showLoading('กำลังทำนายผล...');
-    toggleSpinner('predictBtn', true);
 
-    try {
-        // หาโมเดลล่าสุดที่ใช้งานได้
-        const modelsResponse = await fetch('/api/models');
-        const modelsData = await modelsResponse.json();
-        
-        let modelFilename = null;
-        if (modelsData.success && modelsData.models.length > 0) {
-            // หาโมเดล subject_based ล่าสุด
-            const subjectModels = modelsData.models.filter(m => 
-                m.data_format === 'subject_based' || 
-                m.filename.includes('subject_based')
-            );
+    function hideLoading() {
+        const alertContainer = document.getElementById('alertContainer');
+        // ลบเฉพาะ loading alert
+        const loadingAlert = alertContainer.querySelector('.alert-info');
+        if (loadingAlert) {
+            loadingAlert.remove();
+        }
+    }
+
+    // ฟังก์ชันตรวจสอบสถานะโมเดล
+    async function checkModelStatus() {
+        try {
+            const response = await fetch('/api/models');
+            const data = await response.json();
             
-            if (subjectModels.length > 0) {
-                // เรียงตามวันที่สร้าง และเลือกตัวล่าสุด
-                subjectModels.sort((a, b) => {
-                    const dateA = new Date(a.created_at || 0);
-                    const dateB = new Date(b.created_at || 0);
-                    return dateB - dateA;
-                });
-                modelFilename = subjectModels[0].filename;
-                console.log('Using model:', modelFilename);
+            if (data.success && data.models && data.models.length > 0) {
+                // หาโมเดล subject_based
+                const subjectModels = data.models.filter(m => 
+                    m.data_format === 'subject_based' || 
+                    m.filename.includes('subject_based')
+                );
+                
+                updateModelStatusUI(subjectModels.length > 0, subjectModels[0]);
+            } else {
+                updateModelStatusUI(false, null);
+            }
+            
+            // ซ่อนสถานะกำลังตรวจสอบ
+            hideModelCheckStatus();
+            
+        } catch (error) {
+            console.error('Error checking model status:', error);
+            updateModelStatusUI(false, null);
+            hideModelCheckStatus();
+        }
+    }
+
+    // อัปเดต UI สถานะโมเดล
+    function updateModelStatusUI(hasModel, modelInfo) {
+        const subjectStatus = document.getElementById('subject-model-status');
+        const predictBtn = document.getElementById('predictBtn');
+        
+        if (hasModel && modelInfo) {
+            const accuracy = modelInfo.performance?.accuracy || 
+                                    modelInfo.performance_metrics?.accuracy || 0;
+            
+            subjectStatus.innerHTML = `<span class="badge bg-success">
+                <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(${(accuracy * 100).toFixed(1)}%)` : ''}
+            </span>`;
+            
+            if (predictBtn && currentFilename) {
+                predictBtn.disabled = false;
+                predictBtn.title = 'คลิกเพื่อทำนายผล';
+            }
+        } else {
+            subjectStatus.innerHTML = `<span class="badge bg-danger">
+                <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
+            </span>`;
+            
+            if (predictBtn) {
+                predictBtn.disabled = true;
+                predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
             }
         }
+    }
+
+    // ซ่อนสถานะกำลังตรวจสอบ
+    function hideModelCheckStatus() {
+        const statusBadge = document.getElementById('model-check-status');
+        if (statusBadge) {
+            statusBadge.style.display = 'none';
+        }
+    }
+
+    // แสดงสถานะกำลังตรวจสอบ
+    function showModelCheckStatus() {
+        const statusBadge = document.getElementById('model-check-status');
+        if (statusBadge) {
+            statusBadge.style.display = 'inline-flex';
+            statusBadge.innerHTML = `
+                <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                กำลังตรวจสอบ...
+            `;
+        }
+    }
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // ตรวจสอบสถานะโมเดลทันที
+        checkModelStatus();
         
-        if (!modelFilename) {
-            showAlert('ไม่พบโมเดลที่ใช้งานได้ กรุณาฝึกโมเดลก่อน', 'warning');
+        // ตั้งค่า listener สำหรับ file upload
+        document.getElementById('fileUpload').addEventListener('change', () => {
+            const hasFile = document.getElementById('fileUpload').files.length > 0;
+            document.getElementById('uploadBtn').disabled = !hasFile;
+        });
+        
+        // ตรวจสอบสถานะโมเดลซ้ำทุก 10 วินาที (แทนที่จะเป็น 5 วินาที)
+        modelCheckInterval = setInterval(checkModelStatus, 10000);
+    });
+
+    // Clear interval when page unloads
+    window.addEventListener('beforeunload', function() {
+        if (modelCheckInterval) {
+            clearInterval(modelCheckInterval);
+        }
+    });
+
+    // ฟังก์ชันอัปโหลดไฟล์
+    async function uploadFile() {
+        const fileInput = document.getElementById('fileUpload');
+        if (fileInput.files.length === 0) {
+            showAlert('กรุณาเลือกไฟล์ก่อนครับ', 'warning');
+            return;
+        }
+        
+        showLoading('กำลังอัปโหลดไฟล์...');
+        toggleSpinner('uploadBtn', true);
+        
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                currentFilename = result.filename;
+                document.getElementById('fileName').textContent = result.filename;
+                document.getElementById('fileInfo').innerHTML = `
+                    <span class="badge bg-light text-dark me-2">${result.rows} แถว</span>
+                    <span class="badge bg-light text-dark me-2">${result.columns} คอลัมน์</span>
+                    <span class="badge bg-primary-subtle text-primary">${result.data_format}</span>
+                `;
+                document.getElementById('actionsCard').classList.remove('d-none');
+                showAlert('อัปโหลดไฟล์สำเร็จ!', 'success');
+                
+                // เช็คสถานะโมเดลอีกครั้งหลังอัปโหลด
+                checkModelStatus();
+            } else {
+                showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            showAlert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์', 'danger');
+        } finally {
             hideLoading();
-            toggleSpinner('predictBtn', false);
+            toggleSpinner('uploadBtn', false);
+        }
+    }
+
+    // ฟังก์ชันฝึกโมเดล
+    async function trainModel() {
+        if (!currentFilename) {
+            showAlert('กรุณาอัปโหลดไฟล์ก่อนครับ', 'warning');
             return;
         }
 
-        const response = await fetch('/predict', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                filename: currentFilename, 
-                model_filename: modelFilename 
-            })
-        });
-        const result = await response.json();
+        const useAdvanced = document.getElementById('advancedTraining').checked;
+        const trainBtn = document.getElementById('trainBtn');
+        if (trainBtn.disabled) return;
 
-        if (result.success) {
-            displayPredictionResults(result.results, result.summary);
-            showAlert('ทำนายผลสำเร็จ! (ใช้โมเดล: ' + modelFilename + ')', 'success');
-        } else {
-            showAlert(`เกิดข้อผิดพลาดในการทำนาย: ${result.error}`, 'danger');
-        }
-    } catch (error) {
-        console.error('Prediction error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อทำนาย', 'danger');
-    } finally {
-        hideLoading();
-        toggleSpinner('predictBtn', false);
-    }
-}
-
-function displayPredictionResults(results, summary) {
-    const resultsCard = document.getElementById('resultsCard');
-    resultsCard.classList.remove('d-none');
-    
-    // ซ่อนผลลัพธ์การวิเคราะห์
-    document.getElementById('analysisResults').classList.add('d-none');
-
-    // แสดงผลลัพธ์การทำนาย
-    const predictionResultsDiv = document.getElementById('predictionResults');
-    predictionResultsDiv.classList.remove('d-none');
-
-    const summaryDiv = document.getElementById('summary');
-    summaryDiv.innerHTML = `
-        <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${summary.total} คน</p>
-        <p class="mb-1"><strong>คาดว่าจะจบ:</strong> ${summary.predicted_pass} คน (${summary.pass_rate.toFixed(2)}%)</p>
-        <p class="mb-1"><strong>คาดว่าจะไม่จบ:</strong> ${summary.predicted_fail} คน</p>
-    `;
-
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = `
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>ชื่อ</th>
-                        <th>การทำนาย</th>
-                        <th>เกรดเฉลี่ย</th>
-                        <th>ความน่าจะเป็น (จบ)</th>
-                        <th>คำแนะนำ</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${results.map(r => `
-                        <tr>
-                            <td>${r.ชื่อ}</td>
-                            <td><span class="badge bg-${r.การทำนาย === 'จบ' ? 'success' : 'danger'}">${r.การทำนาย}</span></td>
-                            <td>${r.เกรดเฉลี่ย.toFixed(2)}</td>
-                            <td>${(r.ความน่าจะเป็น.จบ * 100).toFixed(2)}%</td>
-                            <td>${r.คำแนะนำ.join(', ')}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    resultsCard.scrollIntoView({ behavior: 'smooth' });
-}
-
-async function analyzeSubjects() {
-    if (!currentFilename) {
-        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
-        return;
-    }
-
-    showLoading('กำลังวิเคราะห์รายวิชา...');
-    toggleSpinner('analyzeBtn', true);
-    
-    try {
-        const response = await fetch('/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename: currentFilename })
-        });
-        const result = await response.json();
+        const loadingText = useAdvanced ? 
+            'กำลังฝึกโมเดลด้วย Advanced Context-Aware Strategy...' : 
+            'กำลังฝึกโมเดล...';
         
-        if (result.success) {
-            displayAnalysisResults(result);
-            showAlert('วิเคราะห์รายวิชาสำเร็จ!', 'success');
-        } else {
-            showAlert(`เกิดข้อผิดพลาดในการวิเคราะห์: ${result.error}`, 'danger');
+        showLoading(loadingText);
+        toggleSpinner('trainBtn', true);
+
+        try {
+            const response = await fetch('/train', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    filename: currentFilename,
+                    use_advanced_training: useAdvanced 
+                })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                const trainingType = result.training_type === 'advanced' ? 
+                    ' (Advanced Context-Aware)' : ' (Standard)';
+                showAlert(`✅ ฝึกโมเดลสำเร็จ${trainingType}: ${result.model_filename}`, 'success');
+                
+                // แสดง metrics
+                const existingMetrics = document.querySelector('.training-metrics');
+                if (existingMetrics) {
+                    existingMetrics.remove();
+                }
+                
+                const metricsHtml = `
+                    <div class="training-metrics mt-2 text-muted">
+                        <small>
+                            Accuracy: ${(result.accuracy * 100).toFixed(2)}% | 
+                            Precision: ${(result.precision * 100).toFixed(2)}% | 
+                            Recall: ${(result.recall * 100).toFixed(2)}% | 
+                            F1: ${(result.f1_score * 100).toFixed(2)}%
+                        </small>
+                    </div>
+                `;
+                document.getElementById('trainBtn').insertAdjacentHTML('afterend', metricsHtml);
+                
+                // รอสักครู่แล้วเช็คสถานะโมเดลใหม่
+                setTimeout(() => {
+                    showModelCheckStatus();
+                    checkModelStatus();
+                }, 1000);
+                
+            } else {
+                showAlert(`❌ เกิดข้อผิดพลาด: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Training error:', error);
+            showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
+        } finally {
+            hideLoading();
+            toggleSpinner('trainBtn', false);
         }
-    } catch (error) {
-        console.error('Analysis error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อวิเคราะห์', 'danger');
-    } finally {
-        hideLoading();
-        toggleSpinner('analyzeBtn', false);
     }
-}
 
-function displayAnalysisResults(data) {
-    const resultsCard = document.getElementById('resultsCard');
-    resultsCard.classList.remove('d-none');
-    
-    // ซ่อนผลลัพธ์การทำนาย
-    document.getElementById('predictionResults').classList.add('d-none');
+    // Toggle spinner function
+    function toggleSpinner(buttonId, show) {
+        const button = document.getElementById(buttonId);
+        const spinner = button.querySelector('.spinner-border');
+        if (show) {
+            spinner.classList.remove('d-none');
+            button.disabled = true;
+        } else {
+            spinner.classList.add('d-none');
+            button.disabled = false;
+        }
+    }
 
-    // แสดงผลลัพธ์การวิเคราะห์
-    const analysisResultsDiv = document.getElementById('analysisResults');
-    analysisResultsDiv.classList.remove('d-none');
-    
-    const summaryDiv = document.getElementById('analysis-summary');
-    summaryDiv.innerHTML = `
-        <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${data.overall_stats.total_students} คน</p>
-        <p class="mb-1"><strong>จำนวนวิชาที่วิเคราะห์:</strong> ${data.overall_stats.total_subjects} วิชา</p>
-        <p class="mb-1"><strong>เกรดเฉลี่ยรวม:</strong> ${data.overall_stats.avg_gpa.toFixed(2)}</p>
-        <p class="mb-1"><strong>อัตราการตกโดยรวม:</strong> ${(data.overall_stats.overall_fail_rate * 100).toFixed(1)}%</p>
-    `;
+    // ฟังก์ชันทำนายและวิเคราะห์ (ไม่เปลี่ยนแปลง)
+    async function predictData() {
+        if (!currentFilename) {
+            showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
+            return;
+        }
+        
+        showLoading('กำลังทำนายผล...');
+        toggleSpinner('predictBtn', true);
 
-    const recommendationsDiv = document.getElementById('analysis-recommendations');
-    if (data.recommendations && data.recommendations.length > 0) {
-        recommendationsDiv.innerHTML = `
-            <h6 class="fw-bold text-primary mb-2">คำแนะนำจากผลการวิเคราะห์</h6>
-            <ul>
-                ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-            </ul>
+        try {
+            // หาโมเดลล่าสุดที่ใช้งานได้
+            const modelsResponse = await fetch('/api/models');
+            const modelsData = await modelsResponse.json();
+            
+            let modelFilename = null;
+            if (modelsData.success && modelsData.models.length > 0) {
+                // หาโมเดล subject_based ล่าสุด
+                const subjectModels = modelsData.models.filter(m => 
+                    m.data_format === 'subject_based' || 
+                    m.filename.includes('subject_based')
+                );
+                
+                if (subjectModels.length > 0) {
+                    // เรียงตามวันที่สร้าง และเลือกตัวล่าสุด
+                    subjectModels.sort((a, b) => {
+                        const dateA = new Date(a.created_at || 0);
+                        const dateB = new Date(b.created_at || 0);
+                        return dateB - dateA;
+                    });
+                    modelFilename = subjectModels[0].filename;
+                    console.log('Using model:', modelFilename);
+                }
+            }
+            
+            if (!modelFilename) {
+                showAlert('ไม่พบโมเดลที่ใช้งานได้ กรุณาฝึกโมเดลก่อน', 'warning');
+                hideLoading();
+                toggleSpinner('predictBtn', false);
+                return;
+            }
+
+            const response = await fetch('/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    filename: currentFilename, 
+                    model_filename: modelFilename 
+                })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                displayPredictionResults(result.results, result.summary);
+                showAlert('ทำนายผลสำเร็จ! (ใช้โมเดล: ' + modelFilename + ')', 'success');
+            } else {
+                showAlert(`เกิดข้อผิดพลาดในการทำนาย: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Prediction error:', error);
+            showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อทำนาย', 'danger');
+        } finally {
+            hideLoading();
+            toggleSpinner('predictBtn', false);
+        }
+    }
+
+    function displayPredictionResults(results, summary) {
+        const resultsCard = document.getElementById('resultsCard');
+        resultsCard.classList.remove('d-none');
+        
+        // ซ่อนผลลัพธ์การวิเคราะห์
+        document.getElementById('analysisResults').classList.add('d-none');
+
+        // แสดงผลลัพธ์การทำนาย
+        const predictionResultsDiv = document.getElementById('predictionResults');
+        predictionResultsDiv.classList.remove('d-none');
+
+        const summaryDiv = document.getElementById('summary');
+        summaryDiv.innerHTML = `
+            <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${summary.total} คน</p>
+            <p class="mb-1"><strong>คาดว่าจะจบ:</strong> ${summary.predicted_pass} คน (${summary.pass_rate.toFixed(2)}%)</p>
+            <p class="mb-1"><strong>คาดว่าจะไม่จบ:</strong> ${summary.predicted_fail} คน</p>
         `;
-    } else {
-        recommendationsDiv.innerHTML = `<p class="text-muted">ไม่มีคำแนะนำพิเศษ</p>`;
+
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ชื่อ</th>
+                            <th>การทำนาย</th>
+                            <th>เกรดเฉลี่ย</th>
+                            <th>ความน่าจะเป็น (จบ)</th>
+                            <th>คำแนะนำ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${results.map(r => `
+                            <tr>
+                                <td>${r.ชื่อ}</td>
+                                <td><span class="badge bg-${r.การทำนาย === 'จบ' ? 'success' : 'danger'}">${r.การทำนาย}</span></td>
+                                <td>${r.เกรดเฉลี่ย.toFixed(2)}</td>
+                                <td>${(r.ความน่าจะเป็น.จบ * 100).toFixed(2)}%</td>
+                                <td>${r.คำแนะนำ.join(', ')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        resultsCard.scrollIntoView({ behavior: 'smooth' });
     }
 
-    const highFailSubjectsList = document.getElementById('highFailSubjects');
-    highFailSubjectsList.innerHTML = data.problem_subjects.high_fail_rate.length > 0 ?
-        data.problem_subjects.high_fail_rate.map(s => 
-            `<li>${s.subject} <span class="badge bg-danger">${(s.fail_rate * 100).toFixed(1)}%</span></li>`
-        ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีอัตราตกสูง</p>';
-    
-    const lowGpaSubjectsList = document.getElementById('lowGpaSubjects');
-    lowGpaSubjectsList.innerHTML = data.problem_subjects.low_gpa.length > 0 ?
-        data.problem_subjects.low_gpa.map(s => 
-            `<li>${s.subject} <span class="badge bg-warning">${s.average.toFixed(2)}</span></li>`
-        ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีเกรดเฉลี่ยต่ำ</p>';
-    
-    const excellentSubjectsList = document.getElementById('excellentSubjects');
-    excellentSubjectsList.innerHTML = data.excellent_subjects.length > 0 ?
-        data.excellent_subjects.map(s => 
-            `<li>${s.subject} <span class="badge bg-success">${s.average.toFixed(2)}</span></li>`
-        ).join('') : '<p class="text-muted mb-0">ไม่พบวิชาที่ผลการเรียนดีเยี่ยม</p>';
-    
-    resultsCard.scrollIntoView({ behavior: 'smooth' });
-}
+    async function analyzeSubjects() {
+        if (!currentFilename) {
+            showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
+            return;
+        }
 
-function toggleSpinner(buttonId, show) {
-    const button = document.getElementById(buttonId);
-    const spinner = button.querySelector('.spinner-border');
-    if (show) {
-        spinner.classList.remove('d-none');
-        button.disabled = true;
-    } else {
-        spinner.classList.add('d-none');
-        button.disabled = false;
+        showLoading('กำลังวิเคราะห์รายวิชา...');
+        toggleSpinner('analyzeBtn', true);
+        
+        try {
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: currentFilename })
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                displayAnalysisResults(result);
+                showAlert('วิเคราะห์รายวิชาสำเร็จ!', 'success');
+            } else {
+                showAlert(`เกิดข้อผิดพลาดในการวิเคราะห์: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Analysis error:', error);
+            showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อวิเคราะห์', 'danger');
+        } finally {
+            hideLoading();
+            toggleSpinner('analyzeBtn', false);
+        }
     }
-}
+
+    function displayAnalysisResults(data) {
+        const resultsCard = document.getElementById('resultsCard');
+        resultsCard.classList.remove('d-none');
+        
+        // ซ่อนผลลัพธ์การทำนาย
+        document.getElementById('predictionResults').classList.add('d-none');
+
+        // แสดงผลลัพธ์การวิเคราะห์
+        const analysisResultsDiv = document.getElementById('analysisResults');
+        analysisResultsDiv.classList.remove('d-none');
+        
+        const summaryDiv = document.getElementById('analysis-summary');
+        summaryDiv.innerHTML = `
+            <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${data.overall_stats.total_students} คน</p>
+            <p class="mb-1"><strong>จำนวนวิชาที่วิเคราะห์:</strong> ${data.overall_stats.total_subjects} วิชา</p>
+            <p class="mb-1"><strong>เกรดเฉลี่ยรวม:</strong> ${data.overall_stats.avg_gpa.toFixed(2)}</p>
+            <p class="mb-1"><strong>อัตราการตกโดยรวม:</strong> ${(data.overall_stats.overall_fail_rate * 100).toFixed(1)}%</p>
+        `;
+
+        const recommendationsDiv = document.getElementById('analysis-recommendations');
+        if (data.recommendations && data.recommendations.length > 0) {
+            recommendationsDiv.innerHTML = `
+                <h6 class="fw-bold text-primary mb-2">คำแนะนำจากผลการวิเคราะห์</h6>
+                <ul>
+                    ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+            `;
+        } else {
+            recommendationsDiv.innerHTML = `<p class="text-muted">ไม่มีคำแนะนำพิเศษ</p>`;
+        }
+
+        const highFailSubjectsList = document.getElementById('highFailSubjects');
+        highFailSubjectsList.innerHTML = data.problem_subjects.high_fail_rate.length > 0 ?
+            data.problem_subjects.high_fail_rate.map(s => 
+                `<li>${s.subject} <span class="badge bg-danger">${(s.fail_rate * 100).toFixed(1)}%</span></li>`
+            ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีอัตราตกสูง</p>';
+        
+        const lowGpaSubjectsList = document.getElementById('lowGpaSubjects');
+        lowGpaSubjectsList.innerHTML = data.problem_subjects.low_gpa.length > 0 ?
+            data.problem_subjects.low_gpa.map(s => 
+                `<li>${s.subject} <span class="badge bg-warning">${s.average.toFixed(2)}</span></li>`
+            ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีเกรดเฉลี่ยต่ำ</p>';
+        
+        const excellentSubjectsList = document.getElementById('excellentSubjects');
+        excellentSubjectsList.innerHTML = data.excellent_subjects.length > 0 ?
+            data.excellent_subjects.map(s => 
+                `<li>${s.subject} <span class="badge bg-success">${s.average.toFixed(2)}</span></li>`
+            ).join('') : '<p class="text-muted mb-0">ไม่พบวิชาที่ผลการเรียนดีเยี่ยม</p>';
+        
+        resultsCard.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function toggleSpinner(buttonId, show) {
+        const button = document.getElementById(buttonId);
+        const spinner = button.querySelector('.spinner-border');
+        if (show) {
+            spinner.classList.remove('d-none');
+            button.disabled = true;
+        } else {
+            spinner.classList.add('d-none');
+            button.disabled = false;
+        }
+    }
+</script>
 {% endblock %}
