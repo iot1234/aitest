@@ -1475,10 +1475,51 @@ def predict():
 def list_models():
     """Lists all available trained models."""
     try:
-        # Get models from S3 or local storage
-        model_files = storage.list_models()
+        model_files = []
         
-        # Enrich with additional metadata if needed
+        # Get models from storage
+        try:
+            storage_models = storage.list_models()
+            model_files.extend(storage_models)
+        except Exception as e:
+            logger.warning(f"Could not get models from storage: {e}")
+        
+        # Also check local folder
+        try:
+            model_folder = app.config['MODEL_FOLDER']
+            if os.path.exists(model_folder):
+                for filename in os.listdir(model_folder):
+                    if filename.endswith('.joblib'):
+                        # ตรวจสอบว่าไม่ซ้ำ
+                        if not any(m.get('filename') == filename for m in model_files):
+                            filepath = os.path.join(model_folder, filename)
+                            try:
+                                model_data = joblib.load(filepath)
+                                model_info = {
+                                    'filename': filename,
+                                    'created_at': model_data.get('created_at', datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
+                                    'data_format': model_data.get('data_format', 'subject_based'),
+                                    'performance_metrics': model_data.get('performance_metrics', {}),
+                                    'storage': 'local'
+                                }
+                            except:
+                                # ถ้าอ่านไม่ได้ ให้ข้อมูลพื้นฐาน
+                                model_info = {
+                                    'filename': filename,
+                                    'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
+                                    'data_format': 'subject_based' if 'subject' in filename else 'unknown',
+                                    'performance_metrics': {},
+                                    'storage': 'local'
+                                }
+                            model_files.append(model_info)
+            logger.info(f"Found {len(model_files)} models total")
+        except Exception as e:
+            logger.error(f"Error checking local models: {e}")
+        
+        # กรองเอาเฉพาะ subject_based (ตัด GPA-based ออก)
+        model_files = [m for m in model_files if 'gpa_based' not in m.get('filename', '').lower() and m.get('data_format') != 'gpa_based']
+        
+        # Enrich with additional metadata
         for model in model_files:
             if 'performance_metrics' not in model or not model['performance_metrics']:
                 model['performance_metrics'] = {
@@ -1489,6 +1530,9 @@ def list_models():
                 }
             # Rename for frontend compatibility
             model['performance'] = model.get('performance_metrics', {})
+
+        # Sort by date
+        model_files.sort(key=lambda x: x.get('created_at', ''), reverse=True)
 
         return jsonify({'success': True, 'models': model_files})
     except Exception as e:
@@ -2599,19 +2643,16 @@ def model_status():
             }
 
         subject_model_status = models.get('subject_model') is not None
-        gpa_model_status = models.get('gpa_model') is not None
         subject_info = models.get('subject_model_info')
-        gpa_info = models.get('gpa_model_info')
         
         logger.info(f"Subject model status: {subject_model_status}")
-        logger.info(f"GPA model status: {gpa_model_status}")
 
         status = {
             'success': True,
             'subject_model': subject_model_status,
-            'gpa_model': gpa_model_status,
+            'gpa_model': False,  # Always false since we're removing GPA model
             'subject_model_info': subject_info,
-            'gpa_model_info': gpa_info,
+            'gpa_model_info': None,  # No GPA model info
             'server_time': datetime.now().isoformat(),
             'models_folder_exists': os.path.exists(app.config['MODEL_FOLDER']),
             'uploads_folder_exists': os.path.exists(app.config['UPLOAD_FOLDER']),
@@ -2631,6 +2672,34 @@ def model_status():
             'server_time': datetime.now().isoformat()
         }), 500
 
+
+
+@app.route('/api/sync-models', methods=['POST'])
+def sync_local_models_to_storage():
+    """Sync local models to cloud storage"""
+    try:
+        if storage.use_local:
+            return jsonify({'success': False, 'error': 'Storage is in local mode'})
+        
+        synced = []
+        model_folder = app.config['MODEL_FOLDER']
+        
+        if os.path.exists(model_folder):
+            for filename in os.listdir(model_folder):
+                if filename.endswith('.joblib'):
+                    filepath = os.path.join(model_folder, filename)
+                    try:
+                        model_data = joblib.load(filepath)
+                        if storage.save_model(model_data, filename):
+                            synced.append(filename)
+                            logger.info(f"Synced {filename} to storage")
+                    except Exception as e:
+                        logger.error(f"Could not sync {filename}: {e}")
+        
+        return jsonify({'success': True, 'synced': synced})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+    
 # Keep all other routes unchanged...
 @app.route('/page')
 def main_page():
@@ -2851,21 +2920,73 @@ def load_existing_models():
     try:
         logger.info("🔍 Searching for existing models...")
         
-        # Get models list from storage
-        models_list = storage.list_models()
+        # ลองหาโมเดลจากทั้ง storage และ local
+        models_found = []
         
-        if not models_list:
+        # 1. ลองจาก storage ก่อน
+        try:
+            models_list = storage.list_models()
+            if models_list:
+                models_found.extend(models_list)
+                logger.info(f"Found {len(models_list)} models in storage")
+        except Exception as e:
+            logger.warning(f"Could not load from storage: {e}")
+        
+        # 2. ลองจาก local folder
+        try:
+            model_folder = app.config['MODEL_FOLDER']
+            if os.path.exists(model_folder):
+                for filename in os.listdir(model_folder):
+                    if filename.endswith('.joblib'):
+                        # ตรวจสอบว่าไม่ซ้ำกับที่มีอยู่แล้ว
+                        if not any(m.get('filename') == filename for m in models_found):
+                            filepath = os.path.join(model_folder, filename)
+                            try:
+                                model_data = joblib.load(filepath)
+                                models_found.append({
+                                    'filename': filename,
+                                    'created_at': model_data.get('created_at', datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
+                                    'data_format': model_data.get('data_format', 'subject_based'),
+                                    'performance_metrics': model_data.get('performance_metrics', {}),
+                                    'storage': 'local'
+                                })
+                            except Exception as e:
+                                logger.warning(f"Could not load local model {filename}: {e}")
+        except Exception as e:
+            logger.warning(f"Could not check local folder: {e}")
+        
+        if not models_found:
             logger.info("No existing models found")
             return
         
-        logger.info(f"Found {len(models_list)} models in storage")
+        # Load subject-based model เท่านั้น (ตัด GPA-based ออก)
+        subject_models = [m for m in models_found if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
         
-        # Load subject-based model
-        subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
         if subject_models:
+            # เรียงตามวันที่สร้าง
+            subject_models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
             latest_subject = subject_models[0]
-            logger.info(f"Loading subject model: {latest_subject['filename']}")
-            loaded_data = storage.load_model(latest_subject['filename'])
+            
+            # โหลดโมเดล
+            loaded_data = None
+            
+            # ลองโหลดจาก storage ก่อน
+            if latest_subject.get('storage') != 'local':
+                try:
+                    loaded_data = storage.load_model(latest_subject['filename'])
+                except Exception as e:
+                    logger.warning(f"Could not load from storage: {e}")
+            
+            # ถ้าไม่ได้ ลองโหลดจาก local
+            if not loaded_data:
+                try:
+                    filepath = os.path.join(app.config['MODEL_FOLDER'], latest_subject['filename'])
+                    if os.path.exists(filepath):
+                        loaded_data = joblib.load(filepath)
+                        logger.info(f"Loaded from local: {latest_subject['filename']}")
+                except Exception as e:
+                    logger.error(f"Could not load model: {e}")
+            
             if loaded_data:
                 models['subject_model'] = {
                     'models': loaded_data.get('models', {}),
@@ -2878,31 +2999,6 @@ def load_existing_models():
                 models['subject_model_info']['loaded_from_file'] = True
                 models['subject_model_info']['filename'] = latest_subject['filename']
                 logger.info(f"✅ Loaded latest subject model: {latest_subject['filename']}")
-            else:
-                logger.warning(f"Could not load subject model data from {latest_subject['filename']}")
-
-        # Load GPA-based model
-        gpa_models = [m for m in models_list if 'gpa_based' in m.get('filename', '') or m.get('data_format') == 'gpa_based']
-        if gpa_models:
-            latest_gpa = gpa_models[0]
-            logger.info(f"Loading GPA model: {latest_gpa['filename']}")
-            loaded_data = storage.load_model(latest_gpa['filename'])
-            if loaded_data:
-                models['gpa_model'] = {
-                    'models': loaded_data.get('models', {}),
-                    'scaler': loaded_data.get('scaler')
-                }
-                models['gpa_feature_cols'] = loaded_data.get('feature_columns', [])
-                models['gpa_model_info'] = loaded_data.get('performance_metrics', 
-                    {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
-                models['gpa_model_info']['created_at'] = loaded_data.get('created_at', datetime.now().isoformat())
-                models['gpa_model_info']['loaded_from_file'] = True
-                models['gpa_model_info']['filename'] = latest_gpa['filename']
-                logger.info(f"✅ Loaded latest GPA model: {latest_gpa['filename']}")
-            else:
-                logger.warning(f"Could not load GPA model data from {latest_gpa['filename']}")
-
-        logger.info("✅ Model loading completed")
 
     except Exception as e:
         logger.error(f"❌ Error loading existing models: {str(e)}")
