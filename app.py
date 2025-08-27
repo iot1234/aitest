@@ -2046,11 +2046,16 @@ def index():
 @app.route('/test')
 def curriculum_prediction_form():
     """Page for predicting graduation based on curriculum and prerequisites."""
+    # ตรวจสอบว่ามีข้อมูลใน config
+    courses_data = app.config.get('COURSES_DATA', [])
+    terms_data = app.config.get('ALL_TERMS_DATA', [])
+    grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+    
     return render_template(
         'curriculum_prediction_form.html',
-        coursesData=json.dumps(app.config['COURSES_DATA']),  # Convert to JSON string
-        allTermsData=json.dumps(app.config['ALL_TERMS_DATA']),  # Convert to JSON string
-        gradeMapping=json.dumps(app.config['DATA_CONFIG']['grade_mapping'])  # Convert to JSON string
+        coursesData=json.dumps(courses_data),
+        allTermsData=json.dumps(terms_data),
+        gradeMapping=json.dumps(grade_mapping)
     )
 
 
@@ -2826,10 +2831,16 @@ def main_page():
 # แก้ไข route /curriculum  
 @app.route('/curriculum')
 def curriculum_page():
-    return render_template('curriculum_prediction_form.html',
-        coursesData=json.dumps(app.config['COURSES_DATA']),  # Convert to JSON string
-        allTermsData=json.dumps(app.config['ALL_TERMS_DATA']),  # Convert to JSON string
-        gradeMapping=json.dumps(app.config['DATA_CONFIG']['grade_mapping'])  # Convert to JSON string
+    # ใช้โค้ดเดียวกับ /test
+    courses_data = app.config.get('COURSES_DATA', [])
+    terms_data = app.config.get('ALL_TERMS_DATA', [])
+    grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+    
+    return render_template(
+        'curriculum_prediction_form.html',
+        coursesData=json.dumps(courses_data),
+        allTermsData=json.dumps(terms_data),
+        gradeMapping=json.dumps(grade_mapping)
     )
 
 @app.route('/predict-batch')
