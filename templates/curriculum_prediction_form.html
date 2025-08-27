@@ -4,6 +4,7 @@
 
 {% block custom_css %}
 <style>
+/* CSS Styles from your original code */
 .main-container {
     max-width: 1400px;
     margin: 0 auto;
@@ -373,7 +374,6 @@
         try {
             showLoadingModal('กำลังโหลดข้อมูลหลักสูตร...');
             
-            // Load configuration first
             const configLoaded = await loadConfiguration();
             
             if (!configLoaded) {
@@ -382,13 +382,10 @@
                 return;
             }
             
-            // Load models
             await loadModelsData();
             
-            // Setup event listeners
             setupEventListeners();
             
-            // Update UI
             updateLiveStats();
             
             hideLoadingModal();
