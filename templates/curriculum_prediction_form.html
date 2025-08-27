@@ -501,9 +501,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // รับข้อมูลจาก Backend
-let coursesData = {{ coursesData|safe }};
-let allTermsData = {{ allTermsData|safe }};
-let gradeMapping = {{ gradeMapping|safe }};
+// แก้ไขเป็น
+let coursesData = {{ coursesData|tojson|safe }};
+let allTermsData = {{ allTermsData|tojson|safe }};
+let gradeMapping = {{ gradeMapping|tojson|safe }};
 
 // State Management
 let loadedTermsCount = 0;
