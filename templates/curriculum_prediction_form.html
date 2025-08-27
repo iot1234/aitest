@@ -336,9 +336,9 @@
 {% block custom_js %}
 <script type="text/javascript">
 // ประกาศตัวแปรใน global scope
-window.coursesData = {{ coursesData|tojson }};
-window.allTermsData = {{ allTermsData|tojson }};
-window.gradeMapping = {{ gradeMapping|tojson }};
+window.coursesData = [];
+window.allTermsData = [];
+window.gradeMapping = {};
 window.loadedTermsCount = 0;
 window.courseGrades = {};
 
@@ -346,6 +346,7 @@ window.courseGrades = {};
 (function() {
     'use strict';
 
+    // รอให้ DOM โหลดเสร็จ
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 Starting application initialization...');
         initializeApp();
@@ -355,19 +356,54 @@ window.courseGrades = {};
         try {
             showLoadingModal('กำลังโหลดข้อมูลหลักสูตร...');
             
+            // โหลดข้อมูลหลักสูตร
+            await loadCurriculumData();
+            
+            // โหลดโมเดล
+            showLoadingModal('กำลังโหลดโมเดล AI...');
             await loadModelsData();
             
+            // Setup event listeners
             setupEventListeners();
             
+            // อัพเดตสถิติ
             updateLiveStats();
             
             hideLoadingModal();
             showAlert('ระบบพร้อมใช้งาน!', 'success');
             
+            console.log('✅ Application initialized successfully');
+            console.log('📚 Courses:', window.coursesData.length);
+            console.log('📅 Terms:', window.allTermsData.length);
+            
         } catch (error) {
             hideLoadingModal();
             console.error('❌ Initialization error:', error);
             showAlert('เกิดข้อผิดพลาดในการเริ่มต้นระบบ: ' + error.message, 'danger');
+        }
+    }
+
+    async function loadCurriculumData() {
+        try {
+            const response = await fetch('/api/config');
+            const data = await response.json();
+            
+            if (data.success) {
+                window.coursesData = data.COURSES_DATA || [];
+                window.allTermsData = data.ALL_TERMS_DATA || [];
+                window.gradeMapping = data.GRADE_MAPPING || {};
+                
+                console.log('✅ Curriculum data loaded:', {
+                    courses: window.coursesData.length,
+                    terms: window.allTermsData.length,
+                    grades: Object.keys(window.gradeMapping).length
+                });
+            } else {
+                throw new Error('Failed to load curriculum data');
+            }
+        } catch (error) {
+            console.error('❌ Error loading curriculum data:', error);
+            throw error;
         }
     }
 
@@ -396,12 +432,15 @@ window.courseGrades = {};
                     modelSelect.appendChild(option);
                 });
                 
+                // เลือกโมเดลล่าสุดอัตโนมัติ
                 if (subjectModels.length > 0) {
                     modelSelect.value = subjectModels[0].filename;
                 }
                 
+                console.log('✅ Models loaded:', subjectModels.length);
             } else {
                 modelSelect.innerHTML = '<option value="">ไม่พบโมเดล (วิเคราะห์ตาม Prerequisite เท่านั้น)</option>';
+                console.log('⚠️ No models found');
             }
         } catch (error) {
             console.error('❌ Error loading models:', error);
@@ -411,63 +450,86 @@ window.courseGrades = {};
     }
 
     function setupEventListeners() {
+        // Event listeners สำหรับปุ่มต่างๆ โดยใช้ ID
         document.getElementById('loadNextTermBtn').addEventListener('click', loadNextTermBtn);
         document.getElementById('loadAllTermsBtn').addEventListener('click', loadAllTermsBtn);
         document.getElementById('fillSampleGradesBtn').addEventListener('click', fillSampleGradesBtn);
         document.getElementById('clearAllGradesBtn').addEventListener('click', clearAllGradesBtn);
         document.getElementById('analyzeAndPredictBtn').addEventListener('click', analyzeAndPredictBtn);
         
+        // Event delegation สำหรับ grade selects
         document.addEventListener('change', function(e) {
             if (e.target.classList.contains('grade-select')) {
                 const courseId = e.target.dataset.courseId;
                 window.courseGrades[courseId] = e.target.value;
+                console.log('🎯 Grade updated:', courseId, e.target.value);
                 updateLiveStats();
                 updatePrerequisites();
             }
         });
+        
+        console.log('✅ Event listeners setup complete');
     }
 
+    // ฟังก์ชันโหลดเทอม
     function loadNextTermBtn() {
         try {
+            console.log('📚 Loading next term...', window.loadedTermsCount + 1);
+            
             if (window.loadedTermsCount >= window.allTermsData.length) {
                 showAlert('โหลดครบทุกเทอมแล้ว', 'warning');
                 return;
             }
+            
             const termData = window.allTermsData[window.loadedTermsCount];
             window.loadedTermsCount++;
+            
             createTermSection(termData, window.loadedTermsCount);
             updateLoadedTermsInfo();
             updateLiveStats();
             updatePrerequisites();
+            
             showAlert(`โหลดปี ${termData.year} เทอม ${termData.term} เรียบร้อย`, 'success');
+            console.log('✅ Term loaded:', termData);
+            
         } catch (error) {
+            console.error('❌ Error loading next term:', error);
             showAlert('เกิดข้อผิดพลาดในการโหลดเทอม', 'danger');
         }
     }
 
     function loadAllTermsBtn() {
         try {
+            console.log('📚 Loading all terms...');
             let loadedCount = 0;
+            
             while (window.loadedTermsCount < window.allTermsData.length) {
                 const termData = window.allTermsData[window.loadedTermsCount];
                 window.loadedTermsCount++;
                 createTermSection(termData, window.loadedTermsCount);
                 loadedCount++;
             }
+            
             updateLoadedTermsInfo();
             updateLiveStats();
             updatePrerequisites();
+            
             showAlert(`โหลดทั้งหมด ${loadedCount} เทอมเรียบร้อย`, 'success');
+            console.log('✅ All terms loaded:', loadedCount);
+            
         } catch (error) {
+            console.error('❌ Error loading all terms:', error);
             showAlert('เกิดข้อผิดพลาดในการโหลดเทอม', 'danger');
         }
     }
 
     function fillSampleGradesBtn() {
         try {
+            console.log('🎲 Filling sample grades...');
             const grades = ['A', 'B+', 'B', 'C+', 'C'];
             const selects = document.querySelectorAll('.grade-select');
             let filledCount = 0;
+            
             selects.forEach(select => {
                 if (!select.disabled) {
                     const randomGrade = grades[Math.floor(Math.random() * grades.length)];
@@ -476,31 +538,45 @@ window.courseGrades = {};
                     filledCount++;
                 }
             });
+            
             updateLiveStats();
             updatePrerequisites();
+            
             showAlert(`ใส่เกรดตัวอย่าง ${filledCount} วิชาเรียบร้อย`, 'success');
+            console.log('✅ Sample grades filled:', filledCount);
+            
         } catch (error) {
+            console.error('❌ Error filling sample grades:', error);
             showAlert('เกิดข้อผิดพลาดในการใส่เกรดตัวอย่าง', 'danger');
         }
     }
 
     function clearAllGradesBtn() {
         try {
+            console.log('🧹 Clearing all grades...');
+            
             document.querySelectorAll('.grade-select').forEach(select => {
                 select.value = '';
             });
+            
             window.courseGrades = {};
             updateLiveStats();
             updatePrerequisites();
+            
             showAlert('ล้างเกรดทั้งหมดเรียบร้อย', 'info');
+            console.log('✅ All grades cleared');
+            
         } catch (error) {
+            console.error('❌ Error clearing grades:', error);
             showAlert('เกิดข้อผิดพลาดในการล้างเกรด', 'danger');
         }
     }
 
     async function analyzeAndPredictBtn() {
         try {
+            console.log('🔮 Starting analysis and prediction...');
             showLoadingModal('กำลังวิเคราะห์และทำนาย...');
+            
             const studentName = document.getElementById('studentName').value || 'นักศึกษา';
             const modelFilename = document.getElementById('modelSelect').value;
             
@@ -528,11 +604,15 @@ window.courseGrades = {};
             if (result.success) {
                 displayResults(result);
                 showAlert('วิเคราะห์และทำนายเสร็จสิ้น', 'success');
+                console.log('✅ Analysis completed with model');
             } else {
                 showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
+                console.error('❌ Analysis failed:', result.error);
             }
+            
         } catch (error) {
             hideLoadingModal();
+            console.error('❌ Analysis error:', error);
             showAlert('เกิดข้อผิดพลาดในการวิเคราะห์: ' + error.message, 'danger');
         }
     }
@@ -626,6 +706,7 @@ window.courseGrades = {};
         const totalRequiredCredits = window.coursesData.reduce((sum, c) => sum + c.credit, 0);
         const progress = totalRequiredCredits > 0 ? (passedCredits / totalRequiredCredits) * 100 : 0;
         
+        // Update UI
         const statGPA = document.getElementById('statGPA');
         const statCredits = document.getElementById('statCredits');
         const statPassed = document.getElementById('statPassed');
@@ -638,11 +719,13 @@ window.courseGrades = {};
         if (statFailed) statFailed.textContent = failedCount;
         if (statProgress) statProgress.textContent = progress.toFixed(0) + '%';
         
+        // Update progress bar
         const progressBar = document.getElementById('mainProgressBar');
         if (progressBar) {
             progressBar.style.width = progress + '%';
             progressBar.textContent = `${progress.toFixed(0)}% ของหลักสูตร`;
             
+            // Change color based on progress
             if (progress < 50) {
                 progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #e83e8c 100%)';
             } else if (progress < 75) {
@@ -660,6 +743,7 @@ window.courseGrades = {};
             
             if (!course) return;
             
+            // ลบ warning เก่า
             const oldWarning = card.querySelector('.prerequisite-warning');
             if (oldWarning) oldWarning.remove();
             
@@ -684,6 +768,7 @@ window.courseGrades = {};
                 card.classList.add('locked');
                 if (select) select.disabled = true;
                 
+                // เพิ่มข้อความเตือน
                 if (unmetPrereqs.length > 0) {
                     const warningDiv = document.createElement('div');
                     warningDiv.className = 'prerequisite-warning';
@@ -699,6 +784,7 @@ window.courseGrades = {};
             }
         });
         
+        // อัพเดตสถิติ
         const blockedCount = document.querySelectorAll('.course-card.locked').length;
         const statBlocked = document.getElementById('statBlocked');
         if (statBlocked) statBlocked.textContent = blockedCount;
@@ -838,6 +924,7 @@ window.courseGrades = {};
         }
     }
 
+    // Utility Functions
     function showAlert(message, type) {
         const alertContainer = document.getElementById('alertContainer');
         if (!alertContainer) return;
@@ -878,6 +965,8 @@ window.courseGrades = {};
             }
         }
     }
+
+    console.log('📋 Script loaded and ready');
 
 })();
 </script>
