@@ -2214,11 +2214,11 @@ def curriculum_prediction_form():
     grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
     
     return render_template(
-        'curriculum_prediction_form.html',
-        coursesData=json.dumps(courses_data),
-        allTermsData=json.dumps(terms_data),
-        gradeMapping=json.dumps(grade_mapping)
-    )
+    'curriculum_prediction_form.html',
+    coursesData=courses_data,
+    allTermsData=terms_data,
+    gradeMapping=grade_mapping
+)
 
 
 @app.route('/status')
@@ -2999,11 +2999,11 @@ def curriculum_page():
     grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
     
     return render_template(
-        'curriculum_prediction_form.html',
-        coursesData=json.dumps(courses_data),
-        allTermsData=json.dumps(terms_data),
-        gradeMapping=json.dumps(grade_mapping)
-    )
+    'curriculum_prediction_form.html',
+    coursesData=courses_data,
+    allTermsData=terms_data,
+    gradeMapping=grade_mapping
+)
 
 @app.route('/predict-batch')
 def predict_batch_page():
