@@ -445,7 +445,64 @@ class S3Storage:
             logger.error(f"❌ Local load error: {str(e)}")
             return None
     
-    
+    def list_models(self) -> List[Dict[str, Any]]:
+        """List all models"""
+        models = []
+        
+        # Try R2 first
+        if not self.use_local and self.s3_client:
+            try:
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket_name,
+                    Prefix='models/',
+                    Delimiter='/'
+                )
+                
+                if 'Contents' in response:
+                    for obj in response['Contents']:
+                        filename = obj['Key'].replace('models/', '')
+                        if filename and filename.endswith('.joblib'):
+                            models.append({
+                                'filename': filename,
+                                'created_at': obj['LastModified'].isoformat(),
+                                'size': obj['Size'],
+                                'storage': 'r2',
+                                'performance_metrics': {},
+                                'data_format': 'unknown'
+                            })
+                logger.info(f"📊 Found {len(models)} models in R2")
+            except Exception as e:
+                logger.warning(f"R2 list failed: {str(e)}")
+        
+        # Also check local
+        try:
+            model_folder = app.config['MODEL_FOLDER']
+            if os.path.exists(model_folder):
+                for filename in os.listdir(model_folder):
+                    if filename.endswith('.joblib'):
+                        filepath = os.path.join(model_folder, filename)
+                        try:
+                            model_data = joblib.load(filepath)
+                            models.append({
+                                'filename': filename,
+                                'created_at': model_data.get('created_at', ''),
+                                'data_format': model_data.get('data_format', 'unknown'),
+                                'performance_metrics': model_data.get('performance_metrics', {}),
+                                'storage': 'local'
+                            })
+                        except:
+                            models.append({
+                                'filename': filename,
+                                'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
+                                'storage': 'local',
+                                'performance_metrics': {},
+                                'data_format': 'unknown'
+                            })
+                logger.info(f"📂 Found {len([m for m in models if m['storage'] == 'local'])} models locally")
+        except Exception as e:
+            logger.error(f"Local list error: {str(e)}")
+        
+        return sorted(models, key=lambda x: x.get('created_at', ''), reverse=True)
     
     def delete_model(self, filename: str) -> bool:
         """Delete model"""
@@ -1203,130 +1260,70 @@ def predict():
         if not model_filename:
             logger.info("🔍 No model specified, finding latest subject-based model...")
             models_list = storage.list_models()
-            
-            # เพิ่มการตรวจสอบที่ละเอียดขึ้น
-            if not models_list:
-                logger.error("No models found in storage")
-                return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกไว้ กรุณาฝึกโมเดลก่อน'})
-            
-            # กรองเฉพาะ subject-based models
-            subject_models = []
-            for m in models_list:
-                if m and isinstance(m, dict):
-                    if ('subject_based' in m.get('filename', '') or 
-                        m.get('data_format') == 'subject_based'):
-                        subject_models.append(m)
-                        logger.info(f"Found subject model: {m.get('filename')}")
-            
-            if not subject_models:
-                logger.error("No subject-based models found")
-                return jsonify({'success': False, 'error': 'ไม่พบโมเดล subject-based กรุณาฝึกโมเดลใหม่'})
-            
-            # เรียงตามวันที่สร้าง
-            subject_models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-            model_filename = subject_models[0]['filename']
-            logger.info(f"✅ Auto-selected latest model: {model_filename}")
+            subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+            if subject_models:
+                model_filename = subject_models[0]['filename']
+                logger.info(f"✅ Auto-selected latest model: {model_filename}")
+            else:
+                return jsonify({'success': False, 'error': 'No trained model found. Please train a model first.'})
 
         data_filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         if not os.path.exists(data_filepath):
-            logger.error(f"Data file not found: {data_filepath}")
-            return jsonify({'success': False, 'error': 'ไฟล์ข้อมูลที่อัปโหลดไม่พบ'})
+            return jsonify({'success': False, 'error': 'Specified data file not found.'})
 
-        # โหลดโมเดลพร้อมการตรวจสอบ
+        # โหลดโมเดล
         logger.info(f"📂 Loading model: {model_filename}")
         loaded_model_data = storage.load_model(model_filename)
-        
-        # ตรวจสอบว่าโหลดได้จริง
         if not loaded_model_data:
-            logger.error(f"Failed to load model: {model_filename}")
-            return jsonify({'success': False, 'error': f'ไม่สามารถโหลดโมเดล {model_filename} ได้'})
-        
-        # ตรวจสอบโครงสร้างข้อมูลโมเดล
-        if not isinstance(loaded_model_data, dict):
-            logger.error(f"Invalid model data structure")
-            return jsonify({'success': False, 'error': 'โครงสร้างข้อมูลโมเดลไม่ถูกต้อง'})
-        
-        # ตรวจสอบว่ามี models key
-        if 'models' not in loaded_model_data:
-            logger.error(f"Missing 'models' in loaded data. Keys found: {list(loaded_model_data.keys())}")
-            return jsonify({'success': False, 'error': 'ข้อมูลโมเดลไม่สมบูรณ์ (ไม่พบ models)'})
-        
-        # ตรวจสอบว่า models ไม่ว่าง
-        if not loaded_model_data['models']:
-            logger.error(f"Empty models dictionary")
-            return jsonify({'success': False, 'error': 'โมเดลไม่มีข้อมูล sub-models'})
-        
-        # ตรวจสอบ feature columns
-        if 'feature_columns' not in loaded_model_data:
-            logger.error(f"Missing 'feature_columns' in loaded data")
-            return jsonify({'success': False, 'error': 'ข้อมูลโมเดลไม่สมบูรณ์ (ไม่พบ feature_columns)'})
+            return jsonify({'success': False, 'error': f'Model file {model_filename} not found.'})
 
         model_info = {
             'models': loaded_model_data['models'],
-            'scaler': loaded_model_data.get('scaler')  # ใช้ get เพื่อป้องกัน KeyError
+            'scaler': loaded_model_data['scaler']
         }
-        feature_cols = loaded_model_data.get('feature_columns', [])
-        data_format = loaded_model_data.get('data_format', 'unknown')
-        
-        logger.info(f"✅ Loaded model '{model_filename}' successfully")
-        logger.info(f"   Format: {data_format}")
-        logger.info(f"   Sub-models: {list(model_info['models'].keys())}")
-        logger.info(f"   Features: {len(feature_cols)} columns")
+        feature_cols = loaded_model_data['feature_columns']
+        data_format = loaded_model_data['data_format']
+        logger.info(f"✅ Loaded model '{model_filename}' (format: {data_format}) for prediction.")
 
         # อ่านไฟล์ข้อมูล
         file_extension = filename.rsplit('.', 1)[1].lower()
         df = None
-        
-        try:
-            if file_extension == 'csv':
-                encodings = app.config['DATA_CONFIG']['fallback_encodings']
-                for encoding in encodings:
-                    try:
-                        df = pd.read_csv(data_filepath, encoding=encoding)
-                        logger.info(f"✅ Successfully read CSV with encoding: {encoding}")
-                        break
-                    except Exception as e:
-                        logger.debug(f"Failed to read CSV with {encoding}: {e}")
-                        continue
-                if df is None:
-                    raise ValueError("Could not read CSV file with any supported encoding.")
-            elif file_extension in ['xlsx', 'xls']:
-                df = pd.read_excel(data_filepath)
-                logger.info(f"✅ Successfully read Excel file")
-            else:
-                raise ValueError(f"Unsupported file type: {file_extension}")
-        except Exception as e:
-            logger.error(f"Error reading data file: {str(e)}")
-            return jsonify({'success': False, 'error': f'ไม่สามารถอ่านไฟล์ข้อมูล: {str(e)}'})
+        if file_extension == 'csv':
+            encodings = app.config['DATA_CONFIG']['fallback_encodings']
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(data_filepath, encoding=encoding)
+                    logger.info(f"✅ Successfully read CSV with encoding: {encoding}")
+                    break
+                except Exception as e:
+                    logger.debug(f"Failed to read CSV with {encoding}: {e}")
+                    continue
+            if df is None:
+                raise ValueError("Could not read CSV file with any supported encoding.")
+        elif file_extension in ['xlsx', 'xls']:
+            df = pd.read_excel(data_filepath)
+            logger.info(f"✅ Successfully read Excel file")
+        else:
+            raise ValueError("Unsupported file type for prediction.")
 
-        if df is None or df.empty:
-            return jsonify({'success': False, 'error': 'ไฟล์ข้อมูลว่างเปล่าหรืออ่านไม่ได้'})
-
-        logger.info(f"📊 Data loaded: {len(df)} rows, {len(df.columns)} columns")
+        if df is None:
+            return jsonify({'success': False, 'error': 'Could not read prediction data file.'})
 
         # ตรวจสอบรูปแบบข้อมูล
         detected_data_format_for_prediction = detect_data_format(df)
-        logger.info(f"📊 Detected data format: {detected_data_format_for_prediction}")
-        
         if detected_data_format_for_prediction != data_format:
-            logger.warning(f"Format mismatch: data={detected_data_format_for_prediction}, model={data_format}")
-            return jsonify({
-                'success': False, 
-                'error': f'รูปแบบข้อมูล ({detected_data_format_for_prediction}) ไม่ตรงกับโมเดล ({data_format})'
-            })
+            return jsonify({'success': False, 'error': f'Prediction data format ({detected_data_format_for_prediction}) does not match model format ({data_format}).'})
+        
+        logger.info(f"📊 Predicting with data format: {detected_data_format_for_prediction}")
 
         # ประมวลผลข้อมูล
-        try:
-            if data_format == 'subject_based':
-                processed_df = process_subject_data(df)
-            else:
-                processed_df = process_gpa_data(df)
-        except Exception as e:
-            logger.error(f"Error processing data: {str(e)}")
-            return jsonify({'success': False, 'error': f'ไม่สามารถประมวลผลข้อมูล: {str(e)}'})
+        if data_format == 'subject_based':
+            processed_df = process_subject_data(df)
+        else:
+            processed_df = process_gpa_data(df)
 
-        if processed_df is None or len(processed_df) == 0:
-            return jsonify({'success': False, 'error': 'ไม่สามารถประมวลผลข้อมูลได้ (ผลลัพธ์ว่างเปล่า)'})
+        if len(processed_df) == 0:
+            return jsonify({'success': False, 'error': 'No data could be processed for prediction.'})
 
         logger.info(f"📈 Processed {len(processed_df)} students for prediction")
 
@@ -1337,112 +1334,108 @@ def predict():
                 X_predict[col] = processed_df[col]
             else:
                 X_predict[col] = 0
-                logger.debug(f"Missing feature '{col}', filling with 0")
-        
         X_predict = X_predict.fillna(0)
-        logger.info(f"📊 Prepared prediction data: {X_predict.shape}")
 
         # ทำนายผล
         trained_models = model_info['models']
         scaler = model_info['scaler']
-        
-        if not trained_models:
-            return jsonify({'success': False, 'error': 'ไม่พบ sub-models ในโมเดลที่โหลด'})
 
         predictions_proba_list = []
         successful_models = 0
-        failed_models = []
         
         for name, model in trained_models.items():
             try:
-                logger.debug(f"Predicting with {name} model...")
-                
-                if name == 'lr' and scaler is not None:
+                if name == 'lr':
                     X_scaled = scaler.transform(X_predict)
                     pred_proba = model.predict_proba(X_scaled)
                 else:
                     pred_proba = model.predict_proba(X_predict)
                 
-                # ตรวจสอบ shape ของ prediction
                 if pred_proba.shape[1] == 1:
                     pred_proba = np.hstack((1 - pred_proba, pred_proba))
                 
                 predictions_proba_list.append(pred_proba)
                 successful_models += 1
                 logger.debug(f"✅ Prediction successful with {name} model")
-                
             except Exception as e:
-                logger.warning(f"Failed to predict with model {name}: {str(e)}")
-                failed_models.append({'model': name, 'error': str(e)})
+                logger.warning(f"Could not predict with model {name}: {str(e)}")
                 continue
 
         if not predictions_proba_list:
-            logger.error(f"All models failed. Errors: {failed_models}")
-            return jsonify({
-                'success': False, 
-                'error': 'ไม่สามารถทำนายด้วยโมเดลใดๆ ได้',
-                'details': failed_models
-            })
+            return jsonify({'success': False, 'error': 'Could not make predictions with any loaded sub-models.'})
 
         logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
 
         # คำนวณผลลัพธ์
-        try:
-            results = []
-            high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
-            medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
+        results = []
+        high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
+        medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
 
-            for i in range(len(processed_df)):
-                student_name = processed_df.iloc[i].get('ชื่อ', f'นักศึกษา_{i+1}')
-                gpa = processed_df.iloc[i].get('gpa', 0)
+        for i in range(len(processed_df)):
+            student_name = processed_df.iloc[i]['ชื่อ']
+            gpa = processed_df.iloc[i]['gpa']
 
-                # คำนวณความน่าจะเป็นเฉลี่ย
-                avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
-                avg_prob_fail = avg_prob_per_student[0]
-                avg_prob_pass = avg_prob_per_student[1]
+            avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
+            avg_prob_fail = avg_prob_per_student[0]
+            avg_prob_pass = avg_prob_per_student[1]
 
-                prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
-                confidence = max(avg_prob_pass, avg_prob_fail)
-                
-                # กำหนดระดับความเสี่ยง
-                if confidence > high_confidence_threshold:
-                    risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-                elif confidence > medium_confidence_threshold:
-                    risk_level = 'ปานกลาง'
-                else:
-                    risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
+            prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
 
-                # สร้างการวิเคราะห์และคำแนะนำ
-                analysis = []
-                recommendations = []
+            confidence = max(avg_prob_pass, avg_prob_fail)
+            if confidence > high_confidence_threshold:
+                risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
+            elif confidence > medium_confidence_threshold:
+                risk_level = 'ปานกลาง'
+            else:
+                risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
 
-                low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
-                warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
+            # สร้างการวิเคราะห์และคำแนะนำ
+            analysis = []
+            recommendations = []
 
-                if gpa < low_gpa_threshold:
-                    analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
-                    recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
-                elif gpa < warning_gpa_threshold:
-                    analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
-                    recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
-                else:
-                    analysis.append(f"GPA ดี ({gpa:.2f})")
-                    recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
+            low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
+            warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
+            high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
 
-                results.append({
-                    'ชื่อ': student_name,
-                    'การทำนาย': prediction,
-                    'ความน่าจะเป็น': {'จบ': float(avg_prob_pass), 'ไม่จบ': float(avg_prob_fail)},
-                    'เกรดเฉลี่ย': float(gpa),
-                    'ระดับความเสี่ยง': risk_level,
-                    'ความเชื่อมั่น': float(confidence),
-                    'การวิเคราะห์': list(set(analysis)),
-                    'คำแนะนำ': list(set(recommendations))
-                })
+            if gpa < low_gpa_threshold:
+                analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
+                recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
+            elif gpa < warning_gpa_threshold:
+                analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
+                recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
+            elif gpa < 3.0:
+                analysis.append(f"GPA พอใช้ ({gpa:.2f})")
+                recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
+            else:
+                analysis.append(f"GPA ดี ({gpa:.2f})")
+                recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
 
-        except Exception as e:
-            logger.error(f"Error calculating results: {str(e)}")
-            return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาดในการคำนวณผล: {str(e)}'})
+            if prediction == 'ไม่จบ':
+                recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือ")
+                if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
+                    recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
+
+            # ตรวจสอบหมวดวิชาที่อ่อน
+            if data_format == 'subject_based':
+                weak_categories = []
+                for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
+                    gpa_col = f'gpa_{cat_key}'
+                    if gpa_col in processed_df.columns and processed_df.iloc[i].get(gpa_col, 0) < low_gpa_threshold:
+                        weak_categories.append(cat_key)
+
+                if weak_categories:
+                    recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
+
+            results.append({
+                'ชื่อ': student_name,
+                'การทำนาย': prediction,
+                'ความน่าจะเป็น': {'จบ': float(avg_prob_pass), 'ไม่จบ': float(avg_prob_fail)},
+                'เกรดเฉลี่ย': float(gpa),
+                'ระดับความเสี่ยง': risk_level,
+                'ความเชื่อมั่น': float(confidence),
+                'การวิเคราะห์': list(set(analysis)),
+                'คำแนะนำ': list(set(recommendations))
+            })
 
         # สรุปผล
         total = len(results)
@@ -1454,7 +1447,7 @@ def predict():
         medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
         low_risk = total - high_risk - medium_risk
 
-        logger.info(f"🎉 Prediction completed: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
+        logger.info(f"🎉 Prediction completed successfully: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
 
         return jsonify({
             'success': True,
@@ -1475,60 +1468,8 @@ def predict():
 
     except Exception as e:
         logger.error(f"❌ Error during prediction: {str(e)}", exc_info=True)
-        import traceback
-        return jsonify({
-            'success': False, 
-            'error': f'เกิดข้อผิดพลาด: {str(e)}',
-            'traceback': traceback.format_exc()
-        })
-        
-        
-@app.route('/api/debug/model/<filename>')
-def debug_model(filename):
-    """Debug specific model file"""
-    try:
-        result = {
-            'filename': filename,
-            'exists_in_storage': False,
-            'exists_in_local': False,
-            'load_test': None,
-            'model_structure': None
-        }
-        
-        # Check if exists in storage list
-        models_list = storage.list_models()
-        result['exists_in_storage'] = any(m['filename'] == filename for m in models_list)
-        
-        # Check if exists locally
-        local_path = os.path.join(app.config['MODEL_FOLDER'], filename)
-        result['exists_in_local'] = os.path.exists(local_path)
-        result['local_path'] = local_path
-        
-        # Try to load
-        try:
-            loaded = storage.load_model(filename)
-            if loaded:
-                result['load_test'] = 'Success'
-                result['model_structure'] = {
-                    'keys': list(loaded.keys()),
-                    'has_models': 'models' in loaded,
-                    'models_count': len(loaded.get('models', {})) if 'models' in loaded else 0,
-                    'models_types': list(loaded['models'].keys()) if 'models' in loaded else [],
-                    'has_scaler': 'scaler' in loaded,
-                    'has_features': 'feature_columns' in loaded,
-                    'features_count': len(loaded.get('feature_columns', [])),
-                    'data_format': loaded.get('data_format'),
-                    'created_at': loaded.get('created_at')
-                }
-            else:
-                result['load_test'] = 'Failed - returned None'
-        except Exception as e:
-            result['load_test'] = f'Failed - {str(e)}'
-            
-        return jsonify(result)
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
+    
     
 @app.route('/api/models', methods=['GET'])
 def list_models():
@@ -1820,132 +1761,6 @@ def find_affected_courses_backend(course_id, graph):
                 queue.append(dep)
     return list(affected)
 
-
-# ==========================================
-# Prerequisite Checking Functions
-# ==========================================
-
-def check_prerequisites_for_course(course_id, current_grades, courses_data, grade_mapping):
-    """ตรวจสอบว่าผ่าน prerequisite ของวิชาหรือไม่"""
-    course = next((c for c in courses_data if c['id'] == course_id), None)
-    if not course or not course.get('prereq'):
-        return True
-    
-    passing_grades = [g for g, v in grade_mapping.items() if v > 0]
-    
-    for prereq_id in course['prereq']:
-        grade = current_grades.get(prereq_id, '')
-        if not grade or grade not in passing_grades:
-            return False
-    return True
-
-def get_unmet_prerequisites_for_course(course_id, current_grades, courses_data, grade_mapping):
-    """ดึงรายการ prerequisites ที่ยังไม่ผ่าน"""
-    course = next((c for c in courses_data if c['id'] == course_id), None)
-    if not course or not course.get('prereq'):
-        return []
-    
-    passing_grades = [g for g, v in grade_mapping.items() if v > 0]
-    unmet = []
-    
-    for prereq_id in course['prereq']:
-        grade = current_grades.get(prereq_id, '')
-        if not grade or grade not in passing_grades:
-            unmet.append(prereq_id)
-    return unmet
-
-def can_take_courses_together(course_a_id, course_b_id, current_grades, courses_data, grade_mapping):
-    """ตรวจสอบว่าสามารถลงสองวิชาพร้อมกันได้หรือไม่ (กรณีแลปกับทฤษฎี)"""
-    course_a = next((c for c in courses_data if c['id'] == course_a_id), None)
-    course_b = next((c for c in courses_data if c['id'] == course_b_id), None)
-    
-    if not course_a or not course_b:
-        return False
-    
-    # ตรวจสอบกรณีแลปกับทฤษฎี
-    lab_keywords = ["ปฏิบัติการ", "การฝึกพื้นฐาน"]
-    
-    def is_lab_course(course):
-        return any(kw in course['thaiName'] for kw in lab_keywords)
-    
-    a_is_lab = is_lab_course(course_a)
-    b_is_lab = is_lab_course(course_b)
-    
-    # ถ้าทั้งคู่เป็นแลปหรือทั้งคู่เป็นทฤษฎี
-    if a_is_lab == b_is_lab:
-        return False
-    
-    # ตรวจสอบว่าแลปมีทฤษฎีเป็น prerequisite หรือไม่
-    lab_course = course_a if a_is_lab else course_b
-    theory_course = course_b if a_is_lab else course_a
-    
-    passing_grades = [g for g, v in grade_mapping.items() if v > 0]
-    
-    if theory_course['id'] in lab_course.get('prereq', []):
-        # ตรวจสอบว่า prereq อื่นๆ ของแลปผ่านหมดหรือยัง
-        other_prereqs_passed = True
-        for prereq_id in lab_course['prereq']:
-            if prereq_id != theory_course['id']:
-                grade = current_grades.get(prereq_id, '')
-                if not grade or grade not in passing_grades:
-                    other_prereqs_passed = False
-                    break
-        return other_prereqs_passed
-    
-    return False
-
-def find_all_blocked_courses(current_grades, loaded_courses_ids, courses_data, grade_mapping):
-    """หาวิชาที่ถูกบล็อกเนื่องจาก prerequisite ไม่ผ่าน"""
-    blocked = []
-    
-    for course_id in loaded_courses_ids:
-        # ถ้ายังไม่มีเกรดหรือเกรด F
-        current_grade = current_grades.get(course_id, '')
-        if not current_grade or current_grade == 'F':
-            if not check_prerequisites_for_course(course_id, current_grades, courses_data, grade_mapping):
-                unmet = get_unmet_prerequisites_for_course(course_id, current_grades, courses_data, grade_mapping)
-                course = next((c for c in courses_data if c['id'] == course_id), None)
-                if course:
-                    blocked.append({
-                        'id': course_id,
-                        'name': course['thaiName'],
-                        'unmet_prereqs': [
-                            next((c['thaiName'] for c in courses_data if c['id'] == pid), pid)
-                            for pid in unmet
-                        ]
-                    })
-    
-    return blocked
-
-def build_course_dependency_graph(courses_subset_ids, courses_data):
-    """สร้าง dependency graph ของวิชา"""
-    graph = {cid: [] for cid in courses_subset_ids}
-    
-    for course_id in courses_subset_ids:
-        course = next((c for c in courses_data if c['id'] == course_id), None)
-        if course:
-            for prereq_id in course.get('prereq', []):
-                if prereq_id in graph:
-                    graph[prereq_id].append(course_id)
-    
-    return graph
-
-def find_courses_affected_by_failure(failed_course_id, dependency_graph):
-    """หาวิชาที่ได้รับผลกระทบจากวิชาที่ตก"""
-    affected = set()
-    queue = [failed_course_id]
-    
-    while queue:
-        current = queue.pop(0)
-        dependents = dependency_graph.get(current, [])
-        for dep in dependents:
-            if dep not in affected:
-                affected.add(dep)
-                queue.append(dep)
-    
-    return list(affected)
-
-
 def topological_sort_with_cycle_check_backend(loaded_courses_objects):
     """Performs a topological sort on a subset of courses and checks for cycles."""
     if not loaded_courses_objects:
@@ -2105,16 +1920,11 @@ def index():
 @app.route('/test')
 def curriculum_prediction_form():
     """Page for predicting graduation based on curriculum and prerequisites."""
-    # ตรวจสอบว่ามีข้อมูลใน config
-    courses_data = app.config.get('COURSES_DATA', [])
-    terms_data = app.config.get('ALL_TERMS_DATA', [])
-    grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
-    
     return render_template(
         'curriculum_prediction_form.html',
-        coursesData=json.dumps(courses_data),
-        allTermsData=json.dumps(terms_data),
-        gradeMapping=json.dumps(grade_mapping)
+        coursesData=app.config['COURSES_DATA'],  # เพิ่มบรรทัดนี้
+        allTermsData=app.config['ALL_TERMS_DATA'],
+        gradeMapping=app.config['DATA_CONFIG']['grade_mapping']
     )
 
 
@@ -2585,8 +2395,6 @@ def analyze_subjects():
         logger.error(f"Error during subject analysis: {str(e)}")
         return jsonify({'success': False, 'error': f'An error occurred during analysis: {str(e)}'})
 
-
-
 @app.route('/api/analyze_curriculum', methods=['POST'])
 def analyze_curriculum():
     """Analyzes curriculum progress with prerequisites."""
@@ -2598,166 +2406,142 @@ def analyze_curriculum():
         model_filename = data.get('model_filename')
         student_name = data.get('student_name', 'นักศึกษา')
 
-        logger.info(f"Analyzing curriculum for {student_name} with {len(current_grades)} grades")
+        logger.info(f"Received curriculum analysis request with {len(current_grades)} grades for student: {student_name}")
         
-        # Get configuration
-        courses_data = app.config['COURSES_DATA']
         all_terms_data = app.config['ALL_TERMS_DATA']
-        grade_mapping = app.config['DATA_CONFIG']['grade_mapping']
+        courses_data = app.config['COURSES_DATA']
+        grade_mapping_points = app.config['DATA_CONFIG']['grade_mapping']
         
-        # Get loaded courses
-        loaded_courses_ids = []
-        for i in range(loaded_terms_count):
-            if i < len(all_terms_data):
-                loaded_courses_ids.extend(all_terms_data[i]['ids'])
-        loaded_courses_ids.extend(repeated_courses_in_this_term_ids)
-        loaded_courses_ids = list(set(loaded_courses_ids))  # Remove duplicates
+        passing_grades_list_from_config = {g: grade_mapping_points[g] for g in app.config['DATA_CONFIG']['grade_mapping'] if grade_mapping_points[g] > 0}
         
-        # Calculate GPA and failed courses
-        total_points = 0
-        total_credits = 0
-        completed_credits = 0
-        failed_courses_ids = []
-        incomplete_courses_ids = []
+        core_subjects_ids = app.config['CORE_SUBJECTS_IDS'] if 'CORE_SUBJECTS_IDS' in app.config else []
+
+
+        gpa_results = calculate_gpa_and_failed_courses_backend(current_grades, courses_data)
+        avg_gpa = gpa_results['avgGPA']
+        completed_credits = gpa_results['completedCredits']
+        failed_courses_ids = gpa_results['failedCourses']
+
+        loaded_courses_objects = get_loaded_courses_backend(loaded_terms_count, all_terms_data, courses_data, repeated_courses_in_this_term_ids)
         
-        for course_id in loaded_courses_ids:
-            course = next((c for c in courses_data if c['id'] == course_id), None)
-            if not course:
-                continue
-            
-            grade = current_grades.get(course_id, '')
-            
-            if not grade:
-                incomplete_courses_ids.append(course_id)
-            elif grade:
-                grade_point = grade_mapping.get(grade, 0)
-                
-                if grade_point > 0:
-                    total_points += grade_point * course['credit']
-                    total_credits += course['credit']
-                    completed_credits += course['credit']
-                elif grade == 'F':
-                    failed_courses_ids.append(course_id)
-                    total_credits += course['credit']  # F still counts for GPA calculation
-        
-        avg_gpa = total_points / total_credits if total_credits > 0 else 0
-        
-        # Check for blocked courses
-        blocked_courses = find_all_blocked_courses(
-            current_grades, loaded_courses_ids, courses_data, grade_mapping
-        )
-        
-        # Build dependency graph and find impact chains
-        dependency_graph = build_course_dependency_graph(loaded_courses_ids, courses_data)
-        
-        blocked_chain_texts = []
-        for failed_id in failed_courses_ids:
-            affected = find_courses_affected_by_failure(failed_id, dependency_graph)
-            if affected:
-                failed_course = next((c for c in courses_data if c['id'] == failed_id), None)
-                affected_names = []
-                for aid in affected:
-                    course = next((c for c in courses_data if c['id'] == aid), None)
-                    if course:
-                        affected_names.append(f"{course['thaiName']} ({aid})")
-                
-                if affected_names:
-                    chain_text = f"วิชา {failed_course['thaiName']} ({failed_id}) ไม่ผ่าน ส่งผลกระทบต่อวิชาอื่นๆ ดังนี้:\n"
-                    chain_text += "\n".join([f"  - {name}" for name in affected_names])
-                    blocked_chain_texts.append(chain_text)
-        
-        # Calculate completion rate
+        blocked_courses_ids = find_blocked_courses_backend(current_grades, loaded_courses_objects, courses_data, passing_grades_list_from_config)
+
         total_required_credits = sum(c['credit'] for c in courses_data)
-        completion_rate = (completed_credits / total_required_credits * 100) if total_required_credits > 0 else 0
-        
-        # Determine graduation status
-        graduation_status = determine_graduation_status_backend(
-            completion_rate, avg_gpa, blocked_courses, failed_courses_ids,
-            loaded_courses_ids, current_grades, all_terms_data, courses_data, loaded_terms_count
+        completion_rate = estimate_completion_rate_backend(
+            avg_gpa, completed_credits, total_required_credits,
+            blocked_courses_ids, len(failed_courses_ids), failed_courses_ids,
+            len(repeated_courses_in_this_term_ids), core_subjects_ids, courses_data
         )
+
+        graduation_status = determine_graduation_status_backend(
+            completion_rate, avg_gpa, blocked_courses_ids, failed_courses_ids,
+            loaded_courses_objects, current_grades, all_terms_data, courses_data,
+            loaded_terms_count
+        )
+
+        all_loaded_course_ids = [c['id'] for c in loaded_courses_objects]
+        incomplete_courses_ids = [cid for cid in all_loaded_course_ids if cid not in current_grades or not current_grades[cid] or grade_to_numeric(current_grades[cid]) == 0.0]
+        incomplete_courses_names = [find_course_thai_name_backend(cid, courses_data) for cid in incomplete_courses_ids]
+
+        failed_courses_names = [find_course_thai_name_backend(cid, courses_data) for cid in failed_courses_ids]
         
-        # Generate recommendations
-        recommendations = []
-        if failed_courses_ids:
-            recommendations.append("ควรลงทะเบียนซ้ำวิชาที่ตก (F) โดยเร็ว")
-            recommendations.append("ควรปรึกษาอาจารย์ที่ปรึกษาเพื่อวางแผนการเรียน")
+        blocked_courses_details = []
+        for cid in blocked_courses_ids:
+            unmet = get_unmet_prerequisites_backend(cid, current_grades, courses_data, passing_grades_list_from_config)
+            unmet_names = [find_course_thai_name_backend(mid, courses_data) for mid in unmet]
+            blocked_courses_details.append({
+                'id': cid,
+                'name': find_course_thai_name_backend(cid, courses_data),
+                'unmet_prereqs': unmet_names
+            })
+
+        dependency_graph = build_dependency_graph_backend(loaded_courses_objects)
+        blocked_chain_texts = []
+        for failed_cid in failed_courses_ids:
+            affected_ids = find_affected_courses_backend(failed_cid, dependency_graph)
+            if affected_ids:
+                failed_course_name = find_course_thai_name_backend(failed_cid, courses_data)
+                affected_names = [find_course_thai_name_backend(aid, courses_data) for aid in affected_ids]
+                affected_in_loaded_curriculum = [
+                    (name, aid) for name, aid in zip(affected_names, affected_ids)
+                    if aid in all_loaded_course_ids
+                ]
+                if affected_in_loaded_curriculum:
+                    blocked_chain_texts.append(
+                        f"วิชา {failed_course_name} ({failed_cid}) ไม่ผ่าน ส่งผลกระทบต่อวิชาอื่นๆ ดังนี้:\n" +
+                        "\n".join([f"  - {name} ({aid})" for name, aid in affected_in_loaded_curriculum])
+                    )
         
-        if avg_gpa < 2.0 and avg_gpa > 0:
-            recommendations.append("GPA ต่ำกว่า 2.0 ควรปรับปรุงผลการเรียนอย่างเร่งด่วน")
+        courses_subset_for_topo = [c for c in courses_data if c['id'] in all_loaded_course_ids]
+        topo_result = topological_sort_with_cycle_check_backend(courses_subset_for_topo)
+        topological_order_names = []
+        if not topo_result['cycle']:
+            topological_order_names = [find_course_thai_name_backend(cid, courses_data) for cid in topo_result['order']]
         
-        if blocked_courses:
-            recommendations.append("ควรผ่านวิชาพื้นฐานให้ครบก่อนลงวิชาขั้นสูง")
-        
-        if not recommendations:
-            recommendations.append("ผลการเรียนอยู่ในเกณฑ์ดี รักษามาตรฐานและวางแผนให้จบตามกำหนด")
-        
-        # Prepare response
-        response_data = {
-            'success': True,
-            'student_name': student_name,
-            'completion_rate': completion_rate,
-            'avg_gpa': avg_gpa,
-            'completed_credits': completed_credits,
-            'total_required_credits': total_required_credits,
-            'graduation_status': graduation_status,
-            'incomplete_courses': [
-                next((c['thaiName'] for c in courses_data if c['id'] == cid), cid)
-                for cid in incomplete_courses_ids
-            ],
-            'failed_courses': [
-                next((c['thaiName'] for c in courses_data if c['id'] == cid), cid)
-                for cid in failed_courses_ids
-            ],
-            'blocked_courses_details': blocked_courses,
-            'blocked_chain_texts': blocked_chain_texts,
-            'recommendations': recommendations,
-            'debug': {
-                'current_grades_count': len(current_grades),
-                'loaded_terms_count': loaded_terms_count,
-                'loaded_courses_count': len(loaded_courses_ids),
-                'blocked_courses_count': len(blocked_courses)
-            }
-        }
-        
-        # Try to predict if model is provided
+        recommendations_list = update_recommendations_backend(failed_courses_ids, avg_gpa, blocked_courses_ids)
+
+        term_gpas_chart_data = []
+        for i in range(loaded_terms_count):
+            if i >= len(all_terms_data):
+                break
+            term_courses_ids = all_terms_data[i]['ids']
+            
+            term_total_points = 0
+            term_total_credits = 0
+            has_valid_grades_in_term = False
+
+            for cid in term_courses_ids:
+                grade_char = current_grades.get(cid, "")
+                if grade_char:
+                    course = next((c for c in courses_data if c['id'] == cid), None)
+                    if not course: continue
+                    numeric_grade = grade_to_numeric(grade_char)
+                    
+                    term_total_points += numeric_grade * course['credit']
+                    if numeric_grade > 0:
+                        term_total_credits += course['credit']
+                    has_valid_grades_in_term = True
+
+            term_gpa = term_total_points / term_total_credits if term_total_credits > 0 else 0
+            term_label = f"ปี{all_terms_data[i]['year']} เทอม{all_terms_data[i]['term']}"
+            
+            if has_valid_grades_in_term:
+                term_gpas_chart_data.append({'label': term_label, 'gpa': term_gpa})
+
+        next_term_predicted_gpa = linear_regression_next_term_gpa_backend(term_gpas_chart_data)
+
+        prediction_result = None
         if model_filename:
             try:
                 logger.info(f"Making prediction with model: {model_filename}")
                 
-                # Load model
-                loaded_model_data = storage.load_model(model_filename)
-                if loaded_model_data:
+                model_filepath = os.path.join(app.config['MODEL_FOLDER'], model_filename)
+                if os.path.exists(model_filepath):
+                    loaded_model_data = joblib.load(model_filepath)
                     model_info = {
                         'models': loaded_model_data['models'],
                         'scaler': loaded_model_data['scaler']
                     }
                     feature_cols = loaded_model_data['feature_columns']
                     
-                    # Prepare basic features for prediction
-                    student_data_for_prediction = {
-                        'gpa': avg_gpa,
-                        'min_grade': 0,
-                        'max_grade': 4,
-                        'std_grade': 0,
-                        'fail_count': len(failed_courses_ids),
-                        'fail_rate': len(failed_courses_ids) / len(loaded_courses_ids) if loaded_courses_ids else 0,
-                        'total_subjects': len(loaded_courses_ids),
-                        'year_in': 0,
-                        'year_out': 0,
-                    }
+                    student_data_for_prediction_model = {}
+                    
+                    if 'gpa' in feature_cols:
+                        student_data_for_prediction_model['gpa'] = avg_gpa
+                    if 'completed_credits' in feature_cols:
+                        student_data_for_prediction_model['completed_credits'] = completed_credits
                     
                     # Create DataFrame for prediction
                     processed_input_for_df = {}
                     for feature in feature_cols:
-                        processed_input_for_df[feature] = [student_data_for_prediction.get(feature, 0.0)]
-                    
+                        processed_input_for_df[feature] = [student_data_for_prediction_model.get(feature, 0.0)]
+
                     input_df = pd.DataFrame(processed_input_for_df)
-                    
-                    # Make predictions
-                    predictions_proba_list = []
+
                     trained_models = model_info['models']
                     scaler = model_info['scaler']
-                    
+
+                    predictions_proba_list = []
                     for name, model in trained_models.items():
                         try:
                             if name == 'lr':
@@ -2772,41 +2556,75 @@ def analyze_curriculum():
                             predictions_proba_list.append(pred_proba)
                         except Exception as e:
                             logger.warning(f"Could not predict with model {name}: {str(e)}")
-                    
+                            continue
+
                     if predictions_proba_list:
-                        avg_prob_per_student = np.mean([pred[0] for pred in predictions_proba_list], axis=0)
-                        prob_pass = avg_prob_per_student[1]
-                        prob_fail = avg_prob_per_student[0]
+                        avg_prob_per_student = np.mean([pred_proba_array[0] for pred_proba_array in predictions_proba_list], axis=0)
+                        avg_prob_fail = avg_prob_per_student[0]
+                        avg_prob_pass = avg_prob_per_student[1]
+
+                        prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
+                        confidence = max(avg_prob_pass, avg_prob_fail)
                         
-                        prediction = 'จบ' if prob_pass >= 0.5 else 'ไม่จบ'
-                        confidence = max(prob_pass, prob_fail)
-                        
-                        risk_level = 'สูง'
-                        if confidence > 0.8:
+                        high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
+                        medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
+
+                        if confidence > high_confidence_threshold:
                             risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-                        elif confidence > 0.6:
+                        elif confidence > medium_confidence_threshold:
                             risk_level = 'ปานกลาง'
-                        
-                        response_data['prediction_result'] = {
+                        else:
+                            risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
+
+                        prediction_result = {
                             'prediction': prediction,
-                            'prob_pass': float(prob_pass),
-                            'prob_fail': float(prob_fail),
+                            'prob_pass': float(avg_prob_pass),
+                            'prob_fail': float(avg_prob_fail),
                             'confidence': float(confidence),
                             'risk_level': risk_level,
                             'gpa_input': float(avg_gpa)
                         }
-                        logger.info(f"Prediction successful: {prediction} (confidence: {confidence:.3f})")
                         
+                        logger.info(f"Prediction successful: {prediction} (confidence: {confidence:.3f})")
+                    else:
+                        logger.warning(f"No prediction could be made with model {model_filename}.")
+            
             except Exception as e:
-                logger.error(f"Error during prediction: {str(e)}")
+                logger.error(f"Error during prediction with model {model_filename}: {str(e)}")
+
+        response_data = {
+            'success': True,
+            'student_name': student_name,
+            'completion_rate': completion_rate,
+            'avg_gpa': avg_gpa,
+            'graduation_status': graduation_status,
+            'incomplete_courses': incomplete_courses_names,
+            'failed_courses': failed_courses_names,
+            'blocked_courses_details': blocked_courses_details,
+            'blocked_chain_texts': blocked_chain_texts,
+            'topological_order': topological_order_names,
+            'topological_cycle': topo_result['cycle'],
+            'recommendations': recommendations_list,
+            'term_gpas_chart_data': term_gpas_chart_data,
+            'next_term_predicted_gpa': next_term_predicted_gpa,
+            'debug': {
+                'current_grades_count': len(current_grades),
+                'loaded_terms_count': loaded_terms_count,
+                'repeated_courses_ids': repeated_courses_in_this_term_ids
+            }
+        }
+        
+        if prediction_result:
+            response_data.update({
+                'prediction_result': prediction_result
+            })
         
         return jsonify(response_data)
-        
+
     except Exception as e:
         logger.error(f"Error during curriculum analysis: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
-    
-    
+        return jsonify({'success': False, 'error': app.config['MESSAGES']['error']['processing_error'] + f": {str(e)}"})
+
 @app.route('/model_status', methods=['GET'])
 def model_status():
     """Checks the status of currently loaded models."""
@@ -2887,19 +2705,12 @@ def sync_local_models_to_storage():
 def main_page():
     return render_template('main_page.html')
 
-# แก้ไข route /curriculum  
 @app.route('/curriculum')
 def curriculum_page():
-    # ใช้โค้ดเดียวกับ /test
-    courses_data = app.config.get('COURSES_DATA', [])
-    terms_data = app.config.get('ALL_TERMS_DATA', [])
-    grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
-    
-    return render_template(
-        'curriculum_prediction_form.html',
-        coursesData=json.dumps(courses_data),
-        allTermsData=json.dumps(terms_data),
-        gradeMapping=json.dumps(grade_mapping)
+    return render_template('curriculum_prediction_form.html',
+        coursesData=app.config['COURSES_DATA'],  # เพิ่มบรรทัดนี้
+        allTermsData=app.config['ALL_TERMS_DATA'],
+        gradeMapping=app.config['DATA_CONFIG']['grade_mapping']
     )
 
 @app.route('/predict-batch')
