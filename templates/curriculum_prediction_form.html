@@ -97,6 +97,10 @@
     align-items: center;
 }
 
+.term-header.locked {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+}
+
 .course-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -212,7 +216,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-bold">สถานะการโหลด</label>
-                <div class="form-control bg-light" id="loadedTermsInfo">
+                <div class="form-control bg-light" readonly id="loadedTermsInfo">
                     ยังไม่ได้โหลดเทอม
                 </div>
             </div>
@@ -586,28 +590,37 @@ window.courseGrades = {};
                 return;
             }
             
-            const response = await fetch('/api/analyze_curriculum', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    student_name: studentName,
-                    current_grades: window.courseGrades,
-                    loaded_terms_count: window.loadedTermsCount,
-                    model_filename: modelFilename
-                })
-            });
-            
-            const result = await response.json();
-            
-            hideLoadingModal();
-            
-            if (result.success) {
-                displayResults(result);
-                showAlert('วิเคราะห์และทำนายเสร็จสิ้น', 'success');
-                console.log('✅ Analysis completed with model');
+            if (modelFilename) {
+                const response = await fetch('/api/analyze_curriculum', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_name: studentName,
+                        current_grades: window.courseGrades,
+                        loaded_terms_count: window.loadedTermsCount,
+                        model_filename: modelFilename
+                    })
+                });
+                
+                const result = await response.json();
+                
+                hideLoadingModal();
+                
+                if (result.success) {
+                    displayResults(result);
+                    showAlert('วิเคราะห์และทำนายเสร็จสิ้น', 'success');
+                    console.log('✅ Analysis completed with model');
+                } else {
+                    showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
+                    console.error('❌ Analysis failed:', result.error);
+                }
             } else {
-                showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
-                console.error('❌ Analysis failed:', result.error);
+                // Basic analysis without model
+                const basicAnalysis = performBasicAnalysis();
+                hideLoadingModal();
+                displayBasicResults(basicAnalysis);
+                showAlert('วิเคราะห์เบื้องต้นเสร็จสิ้น', 'success');
+                console.log('✅ Basic analysis completed');
             }
             
         } catch (error) {
