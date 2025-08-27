@@ -2048,9 +2048,9 @@ def curriculum_prediction_form():
     """Page for predicting graduation based on curriculum and prerequisites."""
     return render_template(
         'curriculum_prediction_form.html',
-        coursesData=app.config['COURSES_DATA'],  # เพิ่มบรรทัดนี้
-        allTermsData=app.config['ALL_TERMS_DATA'],
-        gradeMapping=app.config['DATA_CONFIG']['grade_mapping']
+        coursesData=json.dumps(app.config['COURSES_DATA']),  # Convert to JSON string
+        allTermsData=json.dumps(app.config['ALL_TERMS_DATA']),  # Convert to JSON string
+        gradeMapping=json.dumps(app.config['DATA_CONFIG']['grade_mapping'])  # Convert to JSON string
     )
 
 
@@ -2823,12 +2823,13 @@ def sync_local_models_to_storage():
 def main_page():
     return render_template('main_page.html')
 
+# แก้ไข route /curriculum  
 @app.route('/curriculum')
 def curriculum_page():
     return render_template('curriculum_prediction_form.html',
-        coursesData=app.config['COURSES_DATA'],  # เพิ่มบรรทัดนี้
-        allTermsData=app.config['ALL_TERMS_DATA'],
-        gradeMapping=app.config['DATA_CONFIG']['grade_mapping']
+        coursesData=json.dumps(app.config['COURSES_DATA']),  # Convert to JSON string
+        allTermsData=json.dumps(app.config['ALL_TERMS_DATA']),  # Convert to JSON string
+        gradeMapping=json.dumps(app.config['DATA_CONFIG']['grade_mapping'])  # Convert to JSON string
     )
 
 @app.route('/predict-batch')
