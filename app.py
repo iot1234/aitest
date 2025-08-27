@@ -1762,6 +1762,109 @@ def get_unmet_prerequisites_backend(course_id, course_grades, courses_data, pass
             unmet.append(pid)
     return unmet
 
+
+def list_models(self):
+    """List all models from storage"""
+    models_list = []
+    
+    if self.use_local:
+        # List from local folder
+        try:
+            model_folder = app.config.get('MODEL_FOLDER', 'models')
+            if os.path.exists(model_folder):
+                for filename in os.listdir(model_folder):
+                    if filename.endswith('.joblib'):
+                        filepath = os.path.join(model_folder, filename)
+                        try:
+                            # Try to load metadata
+                            model_data = joblib.load(filepath)
+                            models_list.append({
+                                'filename': filename,
+                                'created_at': model_data.get('created_at', 
+                                    datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
+                                'data_format': model_data.get('data_format', 'subject_based'),
+                                'performance_metrics': model_data.get('performance_metrics', {}),
+                                'storage': 'local',
+                                'size': os.path.getsize(filepath)
+                            })
+                        except Exception as e:
+                            logger.warning(f"Could not read model {filename}: {e}")
+                            # Add basic info even if can't load
+                            models_list.append({
+                                'filename': filename,
+                                'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
+                                'data_format': 'subject_based' if 'subject' in filename else 'unknown',
+                                'performance_metrics': {},
+                                'storage': 'local',
+                                'size': os.path.getsize(filepath)
+                            })
+        except Exception as e:
+            logger.error(f"Error listing local models: {e}")
+    else:
+        # List from S3/R2
+        try:
+            prefix = 'models/'
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=prefix
+            )
+            
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    key = obj['Key']
+                    if key.endswith('.joblib'):
+                        filename = key.replace(prefix, '')
+                        models_list.append({
+                            'filename': filename,
+                            'created_at': obj['LastModified'].isoformat() if obj.get('LastModified') else datetime.now().isoformat(),
+                            'data_format': 'subject_based' if 'subject' in filename else 'unknown',
+                            'performance_metrics': {},
+                            'storage': 'cloudflare_r2',
+                            'size': obj.get('Size', 0)
+                        })
+        except Exception as e:
+            logger.error(f"Error listing R2 models: {e}")
+            # Fallback to local
+            return self._list_local_models()
+    
+    # Sort by date
+    models_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    
+    # Enrich with performance data (for first few models only to avoid slowness)
+    for model in models_list[:5]:
+        try:
+            loaded_data = self.load_model(model['filename'])
+            if loaded_data:
+                model['performance_metrics'] = loaded_data.get('performance_metrics', {})
+                model['data_format'] = loaded_data.get('data_format', model['data_format'])
+        except:
+            pass
+    
+    return models_list
+
+def _list_local_models(self):
+    """Helper method to list models from local folder"""
+    models_list = []
+    try:
+        model_folder = app.config.get('MODEL_FOLDER', 'models')
+        if os.path.exists(model_folder):
+            for filename in os.listdir(model_folder):
+                if filename.endswith('.joblib'):
+                    filepath = os.path.join(model_folder, filename)
+                    models_list.append({
+                        'filename': filename,
+                        'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
+                        'data_format': 'subject_based' if 'subject' in filename else 'unknown',
+                        'performance_metrics': {},
+                        'storage': 'local',
+                        'size': os.path.getsize(filepath)
+                    })
+    except Exception as e:
+        logger.error(f"Error in _list_local_models: {e}")
+    
+    return models_list
+
+
 def find_course_thai_name_backend(course_id, courses_data):
     course = next((c for c in courses_data if c['id'] == course_id), None)
     return course['thaiName'] if course else course_id
