@@ -406,47 +406,52 @@ class S3Storage:
             return False
     
     def load_model(self, filename: str) -> Optional[Dict[str, Any]]:
-    
-    logger.info(f"🔄 Attempting to load model: {filename}")
-    
-    # ลอง R2 ก่อนเสมอถ้าไม่ได้บังคับใช้ local
-    if not self.use_local and self.s3_client:
-        tmp_path = None
-        try:
-            s3_key = f"models/{filename}"
-            logger.info(f"📥 Downloading from R2: {s3_key}")
-            
-            # สร้างไฟล์ temp
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.joblib', delete=False) as tmp_file:
-                tmp_path = tmp_file.name
-            
-            # ดาวน์โหลดจาก R2
-            self.s3_client.download_file(
-                Bucket=self.bucket_name,
-                Key=s3_key,
-                Filename=tmp_path
-            )
-            
-            # โหลดโมเดล
-            model_data = joblib.load(tmp_path)
-            
-            # ลบไฟล์ temp
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-            
-            logger.info(f"✅ Model {filename} loaded from R2 successfully")
-            return model_data
-            
-        except self.s3_client.exceptions.NoSuchKey:
-            logger.warning(f"⚠️ Model {filename} not found in R2")
-        except Exception as e:
-            logger.error(f"❌ R2 load error: {str(e)}")
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    
-    # Fallback to local
-    return self._load_model_locally(filename)
+        logger.info(f"🔄 Attempting to load model: {filename}")
+        
+        # ลอง R2 ก่อนเสมอถ้าไม่ได้บังคับใช้ local
+        if not self.use_local and self.s3_client:
+            tmp_path = None
+            try:
+                s3_key = f"models/{filename}"
+                logger.info(f"📥 Downloading from R2: {s3_key}")
+                
+                # สร้างไฟล์ temp
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.joblib', delete=False) as tmp_file:
+                    tmp_path = tmp_file.name
+                
+                # ดาวน์โหลดจาก R2
+                self.s3_client.download_file(
+                    Bucket=self.bucket_name,
+                    Key=s3_key,
+                    Filename=tmp_path
+                )
+                
+                # โหลดโมเดล
+                model_data = joblib.load(tmp_path)
+                
+                # ลบไฟล์ temp
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+                
+                logger.info(f"✅ Model {filename} loaded from R2 successfully")
+                return model_data
+                
+            except ClientError as e:
+                # แก้ไขการเรียกใช้ exceptions
+                if e.response['Error']['Code'] == 'NoSuchKey':
+                    logger.warning(f"⚠️ Model {filename} not found in R2")
+                else:
+                    logger.error(f"❌ R2 load error: {str(e)}")
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception as e:
+                logger.error(f"❌ R2 load error: {str(e)}")
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+        
+        # Fallback to local
+        return self._load_model_locally(filename)
     
     def _load_model_locally(self, filename: str) -> Optional[Dict[str, Any]]:
         """Load model from local storage"""
@@ -462,96 +467,95 @@ class S3Storage:
             return None
     
     def list_models(self) -> List[Dict[str, Any]]:
-
-    models = []
-    
-    # ลองจาก R2 ก่อน
-    if not self.use_local and self.s3_client:
-        try:
-            logger.info("📋 Listing models from R2...")
-            response = self.s3_client.list_objects_v2(
-                Bucket=self.bucket_name,
-                Prefix='models/'
-            )
-            
-            if 'Contents' in response:
-                for obj in response['Contents']:
-                    # ข้าม directory markers
-                    if obj['Key'].endswith('/'):
-                        continue
+        models_list = []
+        
+        # ลองจาก R2 ก่อน
+        if not self.use_local and self.s3_client:
+            try:
+                logger.info("📋 Listing models from R2...")
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket_name,
+                    Prefix='models/'
+                )
+                
+                if 'Contents' in response:
+                    for obj in response['Contents']:
+                        # ข้าม directory markers
+                        if obj['Key'].endswith('/'):
+                            continue
                         
-                    filename = obj['Key'].replace('models/', '')
-                    if filename and filename.endswith('.joblib'):
-                        # ลองโหลด metadata
-                        try:
-                            # ดึง metadata จาก R2
-                            head_response = self.s3_client.head_object(
-                                Bucket=self.bucket_name,
-                                Key=obj['Key']
-                            )
-                            metadata = head_response.get('Metadata', {})
-                            
-                            models.append({
-                                'filename': filename,
-                                'created_at': obj['LastModified'].isoformat(),
-                                'size': obj['Size'],
-                                'storage': 'r2',
-                                'data_format': metadata.get('data_format', 'subject_based'),
-                                'performance_metrics': {
-                                    'accuracy': float(metadata.get('accuracy', 0))
-                                }
-                            })
-                        except:
-                            # ถ้าดึง metadata ไม่ได้ ใช้ข้อมูลพื้นฐาน
-                            models.append({
-                                'filename': filename,
-                                'created_at': obj['LastModified'].isoformat(),
-                                'size': obj['Size'],
-                                'storage': 'r2',
-                                'data_format': 'subject_based',
-                                'performance_metrics': {}
-                            })
-                            
-                logger.info(f"📊 Found {len(models)} models in R2")
+                        filename = obj['Key'].replace('models/', '')
+                        if filename and filename.endswith('.joblib'):
+                            # ลองโหลด metadata
+                            try:
+                                # ดึง metadata จาก R2
+                                head_response = self.s3_client.head_object(
+                                    Bucket=self.bucket_name,
+                                    Key=obj['Key']
+                                )
+                                metadata = head_response.get('Metadata', {})
+                                
+                                models_list.append({
+                                    'filename': filename,
+                                    'created_at': obj['LastModified'].isoformat(),
+                                    'size': obj['Size'],
+                                    'storage': 'r2',
+                                    'data_format': metadata.get('data_format', 'subject_based'),
+                                    'performance_metrics': {
+                                        'accuracy': float(metadata.get('accuracy', 0))
+                                    }
+                                })
+                            except Exception:
+                                # ถ้าดึง metadata ไม่ได้ ใช้ข้อมูลพื้นฐาน
+                                models_list.append({
+                                    'filename': filename,
+                                    'created_at': obj['LastModified'].isoformat(),
+                                    'size': obj['Size'],
+                                    'storage': 'r2',
+                                    'data_format': 'subject_based',
+                                    'performance_metrics': {}
+                                })
+                                
+                    logger.info(f"📊 Found {len(models_list)} models in R2")
+            except Exception as e:
+                logger.error(f"❌ R2 list error: {str(e)}")
+        
+        # เช็ค local ด้วย
+        try:
+            model_folder = app.config['MODEL_FOLDER']
+            if os.path.exists(model_folder):
+                for filename in os.listdir(model_folder):
+                    if filename.endswith('.joblib'):
+                        # ตรวจสอบไม่ให้ซ้ำ
+                        if not any(m['filename'] == filename for m in models_list):
+                            filepath = os.path.join(model_folder, filename)
+                            try:
+                                # พยายามโหลดเพื่อดึงข้อมูล
+                                model_data = joblib.load(filepath)
+                                models_list.append({
+                                    'filename': filename,
+                                    'created_at': model_data.get('created_at', 
+                                        datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
+                                    'data_format': model_data.get('data_format', 'subject_based'),
+                                    'performance_metrics': model_data.get('performance_metrics', {}),
+                                    'storage': 'local',
+                                    'size': os.path.getsize(filepath)
+                                })
+                            except Exception:
+                                models_list.append({
+                                    'filename': filename,
+                                    'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
+                                    'storage': 'local',
+                                    'data_format': 'subject_based',
+                                    'performance_metrics': {},
+                                    'size': os.path.getsize(filepath)
+                                })
         except Exception as e:
-            logger.error(f"❌ R2 list error: {str(e)}")
-    
-    # เช็ค local ด้วย
-    try:
-        model_folder = app.config['MODEL_FOLDER']
-        if os.path.exists(model_folder):
-            for filename in os.listdir(model_folder):
-                if filename.endswith('.joblib'):
-                    # ตรวจสอบไม่ให้ซ้ำ
-                    if not any(m['filename'] == filename for m in models):
-                        filepath = os.path.join(model_folder, filename)
-                        try:
-                            # พยายามโหลดเพื่อดึงข้อมูล
-                            model_data = joblib.load(filepath)
-                            models.append({
-                                'filename': filename,
-                                'created_at': model_data.get('created_at', 
-                                    datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
-                                'data_format': model_data.get('data_format', 'subject_based'),
-                                'performance_metrics': model_data.get('performance_metrics', {}),
-                                'storage': 'local',
-                                'size': os.path.getsize(filepath)
-                            })
-                        except:
-                            models.append({
-                                'filename': filename,
-                                'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
-                                'storage': 'local',
-                                'data_format': 'subject_based',
-                                'performance_metrics': {},
-                                'size': os.path.getsize(filepath)
-                            })
-    except Exception as e:
-        logger.error(f"❌ Local list error: {str(e)}")
-    
-    # เรียงตามวันที่
-    models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-    return models
+            logger.error(f"❌ Local list error: {str(e)}")
+        
+        # เรียงตามวันที่
+        models_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        return models_list
     
     def delete_model(self, filename: str) -> bool:
         """Delete model"""
@@ -1312,8 +1316,8 @@ def predict():
             
             # กรองเฉพาะ subject_based models
             subject_models = [m for m in models_list 
-                            if 'subject_based' in m.get('filename', '') 
-                            or m.get('data_format') == 'subject_based']
+                              if 'subject_based' in m.get('filename', '') 
+                              or m.get('data_format') == 'subject_based']
             
             if subject_models:
                 # เรียงตามวันที่และเลือกล่าสุด
@@ -1326,7 +1330,7 @@ def predict():
                 model_folder = app.config['MODEL_FOLDER']
                 if os.path.exists(model_folder):
                     local_models = [f for f in os.listdir(model_folder) 
-                                  if f.endswith('.joblib') and 'subject_based' in f]
+                                    if f.endswith('.joblib') and 'subject_based' in f]
                     if local_models:
                         # เรียงตามชื่อไฟล์ (ซึ่งมี timestamp)
                         local_models.sort(reverse=True)
@@ -1412,7 +1416,7 @@ def predict():
                             logger.warning(f"⚠️ Using alternative model: {alt_model}")
                             model_filename = alt_model
                             break
-                        except:
+                        except Exception:
                             continue
         
         # ถ้าโหลดไม่สำเร็จเลย
@@ -1704,7 +1708,7 @@ def list_models():
                                     'performance_metrics': model_data.get('performance_metrics', {}),
                                     'storage': 'local'
                                 }
-                            except:
+                            except Exception:
                                 # ถ้าอ่านไม่ได้ ให้ข้อมูลพื้นฐาน
                                 model_info = {
                                     'filename': filename,
@@ -1742,7 +1746,6 @@ def list_models():
         return jsonify({'success': False, 'error': f'An error occurred while listing models: {str(e)}'}), 500
 
 
-
 @app.route('/api/sync-models', methods=['POST'])
 def sync_models():
     """Sync models between local and R2"""
@@ -1762,8 +1765,8 @@ def sync_models():
                 )
                 if 'Contents' in response:
                     r2_models = [obj['Key'].replace('models/', '') 
-                                for obj in response['Contents'] 
-                                if obj['Key'].endswith('.joblib')]
+                                 for obj in response['Contents'] 
+                                 if obj['Key'].endswith('.joblib')]
             except Exception as e:
                 synced['errors'].append(f"R2 list error: {str(e)}")
         
@@ -1771,7 +1774,7 @@ def sync_models():
         model_folder = app.config['MODEL_FOLDER']
         if os.path.exists(model_folder):
             local_models = [f for f in os.listdir(model_folder) 
-                          if f.endswith('.joblib')]
+                            if f.endswith('.joblib')]
         
         # Sync from local to R2
         if not storage.use_local:
@@ -2169,7 +2172,7 @@ def topological_sort_with_cycle_check_backend(loaded_courses_objects):
     adj_list = {c_id: [] for c_id in course_map.keys()}
 
     for course_id, course_obj in course_map.items():
-        for prereq_id in course_obj['prereq']:
+        for prereq_id in course_obj.get('prereq', []):
             if prereq_id in course_map:
                 adj_list[prereq_id].append(course_id)
                 in_degree[course_id] += 1
@@ -2543,7 +2546,7 @@ def upload_file():
                     # ถ้าอ่านไม่ได้ ลองใช้ engine python
                     try:
                         df = pd.read_csv(filepath, encoding='utf-8', engine='python')
-                    except:
+                    except Exception:
                         df = pd.read_csv(filepath, encoding='cp874', engine='python')
                         
             else:  # Excel files
@@ -2793,7 +2796,6 @@ def analyze_subjects():
         return jsonify({'success': False, 'error': f'An error occurred during analysis: {str(e)}'})
 
 
-
 @app.route('/api/analyze_curriculum', methods=['POST'])
 def analyze_curriculum():
     """Analyzes curriculum progress with prerequisites."""
@@ -2973,6 +2975,7 @@ def analyze_curriculum():
                             else:
                                 pred_proba = model.predict_proba(input_df)
                             
+                            # ตรวจสอบ shape ของ output
                             if pred_proba.shape[1] == 1:
                                 pred_proba = np.hstack((1 - pred_proba, pred_proba))
                             
@@ -3062,7 +3065,6 @@ def model_status():
         }), 500
 
 
-
 @app.route('/api/sync-models', methods=['POST'])
 def sync_local_models_to_storage():
     """Sync local models to cloud storage"""
@@ -3109,6 +3111,7 @@ def predict_batch_page():
 @app.route('/models')
 def models_page():
     return render_template('model_management.html')
+
 @app.route('/predict_manual_input', methods=['POST'])
 def predict_manual_input():
     """Predicts outcome from manually entered subject data."""
