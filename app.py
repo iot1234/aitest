@@ -406,7 +406,7 @@ class S3Storage:
             return False
     
     def load_model(self, filename: str) -> Optional[Dict[str, Any]]:
-    """Load model with better error handling"""
+    
     logger.info(f"🔄 Attempting to load model: {filename}")
     
     # ลอง R2 ก่อนเสมอถ้าไม่ได้บังคับใช้ local
@@ -462,7 +462,7 @@ class S3Storage:
             return None
     
     def list_models(self) -> List[Dict[str, Any]]:
-    """List all models with improved R2 handling"""
+
     models = []
     
     # ลองจาก R2 ก่อน
@@ -1295,7 +1295,7 @@ def train_model():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Predicts outcome from an uploaded CSV/Excel file using a specified model."""
+    """Enhanced prediction with better model loading and error handling"""
     try:
         logger.info("🔮 Starting prediction process...")
         data = request.get_json()
@@ -1303,40 +1303,150 @@ def predict():
         model_filename = data.get('model_filename')
 
         if not filename:
-            return jsonify({'success': False, 'error': 'No filename provided for prediction data.'})
+            return jsonify({'success': False, 'error': 'ไม่พบไฟล์ข้อมูลสำหรับการทำนาย'})
         
         # ถ้าไม่ระบุโมเดล ให้หาโมเดลล่าสุด
         if not model_filename:
             logger.info("🔍 No model specified, finding latest subject-based model...")
             models_list = storage.list_models()
-            subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+            
+            # กรองเฉพาะ subject_based models
+            subject_models = [m for m in models_list 
+                            if 'subject_based' in m.get('filename', '') 
+                            or m.get('data_format') == 'subject_based']
+            
             if subject_models:
+                # เรียงตามวันที่และเลือกล่าสุด
+                subject_models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
                 model_filename = subject_models[0]['filename']
                 logger.info(f"✅ Auto-selected latest model: {model_filename}")
             else:
-                return jsonify({'success': False, 'error': 'No trained model found. Please train a model first.'})
+                # ถ้าไม่มีใน list ลองหาจาก local โดยตรง
+                logger.warning("No models in list, checking local folder...")
+                model_folder = app.config['MODEL_FOLDER']
+                if os.path.exists(model_folder):
+                    local_models = [f for f in os.listdir(model_folder) 
+                                  if f.endswith('.joblib') and 'subject_based' in f]
+                    if local_models:
+                        # เรียงตามชื่อไฟล์ (ซึ่งมี timestamp)
+                        local_models.sort(reverse=True)
+                        model_filename = local_models[0]
+                        logger.info(f"✅ Found local model: {model_filename}")
+                    else:
+                        return jsonify({
+                            'success': False, 
+                            'error': 'ไม่พบโมเดลที่ใช้งานได้ กรุณาฝึกโมเดลก่อน'
+                        })
+                else:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'ไม่พบโฟลเดอร์โมเดล กรุณาฝึกโมเดลก่อน'
+                    })
 
+        # ตรวจสอบไฟล์ข้อมูล
         data_filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         if not os.path.exists(data_filepath):
-            return jsonify({'success': False, 'error': 'Specified data file not found.'})
+            return jsonify({'success': False, 'error': f'ไม่พบไฟล์ข้อมูล: {filename}'})
 
-        # โหลดโมเดล
+        # โหลดโมเดล - พยายามหลายวิธี
         logger.info(f"📂 Loading model: {model_filename}")
-        loaded_model_data = storage.load_model(model_filename)
+        loaded_model_data = None
+        load_errors = []
+        
+        # Method 1: ผ่าน storage class (R2 หรือ local)
+        try:
+            loaded_model_data = storage.load_model(model_filename)
+            if loaded_model_data:
+                logger.info("✅ Model loaded via storage class")
+        except Exception as e:
+            load_errors.append(f"Storage load error: {str(e)}")
+            logger.warning(f"Storage load failed: {e}")
+        
+        # Method 2: ถ้าไม่ได้ ลองโหลดจาก local โดยตรง
         if not loaded_model_data:
-            return jsonify({'success': False, 'error': f'Model file {model_filename} not found.'})
+            logger.warning("Trying direct local load...")
+            local_path = os.path.join(app.config['MODEL_FOLDER'], model_filename)
+            if os.path.exists(local_path):
+                try:
+                    loaded_model_data = joblib.load(local_path)
+                    logger.info("✅ Model loaded from local directly")
+                except Exception as e:
+                    load_errors.append(f"Direct local load error: {str(e)}")
+                    logger.error(f"Direct local load failed: {e}")
+            else:
+                load_errors.append(f"Local file not found: {local_path}")
+        
+        # Method 3: ถ้ายังไม่ได้และ R2 พร้อมใช้ ลองดาวน์โหลดจาก R2 มา local แล้วโหลด
+        if not loaded_model_data and not storage.use_local and storage.s3_client:
+            logger.warning("Trying to download from R2 to local...")
+            try:
+                s3_key = f"models/{model_filename}"
+                local_path = os.path.join(app.config['MODEL_FOLDER'], model_filename)
+                
+                # ดาวน์โหลดจาก R2 มา local
+                storage.s3_client.download_file(
+                    Bucket=storage.bucket_name,
+                    Key=s3_key,
+                    Filename=local_path
+                )
+                logger.info(f"✅ Downloaded {model_filename} from R2 to local")
+                
+                # โหลดจาก local
+                loaded_model_data = joblib.load(local_path)
+                logger.info("✅ Model loaded after R2 download")
+                
+            except Exception as e:
+                load_errors.append(f"R2 download error: {str(e)}")
+                logger.error(f"R2 download failed: {e}")
+        
+        # Method 4: ถ้ายังไม่ได้อีก ลองหาโมเดลอื่นที่ใช้ได้
+        if not loaded_model_data:
+            logger.error("All loading methods failed, trying alternative models...")
+            model_folder = app.config['MODEL_FOLDER']
+            if os.path.exists(model_folder):
+                for alt_model in os.listdir(model_folder):
+                    if alt_model.endswith('.joblib') and 'subject_based' in alt_model:
+                        try:
+                            alt_path = os.path.join(model_folder, alt_model)
+                            loaded_model_data = joblib.load(alt_path)
+                            logger.warning(f"⚠️ Using alternative model: {alt_model}")
+                            model_filename = alt_model
+                            break
+                        except:
+                            continue
+        
+        # ถ้าโหลดไม่สำเร็จเลย
+        if not loaded_model_data:
+            error_details = '\n'.join(load_errors) if load_errors else 'Unknown error'
+            logger.error(f"❌ Failed to load model. Errors: {error_details}")
+            return jsonify({
+                'success': False, 
+                'error': f'ไม่สามารถโหลดโมเดล {model_filename} ได้',
+                'details': load_errors
+            })
 
+        # ตรวจสอบข้อมูลในโมเดล
+        if not isinstance(loaded_model_data, dict):
+            return jsonify({
+                'success': False, 
+                'error': 'รูปแบบข้อมูลโมเดลไม่ถูกต้อง'
+            })
+        
+        # ดึงข้อมูลจากโมเดล
         model_info = {
-            'models': loaded_model_data['models'],
-            'scaler': loaded_model_data['scaler']
+            'models': loaded_model_data.get('models', {}),
+            'scaler': loaded_model_data.get('scaler')
         }
-        feature_cols = loaded_model_data['feature_columns']
-        data_format = loaded_model_data['data_format']
-        logger.info(f"✅ Loaded model '{model_filename}' (format: {data_format}) for prediction.")
+        feature_cols = loaded_model_data.get('feature_columns', [])
+        data_format = loaded_model_data.get('data_format', 'unknown')
+        
+        logger.info(f"✅ Model loaded successfully - Format: {data_format}, Features: {len(feature_cols)}")
 
-        # อ่านไฟล์ข้อมูล
+        # อ่านไฟล์ข้อมูลสำหรับการทำนาย
+        logger.info(f"📖 Reading prediction data file: {filename}")
         file_extension = filename.rsplit('.', 1)[1].lower()
         df = None
+        
         if file_extension == 'csv':
             encodings = app.config['DATA_CONFIG']['fallback_encodings']
             for encoding in encodings:
@@ -1345,34 +1455,52 @@ def predict():
                     logger.info(f"✅ Successfully read CSV with encoding: {encoding}")
                     break
                 except Exception as e:
-                    logger.debug(f"Failed to read CSV with {encoding}: {e}")
+                    logger.debug(f"Failed with {encoding}: {e}")
                     continue
             if df is None:
-                raise ValueError("Could not read CSV file with any supported encoding.")
+                return jsonify({'success': False, 'error': 'ไม่สามารถอ่านไฟล์ CSV ได้'})
+                
         elif file_extension in ['xlsx', 'xls']:
-            df = pd.read_excel(data_filepath)
-            logger.info(f"✅ Successfully read Excel file")
+            try:
+                df = pd.read_excel(data_filepath)
+                logger.info(f"✅ Successfully read Excel file")
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'ไม่สามารถอ่านไฟล์ Excel: {str(e)}'})
         else:
-            raise ValueError("Unsupported file type for prediction.")
+            return jsonify({'success': False, 'error': 'รองรับเฉพาะไฟล์ CSV และ Excel'})
 
-        if df is None:
-            return jsonify({'success': False, 'error': 'Could not read prediction data file.'})
+        if df is None or df.empty:
+            return jsonify({'success': False, 'error': 'ไฟล์ข้อมูลว่างเปล่า'})
 
         # ตรวจสอบรูปแบบข้อมูล
-        detected_data_format_for_prediction = detect_data_format(df)
-        if detected_data_format_for_prediction != data_format:
-            return jsonify({'success': False, 'error': f'Prediction data format ({detected_data_format_for_prediction}) does not match model format ({data_format}).'})
+        detected_format = detect_data_format(df)
+        if detected_format != data_format:
+            logger.warning(f"Data format mismatch: detected={detected_format}, model={data_format}")
+            if detected_format == 'unknown':
+                logger.warning("Proceeding with model's expected format")
+                detected_format = data_format
+            else:
+                return jsonify({
+                    'success': False, 
+                    'error': f'รูปแบบข้อมูล ({detected_format}) ไม่ตรงกับโมเดล ({data_format})'
+                })
         
-        logger.info(f"📊 Predicting with data format: {detected_data_format_for_prediction}")
+        logger.info(f"📊 Processing {len(df)} rows with format: {detected_format}")
 
         # ประมวลผลข้อมูล
-        if data_format == 'subject_based':
-            processed_df = process_subject_data(df)
-        else:
-            processed_df = process_gpa_data(df)
+        try:
+            if data_format == 'subject_based':
+                processed_df = process_subject_data(df)
+            elif data_format == 'gpa_based':
+                processed_df = process_gpa_data(df)
+            else:
+                return jsonify({'success': False, 'error': f'รูปแบบข้อมูลไม่รองรับ: {data_format}'})
+        except Exception as e:
+            logger.error(f"Error processing data: {str(e)}")
+            return jsonify({'success': False, 'error': f'ไม่สามารถประมวลผลข้อมูลได้: {str(e)}'})
 
         if len(processed_df) == 0:
-            return jsonify({'success': False, 'error': 'No data could be processed for prediction.'})
+            return jsonify({'success': False, 'error': 'ไม่มีข้อมูลที่สามารถประมวลผลได้'})
 
         logger.info(f"📈 Processed {len(processed_df)} students for prediction")
 
@@ -1383,35 +1511,49 @@ def predict():
                 X_predict[col] = processed_df[col]
             else:
                 X_predict[col] = 0
+                logger.debug(f"Feature '{col}' not found, filling with 0")
         X_predict = X_predict.fillna(0)
 
         # ทำนายผล
-        trained_models = model_info['models']
-        scaler = model_info['scaler']
+        trained_models = model_info.get('models', {})
+        scaler = model_info.get('scaler')
+        
+        if not trained_models:
+            return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
 
         predictions_proba_list = []
         successful_models = 0
+        model_errors = []
         
         for name, model in trained_models.items():
             try:
-                if name == 'lr':
+                logger.debug(f"Predicting with {name} model...")
+                if name == 'lr' and scaler is not None:
                     X_scaled = scaler.transform(X_predict)
                     pred_proba = model.predict_proba(X_scaled)
                 else:
                     pred_proba = model.predict_proba(X_predict)
                 
+                # ตรวจสอบ shape ของ output
                 if pred_proba.shape[1] == 1:
                     pred_proba = np.hstack((1 - pred_proba, pred_proba))
                 
                 predictions_proba_list.append(pred_proba)
                 successful_models += 1
                 logger.debug(f"✅ Prediction successful with {name} model")
+                
             except Exception as e:
-                logger.warning(f"Could not predict with model {name}: {str(e)}")
+                error_msg = f"Model {name} error: {str(e)}"
+                model_errors.append(error_msg)
+                logger.warning(error_msg)
                 continue
 
         if not predictions_proba_list:
-            return jsonify({'success': False, 'error': 'Could not make predictions with any loaded sub-models.'})
+            return jsonify({
+                'success': False, 
+                'error': 'ไม่สามารถทำนายได้ด้วยโมเดลใดเลย',
+                'model_errors': model_errors
+            })
 
         logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
 
@@ -1421,16 +1563,18 @@ def predict():
         medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
 
         for i in range(len(processed_df)):
-            student_name = processed_df.iloc[i]['ชื่อ']
-            gpa = processed_df.iloc[i]['gpa']
+            student_name = processed_df.iloc[i].get('ชื่อ', f'นักศึกษา_{i+1}')
+            gpa = processed_df.iloc[i].get('gpa', 0)
 
+            # คำนวณค่าเฉลี่ยความน่าจะเป็นจากทุกโมเดล
             avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
             avg_prob_fail = avg_prob_per_student[0]
             avg_prob_pass = avg_prob_per_student[1]
 
-            prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
-
+            prediction = 'จบ' if avg_prob_pass >= 0.5 else 'ไม่จบ'
             confidence = max(avg_prob_pass, avg_prob_fail)
+
+            # กำหนดระดับความเสี่ยง
             if confidence > high_confidence_threshold:
                 risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
             elif confidence > medium_confidence_threshold:
@@ -1460,11 +1604,11 @@ def predict():
                 recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
 
             if prediction == 'ไม่จบ':
-                recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือ")
+                recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือจากอาจารย์ที่ปรึกษา")
                 if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
                     recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
 
-            # ตรวจสอบหมวดวิชาที่อ่อน
+            # ตรวจสอบหมวดวิชาที่อ่อน (สำหรับ subject-based)
             if data_format == 'subject_based':
                 weak_categories = []
                 for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
@@ -1478,7 +1622,10 @@ def predict():
             results.append({
                 'ชื่อ': student_name,
                 'การทำนาย': prediction,
-                'ความน่าจะเป็น': {'จบ': float(avg_prob_pass), 'ไม่จบ': float(avg_prob_fail)},
+                'ความน่าจะเป็น': {
+                    'จบ': float(avg_prob_pass),
+                    'ไม่จบ': float(avg_prob_fail)
+                },
                 'เกรดเฉลี่ย': float(gpa),
                 'ระดับความเสี่ยง': risk_level,
                 'ความเชื่อมั่น': float(confidence),
@@ -1486,7 +1633,7 @@ def predict():
                 'คำแนะนำ': list(set(recommendations))
             })
 
-        # สรุปผล
+        # สรุปผลรวม
         total = len(results)
         predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
         predicted_fail = total - predicted_pass
@@ -1496,7 +1643,7 @@ def predict():
         medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
         low_risk = total - high_risk - medium_risk
 
-        logger.info(f"🎉 Prediction completed successfully: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
+        logger.info(f"🎉 Prediction completed: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
 
         return jsonify({
             'success': True,
@@ -1512,13 +1659,19 @@ def predict():
             },
             'model_used': model_filename,
             'models_count': successful_models,
+            'data_format': data_format,
             'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
         })
 
     except Exception as e:
-        logger.error(f"❌ Error during prediction: {str(e)}", exc_info=True)
-        return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
-    
+        logger.error(f"❌ Critical error during prediction: {str(e)}", exc_info=True)
+        import traceback
+        return jsonify({
+            'success': False, 
+            'error': f'เกิดข้อผิดพลาดร้ายแรง: {str(e)}',
+            'traceback': traceback.format_exc()
+        })
+        
     
 @app.route('/api/models', methods=['GET'])
 def list_models():
@@ -1588,6 +1741,75 @@ def list_models():
         logger.error(f"Error listing models: {str(e)}")
         return jsonify({'success': False, 'error': f'An error occurred while listing models: {str(e)}'}), 500
 
+
+
+@app.route('/api/sync-models', methods=['POST'])
+def sync_models():
+    """Sync models between local and R2"""
+    try:
+        synced = {'to_r2': [], 'to_local': [], 'errors': []}
+        
+        # Get lists from both storages
+        r2_models = []
+        local_models = []
+        
+        # Get R2 models
+        if not storage.use_local and storage.s3_client:
+            try:
+                response = storage.s3_client.list_objects_v2(
+                    Bucket=storage.bucket_name,
+                    Prefix='models/'
+                )
+                if 'Contents' in response:
+                    r2_models = [obj['Key'].replace('models/', '') 
+                                for obj in response['Contents'] 
+                                if obj['Key'].endswith('.joblib')]
+            except Exception as e:
+                synced['errors'].append(f"R2 list error: {str(e)}")
+        
+        # Get local models
+        model_folder = app.config['MODEL_FOLDER']
+        if os.path.exists(model_folder):
+            local_models = [f for f in os.listdir(model_folder) 
+                          if f.endswith('.joblib')]
+        
+        # Sync from local to R2
+        if not storage.use_local:
+            for filename in local_models:
+                if filename not in r2_models:
+                    filepath = os.path.join(model_folder, filename)
+                    try:
+                        model_data = joblib.load(filepath)
+                        if storage.save_model(model_data, filename):
+                            synced['to_r2'].append(filename)
+                            logger.info(f"✅ Synced {filename} to R2")
+                    except Exception as e:
+                        synced['errors'].append(f"Failed to sync {filename} to R2: {str(e)}")
+        
+        # Sync from R2 to local
+        for filename in r2_models:
+            if filename not in local_models:
+                try:
+                    model_data = storage.load_model(filename)
+                    if model_data:
+                        filepath = os.path.join(model_folder, filename)
+                        joblib.dump(model_data, filepath)
+                        synced['to_local'].append(filename)
+                        logger.info(f"✅ Synced {filename} to local")
+                except Exception as e:
+                    synced['errors'].append(f"Failed to sync {filename} to local: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'synced': synced,
+            'message': f"Synced {len(synced['to_r2'])} to R2, {len(synced['to_local'])} to local"
+        })
+        
+    except Exception as e:
+        logger.error(f"Sync error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+    
+    
 @app.route('/api/models/<filename>', methods=['DELETE'])
 def delete_model(filename):
     """Deletes a specified model file."""
