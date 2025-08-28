@@ -406,31 +406,47 @@ class S3Storage:
             return False
     
     def load_model(self, filename: str) -> Optional[Dict[str, Any]]:
-        """Load model"""
-        if self.use_local:
-            return self._load_model_locally(filename)
-        
+    """Load model with better error handling"""
+    logger.info(f"🔄 Attempting to load model: {filename}")
+    
+    # ลอง R2 ก่อนเสมอถ้าไม่ได้บังคับใช้ local
+    if not self.use_local and self.s3_client:
         tmp_path = None
         try:
             s3_key = f"models/{filename}"
+            logger.info(f"📥 Downloading from R2: {s3_key}")
+            
+            # สร้างไฟล์ temp
+            import tempfile
             with tempfile.NamedTemporaryFile(suffix='.joblib', delete=False) as tmp_file:
-                self.s3_client.download_file(
-                    Bucket=self.bucket_name,
-                    Key=s3_key,
-                    Filename=tmp_file.name
-                )
                 tmp_path = tmp_file.name
             
+            # ดาวน์โหลดจาก R2
+            self.s3_client.download_file(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Filename=tmp_path
+            )
+            
+            # โหลดโมเดล
             model_data = joblib.load(tmp_path)
-            os.remove(tmp_path)
-            logger.info(f"✅ Model {filename} loaded from R2")
+            
+            # ลบไฟล์ temp
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            
+            logger.info(f"✅ Model {filename} loaded from R2 successfully")
             return model_data
             
+        except self.s3_client.exceptions.NoSuchKey:
+            logger.warning(f"⚠️ Model {filename} not found in R2")
         except Exception as e:
-            logger.warning(f"R2 load failed: {str(e)}, trying local...")
+            logger.error(f"❌ R2 load error: {str(e)}")
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
-            return self._load_model_locally(filename)
+    
+    # Fallback to local
+    return self._load_model_locally(filename)
     
     def _load_model_locally(self, filename: str) -> Optional[Dict[str, Any]]:
         """Load model from local storage"""
@@ -446,63 +462,96 @@ class S3Storage:
             return None
     
     def list_models(self) -> List[Dict[str, Any]]:
-        """List all models"""
-        models = []
-        
-        # Try R2 first
-        if not self.use_local and self.s3_client:
-            try:
-                response = self.s3_client.list_objects_v2(
-                    Bucket=self.bucket_name,
-                    Prefix='models/',
-                    Delimiter='/'
-                )
-                
-                if 'Contents' in response:
-                    for obj in response['Contents']:
-                        filename = obj['Key'].replace('models/', '')
-                        if filename and filename.endswith('.joblib'):
+    """List all models with improved R2 handling"""
+    models = []
+    
+    # ลองจาก R2 ก่อน
+    if not self.use_local and self.s3_client:
+        try:
+            logger.info("📋 Listing models from R2...")
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix='models/'
+            )
+            
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    # ข้าม directory markers
+                    if obj['Key'].endswith('/'):
+                        continue
+                        
+                    filename = obj['Key'].replace('models/', '')
+                    if filename and filename.endswith('.joblib'):
+                        # ลองโหลด metadata
+                        try:
+                            # ดึง metadata จาก R2
+                            head_response = self.s3_client.head_object(
+                                Bucket=self.bucket_name,
+                                Key=obj['Key']
+                            )
+                            metadata = head_response.get('Metadata', {})
+                            
                             models.append({
                                 'filename': filename,
                                 'created_at': obj['LastModified'].isoformat(),
                                 'size': obj['Size'],
                                 'storage': 'r2',
-                                'performance_metrics': {},
-                                'data_format': 'unknown'
+                                'data_format': metadata.get('data_format', 'subject_based'),
+                                'performance_metrics': {
+                                    'accuracy': float(metadata.get('accuracy', 0))
+                                }
                             })
+                        except:
+                            # ถ้าดึง metadata ไม่ได้ ใช้ข้อมูลพื้นฐาน
+                            models.append({
+                                'filename': filename,
+                                'created_at': obj['LastModified'].isoformat(),
+                                'size': obj['Size'],
+                                'storage': 'r2',
+                                'data_format': 'subject_based',
+                                'performance_metrics': {}
+                            })
+                            
                 logger.info(f"📊 Found {len(models)} models in R2")
-            except Exception as e:
-                logger.warning(f"R2 list failed: {str(e)}")
-        
-        # Also check local
-        try:
-            model_folder = app.config['MODEL_FOLDER']
-            if os.path.exists(model_folder):
-                for filename in os.listdir(model_folder):
-                    if filename.endswith('.joblib'):
+        except Exception as e:
+            logger.error(f"❌ R2 list error: {str(e)}")
+    
+    # เช็ค local ด้วย
+    try:
+        model_folder = app.config['MODEL_FOLDER']
+        if os.path.exists(model_folder):
+            for filename in os.listdir(model_folder):
+                if filename.endswith('.joblib'):
+                    # ตรวจสอบไม่ให้ซ้ำ
+                    if not any(m['filename'] == filename for m in models):
                         filepath = os.path.join(model_folder, filename)
                         try:
+                            # พยายามโหลดเพื่อดึงข้อมูล
                             model_data = joblib.load(filepath)
                             models.append({
                                 'filename': filename,
-                                'created_at': model_data.get('created_at', ''),
-                                'data_format': model_data.get('data_format', 'unknown'),
+                                'created_at': model_data.get('created_at', 
+                                    datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
+                                'data_format': model_data.get('data_format', 'subject_based'),
                                 'performance_metrics': model_data.get('performance_metrics', {}),
-                                'storage': 'local'
+                                'storage': 'local',
+                                'size': os.path.getsize(filepath)
                             })
                         except:
                             models.append({
                                 'filename': filename,
                                 'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
                                 'storage': 'local',
+                                'data_format': 'subject_based',
                                 'performance_metrics': {},
-                                'data_format': 'unknown'
+                                'size': os.path.getsize(filepath)
                             })
-                logger.info(f"📂 Found {len([m for m in models if m['storage'] == 'local'])} models locally")
-        except Exception as e:
-            logger.error(f"Local list error: {str(e)}")
-        
-        return sorted(models, key=lambda x: x.get('created_at', ''), reverse=True)
+    except Exception as e:
+        logger.error(f"❌ Local list error: {str(e)}")
+    
+    # เรียงตามวันที่
+    models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    return models
     
     def delete_model(self, filename: str) -> bool:
         """Delete model"""
