@@ -1127,9 +1127,9 @@ def train_ensemble_model(X, y):
 
 @app.route('/train', methods=['POST'])
 def train_model():
-    """Handles model training with the uploaded file."""
+    """Handles model training with ULTIMATE accuracy"""
     try:
-        logger.info("🚀 Starting ADVANCED model training process...")
+        logger.info("🚀 Starting ULTIMATE model training process...")
         data = request.get_json()
         filename = data.get('filename')
         use_advanced = data.get('use_advanced_training', True)  # Default to advanced
@@ -1173,76 +1173,53 @@ def train_model():
         data_format = detect_data_format(df)
         logger.info(f"📊 Detected data format for training: {data_format}")
 
-        # เลือกวิธีการประมวลผล
-        if use_advanced and data_format == 'subject_based':
-            logger.info("🧬 Using ADVANCED Context-Aware Training Strategy")
-            
-            # ใช้ Advanced Feature Engineering
-            engineer = AdvancedFeatureEngineer(
-                grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
-            )
-            
-            # เตรียมข้อมูลแบบ Advanced
-            X, y = engineer.prepare_training_data(df)
-            
-            if len(X) == 0:
-                return jsonify({'success': False, 'error': 'Could not prepare training data'})
-            
-            # บันทึก course profiles สำหรับใช้ในการ predict
-            course_profiles = engineer.course_profiles
-            
-        else:
-            # ใช้วิธีเดิม
-            logger.info("📊 Using standard training strategy")
-            if data_format == 'subject_based':
-                processed_df = process_subject_data(df)
-            elif data_format == 'gpa_based':
-                processed_df = process_gpa_data(df)
-            else:
-                return jsonify({'success': False, 'error': 'Unsupported data format.'})
-
-            feature_cols = [col for col in processed_df.columns if col not in ['ชื่อ', 'graduated']]
-            X = processed_df[feature_cols].fillna(0)
-            y = processed_df['graduated']
-            course_profiles = None
-
+        # ใช้ ULTIMATE Feature Engineering
+        logger.info("🧬 Using ULTIMATE Context-Aware Training Strategy")
+        
+        # สร้าง Feature Engineer
+        engineer = AdvancedFeatureEngineer(
+            grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+        )
+        
+        # เตรียมข้อมูลแบบ Advanced
+        X, y = engineer.prepare_training_data(df)
+        
+        if len(X) == 0:
+            return jsonify({'success': False, 'error': 'Could not prepare training data'})
+        
+        # บันทึก course profiles สำหรับใช้ในการ predict
+        course_profiles = engineer.course_profiles
+        
         min_students_for_training = app.config['DATA_CONFIG']['min_students_for_training']
         if len(X) < min_students_for_training:
             return jsonify({'success': False, 
                             'error': f'Insufficient data ({min_students_for_training} samples required).'})
 
-        logger.info(f"🎯 Training data prepared: {len(X)} samples, {X.shape[1]} features")
+        logger.info(f"🎯 Training data prepared: {len(X)} samples, {X.shape[1]} advanced features")
         logger.info(f"📈 Label distribution: {y.value_counts().to_dict()}")
 
-        # เทรนโมเดล
-        logger.info("🤖 Starting ensemble model training...")
+        # เทรนโมเดลด้วย Ultimate Ensemble
+        logger.info("🤖 Starting ULTIMATE ensemble model training...")
         model_result = train_ensemble_model(X, y)
 
-        # คำนวณ feature importance
+        # Extract top features
         feature_importances = {}
-        if 'rf' in model_result['models']:
-            rf_model = model_result['models']['rf']
-            if hasattr(rf_model, 'feature_importances_'):
-                feature_cols = X.columns.tolist()
-                importances = pd.Series(
-                    rf_model.feature_importances_, 
-                    index=feature_cols
-                ).sort_values(ascending=False)
-                feature_importances = importances.head(10).to_dict()
+        if 'feature_importance' in model_result:
+            feature_importances = model_result['feature_importance'].get('top_features', {})
 
         # สร้างชื่อไฟล์โมเดล
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        training_type = 'advanced' if use_advanced else 'standard'
-        model_filename = f'{data_format}_model_{training_type}_{timestamp}.joblib'
+        model_filename = f'{data_format}_model_ultimate_{timestamp}.joblib'
 
         # สร้างข้อมูลโมเดลสำหรับบันทึก
         model_data = {
             'models': model_result['models'],
-            'scaler': model_result['scaler'],
+            'scaler': model_result.get('scaler'),
             'feature_columns': X.columns.tolist(),
             'data_format': data_format,
-            'training_type': training_type,
-            'course_profiles': course_profiles,  # บันทึก course DNA
+            'training_type': 'ultimate',
+            'course_profiles': course_profiles,
+            'threshold': model_result.get('threshold', 0.5),
             'created_at': datetime.now().isoformat(),
             'training_data_info': {
                 'rows': len(X),
@@ -1255,45 +1232,57 @@ def train_model():
                 'accuracy': model_result['accuracy'],
                 'precision': model_result['precision'],
                 'recall': model_result['recall'],
-                'f1_score': model_result['f1_score']
+                'f1_score': model_result['f1_score'],
+                'roc_auc': model_result.get('roc_auc', 0),
+                'matthews_corrcoef': model_result.get('matthews_corrcoef', 0)
             },
             'feature_importances': feature_importances,
+            'evaluation_results': model_result.get('evaluation_results', {}),
             'hyperparameters': {
-                'best_rf_params': model_result.get('best_rf_params', {}),
-                'best_gb_params': model_result.get('best_gb_params', {}),
-                'best_lr_params': model_result.get('best_lr_params', {})
+                'ensemble_type': 'stacking_with_7_models',
+                'optimization': 'bayesian',
+                'threshold_optimized': True
             }
         }
 
         # บันทึกโมเดล
-        logger.info(f"💾 Saving model: {model_filename}")
+        logger.info(f"💾 Saving ULTIMATE model: {model_filename}")
         save_success = storage.save_model(model_data, model_filename)
         
         if save_success:
-            logger.info(f"✅ Model saved successfully: {model_filename}")
+            logger.info(f"✅ ULTIMATE Model saved successfully: {model_filename}")
         else:
             logger.warning(f"⚠️ Model save failed, but continuing...")
 
-        logger.info("🎉 Model training completed successfully!")
+        logger.info("🎉 ULTIMATE Model training completed successfully!")
 
         return jsonify({
             'success': True,
             'model_filename': model_filename,
-            'training_type': training_type,
+            'training_type': 'ultimate',
             'accuracy': model_result['accuracy'],
             'precision': model_result['precision'],
             'recall': model_result['recall'],
             'f1_score': model_result['f1_score'],
+            'roc_auc': model_result.get('roc_auc', 0),
+            'matthews_corrcoef': model_result.get('matthews_corrcoef', 0),
             'training_samples': len(X),
             'validation_samples': model_result.get('validation_samples', 0),
             'features_count': X.shape[1],
             'data_format': data_format,
-            'feature_importances': feature_importances,
+            'feature_importances': list(feature_importances.keys())[:10],  # Top 10 features
+            'threshold': model_result.get('threshold', 0.5),
+            'evaluation_metrics': {
+                'bootstrap_accuracy_95ci': model_result.get('evaluation_results', {})
+                    .get('bootstrap', {}).get('accuracy_ci_95', [0, 0]),
+                'cross_validation_mean': model_result.get('evaluation_results', {})
+                    .get('stratified_cv', {}).get('test_scores', {}).get('test_accuracy', 0)
+            },
             'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
         })
 
     except Exception as e:
-        logger.error(f"❌ Error during model training: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error during ULTIMATE model training: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': f'Training error: {str(e)}'})
 
 
@@ -1518,39 +1507,50 @@ def predict():
                 logger.debug(f"Feature '{col}' not found, filling with 0")
         X_predict = X_predict.fillna(0)
 
-        # ทำนายผล
-        trained_models = model_info.get('models', {})
-        scaler = model_info.get('scaler')
-        
-        if not trained_models:
-            return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
+        # แทนที่ส่วนการทำนายด้วย:
+# ทำนายผล (ประมาณบรรทัด 1150)
+trained_models = model_info.get('models', {})
+scaler = model_info.get('scaler')
+threshold = loaded_model_data.get('threshold', 0.5)
 
-        predictions_proba_list = []
-        successful_models = 0
-        model_errors = []
-        
-        for name, model in trained_models.items():
-            try:
-                logger.debug(f"Predicting with {name} model...")
-                if name == 'lr' and scaler is not None:
-                    X_scaled = scaler.transform(X_predict)
-                    pred_proba = model.predict_proba(X_scaled)
-                else:
-                    pred_proba = model.predict_proba(X_predict)
-                
-                # ตรวจสอบ shape ของ output
-                if pred_proba.shape[1] == 1:
-                    pred_proba = np.hstack((1 - pred_proba, pred_proba))
-                
-                predictions_proba_list.append(pred_proba)
-                successful_models += 1
-                logger.debug(f"✅ Prediction successful with {name} model")
-                
-            except Exception as e:
-                error_msg = f"Model {name} error: {str(e)}"
-                model_errors.append(error_msg)
-                logger.warning(error_msg)
-                continue
+if not trained_models:
+    return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
+
+# ตรวจสอบว่าเป็น Ultimate model หรือไม่
+if 'ultimate_ensemble' in trained_models:
+    # Use Ultimate model with optimized threshold
+    predictions, probabilities = predict_with_threshold(loaded_model_data, X_predict)
+    predictions_proba_list = [probabilities]
+    successful_models = 1
+    model_errors = []
+else:
+    # Use old ensemble approach
+    predictions_proba_list = []
+    successful_models = 0
+    model_errors = []
+    
+    for name, model in trained_models.items():
+        try:
+            logger.debug(f"Predicting with {name} model...")
+            if name == 'lr' and scaler is not None:
+                X_scaled = scaler.transform(X_predict)
+                pred_proba = model.predict_proba(X_scaled)
+            else:
+                pred_proba = model.predict_proba(X_predict)
+            
+            # ตรวจสอบ shape ของ output
+            if pred_proba.shape[1] == 1:
+                pred_proba = np.hstack((1 - pred_proba, pred_proba))
+            
+            predictions_proba_list.append(pred_proba)
+            successful_models += 1
+            logger.debug(f"✅ Prediction successful with {name} model")
+            
+        except Exception as e:
+            error_msg = f"Model {name} error: {str(e)}"
+            model_errors.append(error_msg)
+            logger.warning(error_msg)
+            continue
 
         if not predictions_proba_list:
             return jsonify({
