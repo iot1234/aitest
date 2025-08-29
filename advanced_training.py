@@ -1,4 +1,5 @@
-# advanced_training.py - ULTIMATE VERSION FOR MAXIMUM ACCURACY
+
+from advanced_training import AdvancedFeatureEngineer, UltimateModelTrainer, ModelEvaluator
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Set
@@ -1288,8 +1289,9 @@ class UltimateModelTrainer:
                 return X, y
                 
         except Exception as e:
+            logger.warning(f"Could not handle class imbalance: {e}")
+            return X, y
             # เพิ่มหลังจาก imports ด้านบน
-from advanced_training import AdvancedFeatureEngineer, UltimateModelTrainer, ModelEvaluator
 
 # แทนที่ฟังก์ชัน train_ensemble_model เดิมด้วย:
 def train_ensemble_model(X, y):
