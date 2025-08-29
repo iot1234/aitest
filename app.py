@@ -1127,6 +1127,9 @@ def train_ensemble_model(X, y):
 def train_model():
     """Handles model training with ULTIMATE accuracy"""
     try:
+        # ✅ เพิ่มบรรทัดนี้ - Import ที่นี่เพื่อหลีกเลี่ยง circular import
+        from advanced_training import AdvancedFeatureEngineer, train_ensemble_model
+        
         logger.info("🚀 Starting ULTIMATE model training process...")
         data = request.get_json()
         filename = data.get('filename')
@@ -1174,7 +1177,7 @@ def train_model():
         # ใช้ ULTIMATE Feature Engineering
         logger.info("🧬 Using ULTIMATE Context-Aware Training Strategy")
         
-        # สร้าง Feature Engineer
+        # สร้าง Feature Engineer - ตอนนี้ AdvancedFeatureEngineer ถูก import แล้ว
         engineer = AdvancedFeatureEngineer(
             grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
         )
