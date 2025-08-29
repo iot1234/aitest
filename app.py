@@ -1507,165 +1507,169 @@ def predict():
                 logger.debug(f"Feature '{col}' not found, filling with 0")
         X_predict = X_predict.fillna(0)
 
-        # แทนที่ส่วนการทำนายด้วย:
-# ทำนายผล (ประมาณบรรทัด 1150)
-trained_models = model_info.get('models', {})
-scaler = model_info.get('scaler')
-threshold = loaded_model_data.get('threshold', 0.5)
-
-if not trained_models:
-    return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
-
-# ตรวจสอบว่าเป็น Ultimate model หรือไม่
-if 'ultimate_ensemble' in trained_models:
-    # Use Ultimate model with optimized threshold
-    predictions, probabilities = predict_with_threshold(loaded_model_data, X_predict)
-    predictions_proba_list = [probabilities]
-    successful_models = 1
-    model_errors = []
-else:
-    # Use old ensemble approach
-    predictions_proba_list = []
-    successful_models = 0
-    model_errors = []
-    
-    for name, model in trained_models.items():
+        # ทำนายผล
         try:
-            logger.debug(f"Predicting with {name} model...")
-            if name == 'lr' and scaler is not None:
-                X_scaled = scaler.transform(X_predict)
-                pred_proba = model.predict_proba(X_scaled)
+            trained_models = model_info.get('models', {})
+            scaler = model_info.get('scaler')
+            threshold = loaded_model_data.get('threshold', 0.5)
+
+            if not trained_models:
+                return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
+
+            # ตรวจสอบว่าเป็น Ultimate model หรือไม่
+            if 'ultimate_ensemble' in trained_models:
+                # Use Ultimate model with optimized threshold
+                predictions, probabilities = predict_with_threshold(loaded_model_data, X_predict)
+                predictions_proba_list = [probabilities]
+                successful_models = 1
+                model_errors = []
             else:
-                pred_proba = model.predict_proba(X_predict)
-            
-            # ตรวจสอบ shape ของ output
-            if pred_proba.shape[1] == 1:
-                pred_proba = np.hstack((1 - pred_proba, pred_proba))
-            
-            predictions_proba_list.append(pred_proba)
-            successful_models += 1
-            logger.debug(f"✅ Prediction successful with {name} model")
+                # Use old ensemble approach
+                predictions_proba_list = []
+                successful_models = 0
+                model_errors = []
+                
+                for name, model in trained_models.items():
+                    try:
+                        logger.debug(f"Predicting with {name} model...")
+                        if name == 'lr' and scaler is not None:
+                            X_scaled = scaler.transform(X_predict)
+                            pred_proba = model.predict_proba(X_scaled)
+                        else:
+                            pred_proba = model.predict_proba(X_predict)
+                        
+                        # ตรวจสอบ shape ของ output
+                        if pred_proba.shape[1] == 1:
+                            pred_proba = np.hstack((1 - pred_proba, pred_proba))
+                        
+                        predictions_proba_list.append(pred_proba)
+                        successful_models += 1
+                        logger.debug(f"✅ Prediction successful with {name} model")
+                        
+                    except Exception as e:
+                        error_msg = f"Model {name} error: {str(e)}"
+                        model_errors.append(error_msg)
+                        logger.warning(error_msg)
+                        continue
+
+            if not predictions_proba_list:
+                return jsonify({
+                    'success': False, 
+                    'error': 'ไม่สามารถทำนายได้ด้วยโมเดลใดเลย',
+                    'model_errors': model_errors
+                })
+
+            logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
+
+            # คำนวณผลลัพธ์
+            results = []
+            high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
+            medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
+
+            for i in range(len(processed_df)):
+                student_name = processed_df.iloc[i].get('ชื่อ', f'นักศึกษา_{i+1}')
+                gpa = processed_df.iloc[i].get('gpa', 0)
+
+                # คำนวณค่าเฉลี่ยความน่าจะเป็นจากทุกโมเดล
+                avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
+                avg_prob_fail = avg_prob_per_student[0]
+                avg_prob_pass = avg_prob_per_student[1]
+
+                prediction = 'จบ' if avg_prob_pass >= 0.5 else 'ไม่จบ'
+                confidence = max(avg_prob_pass, avg_prob_fail)
+
+                # กำหนดระดับความเสี่ยง
+                if confidence > high_confidence_threshold:
+                    risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
+                elif confidence > medium_confidence_threshold:
+                    risk_level = 'ปานกลาง'
+                else:
+                    risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
+
+                # สร้างการวิเคราะห์และคำแนะนำ
+                analysis = []
+                recommendations = []
+
+                low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
+                warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
+                high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
+
+                if gpa < low_gpa_threshold:
+                    analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
+                    recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
+                elif gpa < warning_gpa_threshold:
+                    analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
+                    recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
+                elif gpa < 3.0:
+                    analysis.append(f"GPA พอใช้ ({gpa:.2f})")
+                    recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
+                else:
+                    analysis.append(f"GPA ดี ({gpa:.2f})")
+                    recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
+
+                if prediction == 'ไม่จบ':
+                    recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือจากอาจารย์ที่ปรึกษา")
+                    if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
+                        recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
+
+                # ตรวจสอบหมวดวิชาที่อ่อน (สำหรับ subject-based)
+                if data_format == 'subject_based':
+                    weak_categories = []
+                    for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
+                        gpa_col = f'gpa_{cat_key}'
+                        if gpa_col in processed_df.columns and processed_df.iloc[i].get(gpa_col, 0) < low_gpa_threshold:
+                            weak_categories.append(cat_key)
+
+                    if weak_categories:
+                        recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
+
+                results.append({
+                    'ชื่อ': student_name,
+                    'การทำนาย': prediction,
+                    'ความน่าจะเป็น': {
+                        'จบ': float(avg_prob_pass),
+                        'ไม่จบ': float(avg_prob_fail)
+                    },
+                    'เกรดเฉลี่ย': float(gpa),
+                    'ระดับความเสี่ยง': risk_level,
+                    'ความเชื่อมั่น': float(confidence),
+                    'การวิเคราะห์': list(set(analysis)),
+                    'คำแนะนำ': list(set(recommendations))
+                })
+
+            # สรุปผลรวม
+            total = len(results)
+            predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
+            predicted_fail = total - predicted_pass
+            pass_rate = (predicted_pass / total * 100) if total > 0 else 0
+
+            high_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'สูง')
+            medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
+            low_risk = total - high_risk - medium_risk
+
+            logger.info(f"🎉 Prediction completed: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
+
+            return jsonify({
+                'success': True,
+                'results': results,
+                'summary': {
+                    'total': total,
+                    'predicted_pass': predicted_pass,
+                    'predicted_fail': predicted_fail,
+                    'pass_rate': float(pass_rate),
+                    'high_risk': high_risk,
+                    'medium_risk': medium_risk,
+                    'low_risk': low_risk
+                },
+                'model_used': model_filename,
+                'models_count': successful_models,
+                'data_format': data_format,
+                'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
+            })
             
         except Exception as e:
-            error_msg = f"Model {name} error: {str(e)}"
-            model_errors.append(error_msg)
-            logger.warning(error_msg)
-            continue
-
-        if not predictions_proba_list:
-            return jsonify({
-                'success': False, 
-                'error': 'ไม่สามารถทำนายได้ด้วยโมเดลใดเลย',
-                'model_errors': model_errors
-            })
-
-        logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
-
-        # คำนวณผลลัพธ์
-        results = []
-        high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
-        medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
-
-        for i in range(len(processed_df)):
-            student_name = processed_df.iloc[i].get('ชื่อ', f'นักศึกษา_{i+1}')
-            gpa = processed_df.iloc[i].get('gpa', 0)
-
-            # คำนวณค่าเฉลี่ยความน่าจะเป็นจากทุกโมเดล
-            avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
-            avg_prob_fail = avg_prob_per_student[0]
-            avg_prob_pass = avg_prob_per_student[1]
-
-            prediction = 'จบ' if avg_prob_pass >= 0.5 else 'ไม่จบ'
-            confidence = max(avg_prob_pass, avg_prob_fail)
-
-            # กำหนดระดับความเสี่ยง
-            if confidence > high_confidence_threshold:
-                risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-            elif confidence > medium_confidence_threshold:
-                risk_level = 'ปานกลาง'
-            else:
-                risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
-
-            # สร้างการวิเคราะห์และคำแนะนำ
-            analysis = []
-            recommendations = []
-
-            low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
-            warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
-            high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
-
-            if gpa < low_gpa_threshold:
-                analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
-                recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
-            elif gpa < warning_gpa_threshold:
-                analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
-                recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
-            elif gpa < 3.0:
-                analysis.append(f"GPA พอใช้ ({gpa:.2f})")
-                recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
-            else:
-                analysis.append(f"GPA ดี ({gpa:.2f})")
-                recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
-
-            if prediction == 'ไม่จบ':
-                recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือจากอาจารย์ที่ปรึกษา")
-                if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
-                    recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
-
-            # ตรวจสอบหมวดวิชาที่อ่อน (สำหรับ subject-based)
-            if data_format == 'subject_based':
-                weak_categories = []
-                for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
-                    gpa_col = f'gpa_{cat_key}'
-                    if gpa_col in processed_df.columns and processed_df.iloc[i].get(gpa_col, 0) < low_gpa_threshold:
-                        weak_categories.append(cat_key)
-
-                if weak_categories:
-                    recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
-
-            results.append({
-                'ชื่อ': student_name,
-                'การทำนาย': prediction,
-                'ความน่าจะเป็น': {
-                    'จบ': float(avg_prob_pass),
-                    'ไม่จบ': float(avg_prob_fail)
-                },
-                'เกรดเฉลี่ย': float(gpa),
-                'ระดับความเสี่ยง': risk_level,
-                'ความเชื่อมั่น': float(confidence),
-                'การวิเคราะห์': list(set(analysis)),
-                'คำแนะนำ': list(set(recommendations))
-            })
-
-        # สรุปผลรวม
-        total = len(results)
-        predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
-        predicted_fail = total - predicted_pass
-        pass_rate = (predicted_pass / total * 100) if total > 0 else 0
-
-        high_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'สูง')
-        medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
-        low_risk = total - high_risk - medium_risk
-
-        logger.info(f"🎉 Prediction completed: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
-
-        return jsonify({
-            'success': True,
-            'results': results,
-            'summary': {
-                'total': total,
-                'predicted_pass': predicted_pass,
-                'predicted_fail': predicted_fail,
-                'pass_rate': float(pass_rate),
-                'high_risk': high_risk,
-                'medium_risk': medium_risk,
-                'low_risk': low_risk
-            },
-            'model_used': model_filename,
-            'models_count': successful_models,
-            'data_format': data_format,
-            'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
-        })
+            logger.error(f"Error during prediction processing: {str(e)}")
+            return jsonify({'success': False, 'error': f'ข้อผิดพลาดในการประมวลผล: {str(e)}'})
 
     except Exception as e:
         logger.error(f"❌ Critical error during prediction: {str(e)}", exc_info=True)
