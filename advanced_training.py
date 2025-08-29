@@ -1289,7 +1289,6 @@ class UltimateModelTrainer:
                 
         except Exception as e:
             # เพิ่มหลังจาก imports ด้านบน
-from advanced_training import AdvancedFeatureEngineer, UltimateModelTrainer, ModelEvaluator
 
 # แทนที่ฟังก์ชัน train_ensemble_model เดิมด้วย:
 def train_ensemble_model(X, y):
