@@ -22,7 +22,7 @@ class Config:
     STATIC_FOLDER: str = os.path.join(BASE_DIR, 'static')
 
     # --- การตั้งค่าไฟล์อัพโหลด ---
-    MAX_CONTENT_LENGTH: int = 100 * 1024 * 1024  # เพิ่มเป็น 100MB
+    MAX_CONTENT_LENGTH: int = 100 * 1024 * 1024  # 100MB
     ALLOWED_EXTENSIONS: set = {'csv', 'xlsx', 'xls'}
 
     # --- การตั้งค่า Session ---
@@ -90,8 +90,8 @@ class Config:
         'ระบบคอมพิวเตอร์': {
             'keywords': [
                 'ระบบ', 'เครือข่าย', 'ปฏิบัติการ', 'ไมโครโปรเซสเซอร์', 'ดิจิตอล',
-                'vlsi', 'สื่อสาร', 'องค์ประกอบ', 'แอสแซมบลี', 'สถาปัตยกรรม',
-                'system', 'network', 'operating', 'microprocessor', 'digital'
+                'ไมโครคอนโทรลเลอร์', 'สถาปัตยกรรม', 'สื่อสาร', 'องค์ประกอบ', 'แอสแซมบลี',
+                'system', 'network', 'operating', 'microprocessor', 'digital', 'architecture'
             ],
             'color': '#ffc107',
             'icon': 'microchip'
@@ -100,7 +100,7 @@ class Config:
             'keywords': [
                 'ภาษา', 'อังกฤษ', 'ไทย', 'การสื่อสาร', 'สังคม', 'กีฬา', 'นันทนาการ',
                 'สุขภาพ', 'คุณภาพชีวิต', 'สารสนเทศ', 'ทักษะ', 'พัฒนา', 'ชีวิต', 'สิ่งแวดล้อม',
-                'english', 'thai', 'communication', 'social', 'sport', 'health'
+                'พลวัต', 'คุณค่ามนุษย์', 'english', 'thai', 'communication', 'social', 'sport', 'health'
             ],
             'color': '#6c757d',
             'icon': 'book'
@@ -124,77 +124,85 @@ class Config:
         }
     }
 
+    # อัพเดตข้อมูลวิชาให้ตรงกับไฟล์ HTML
     COURSES_DATA: List[Dict[str, Any]] = [
         # ปี 1 เทอม 1
         { "id": "00-000-012-002", "thaiName": "พลวัตทางสังคมและการอยู่ร่วมอย่างมีความสุข", "credit": 3, "prereq": [] },
         { "id": "00-000-032-101", "thaiName": "การสื่อสารภาษาไทย", "credit": 3, "prereq": [] },
         { "id": "00-000-031-101", "thaiName": "ภาษาอังกฤษเพื่อพัฒนาทักษะการเรียน", "credit": 3, "prereq": [] },
-        { "id": "02-005-011-109", "thaiName": "แคลคูลัส 1 สำหรับวิศวกร", "credit": 3, "prereq": [] },
+        { "id": "02-005-030-109", "thaiName": "แคลคูลัส 1 สำหรับวิศวกร", "credit": 3, "prereq": [] },
         { "id": "02-005-030-101", "thaiName": "ฟิสิกส์ 1", "credit": 3, "prereq": [] },
-        { "id": "02-005-030-102", "thaiName": "ปฏิบัติการฟิสิกส์ 1", "credit": 1, "prereq": ["02-005-030-101"] },
+        { "id": "02-005-030-110", "thaiName": "ปฏิบัติการฟิสิกส์ 1", "credit": 1, "prereq": ["02-005-030-101"] },
         { "id": "03-407-100-101", "thaiName": "การเขียนโปรแกรมคอมพิวเตอร์", "credit": 3, "prereq": [] },
-        { "id": "03-407-100-102", "thaiName": "การฝึกพื้นฐานทางวิศวกรรมคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-100-101"] },
+        { "id": "03-407-100-102", "thaiName": "การฝึกพื้นฐานทางวิศวกรรมคอมพิวเตอร์", "credit": 1, "prereq": ["03-407-100-101"] },
+        
         # ปี 1 เทอม 2
         { "id": "00-000-041-004", "thaiName": "เทคโนโลยีสารสนเทศเพื่อการดำเนินชีวิตอัจฉริยะ", "credit": 3, "prereq": [] },
         { "id": "00-000-031-102", "thaiName": "ภาษาอังกฤษเพื่อการสื่อสาร", "credit": 3, "prereq": [] },
         { "id": "00-000-022-003", "thaiName": "คุณค่ามนุษย์ : ศิลปะและวิทย์ในชีวิตประจำวัน", "credit": 3, "prereq": [] },
-        { "id": "02-005-011-110", "thaiName": "แคลคูลัส 2 สำหรับวิศวกร", "credit": 3, "prereq": ["02-005-011-109"] },
+        { "id": "02-005-011-110", "thaiName": "แคลคูลัส 2 สำหรับวิศวกร", "credit": 3, "prereq": ["02-005-030-109"] },
         { "id": "02-005-030-103", "thaiName": "ฟิสิกส์ 2", "credit": 3, "prereq": ["02-005-030-101"] },
-        { "id": "02-005-030-104", "thaiName": "ปฏิบัติการฟิสิกส์ 2", "credit": 1, "prereq": ["02-005-030-103"] },
-        { "id": "03-407-000-100", "thaiName": "บทนำสู่ทางวิศวกรรม", "credit": 2, "prereq": [] },
+        { "id": "02-005-030-113", "thaiName": "ปฏิบัติการฟิสิกส์ 2", "credit": 1, "prereq": ["02-005-030-110", "02-005-030-103"] },
+        { "id": "03-407-103-203", "thaiName": "บทนำสู่ทางวิศวกรรม", "credit": 3, "prereq": [] },
         { "id": "03-407-100-103", "thaiName": "อุปกรณ์อิเล็กทรอนิกส์สำหรับวิศวกรรมคอมพิวเตอร์", "credit": 3, "prereq": [] },
+        
         # ปี 2 เทอม 1
         { "id": "03-407-102-201", "thaiName": "โครงสร้างข้อมูลและอัลกอริทึม", "credit": 3, "prereq": ["03-407-100-101"] },
-        { "id": "03-407-101-201", "thaiName": "สถิติเพื่อวิศวกรรมคอมพิวเตอร์", "credit": 3, "prereq": [] },
-        { "id": "03-407-102-202", "thaiName": "การเขียนโปรแกรมเชิงวัตถุ", "credit": 3, "prereq": ["03-407-100-101"] },
-        { "id": "03-407-100-204", "thaiName": "การออกแบบวงจรดิจิทัล", "credit": 4, "prereq": [] },
+        { "id": "03-407-102-202", "thaiName": "สถิติเพื่อวิศวกรรมคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-100-101"] },
+        { "id": "03-407-102-203", "thaiName": "การเขียนโปรแกรมเชิงวัตถุ", "credit": 3, "prereq": ["03-407-100-101"] },
+        { "id": "03-407-102-204", "thaiName": "การออกแบบวงจรดิจิทัล", "credit": 3, "prereq": ["03-407-100-101"] },
         { "id": "03-407-100-205", "thaiName": "วงจรไฟฟ้าสำหรับวิศวกรรมคอมพิวเตอร์", "credit": 3, "prereq": ["02-005-030-101"] },
+        
         # ปี 2 เทอม 2
         { "id": "00-000-041-001", "thaiName": "ชีวิตและสิ่งแวดล้อม", "credit": 3, "prereq": [] },
         { "id": "03-407-103-201", "thaiName": "คณิตศาสตร์เชิงการจัดระเบียบสำหรับวิศวกรรม", "credit": 3, "prereq": [] },
-        { "id": "03-407-104-201", "thaiName": "การวัดและเครื่องมือสัญญาณดิจิทัล", "credit": 3, "prereq": [] },
+        { "id": "03-407-104-201", "thaiName": "การวัดและเครื่องมือสัญญาณดิจิทัล", "credit": 3, "prereq": ["03-407-100-101"] },
         { "id": "03-407-104-202", "thaiName": "วงจรอิเล็กทรอนิกส์สำหรับวิศวกรรมคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-100-103"] },
-        { "id": "03-407-104-203", "thaiName": "สถาปัตยกรรมคอมพิวเตอร์และระบบ", "credit": 3, "prereq": [] },
+        { "id": "03-407-104-203", "thaiName": "สถาปัตยกรรมคอมพิวเตอร์และระบบ", "credit": 3, "prereq": ["03-407-102-201"] },
         { "id": "03-407-104-204", "thaiName": "ปฏิบัติการสถาปัตยกรรมคอมพิวเตอร์และระบบ", "credit": 1, "prereq": ["03-407-104-203"] },
-        { "id": "03-407-102-303", "thaiName": "ระบบฐานข้อมูล", "credit": 3, "prereq": [] },
+        { "id": "03-407-102-303", "thaiName": "ระบบฐานข้อมูล", "credit": 3, "prereq": ["03-407-102-201"] },
+        
         # ปี 3 เทอม 1
-        { "id": "00-000-031-204", "thaiName": "การสนทนาภาษาอังกฤษในชีวิตประจำวัน", "credit": 3, "prereq": ["00-000-031-101", "00-000-031-102"] },
-        { "id": "03-407-104-305", "thaiName": "ไมโครคอนโทรลเลอร์", "credit": 3, "prereq": ["03-407-100-204"] },
-        { "id": "03-407-103-202", "thaiName": "การสื่อสารข้อมูล", "credit": 3, "prereq": [] },
-        { "id": "03-407-102-404", "thaiName": "วิศวกรรมซอฟต์แวร์", "credit": 3, "prereq": ["03-407-102-201"] },
+        { "id": "00-000-031-204", "thaiName": "การสนทนาภาษาอังกฤษในชีวิตประจำวัน", "credit": 3, "prereq": [] },
+        { "id": "03-407-104-205", "thaiName": "ไมโครคอนโทรลเลอร์", "credit": 3, "prereq": ["03-407-102-204"] },
+        { "id": "03-407-103-206", "thaiName": "การสื่อสารข้อมูล", "credit": 3, "prereq": ["03-407-102-201"] },
+        { "id": "03-407-102-404", "thaiName": "วิศวกรรมซอฟต์แวร์", "credit": 3, "prereq": ["03-407-102-203"] },
         { "id": "03-407-106-303", "thaiName": "การเขียนโปรแกรมเว็บ", "credit": 3, "prereq": ["03-407-100-101"] },
-        { "id": "03-407-106-409", "thaiName": "การค้นหาความรู้และเหมืองข้อมูล", "credit": 3, "prereq": ["03-407-103-201"] },
+        { "id": "03-407-106-409", "thaiName": "การค้นหาความรู้และเหมืองข้อมูล", "credit": 3, "prereq": ["03-407-102-303"] },
+        
         # ปี 3 เทอม 2
-        { "id": "00-000-031-203", "thaiName": "การอ่านภาษาอังกฤษเพื่อวัตถุประสงค์ทางวิชาการ", "credit": 3, "prereq": ["00-000-031-101", "00-000-031-102"] },
-        { "id": "03-407-103-304", "thaiName": "ระบบปฏิบัติการ", "credit": 3, "prereq": ["03-407-104-203"] },
-        { "id": "03-407-101-302", "thaiName": "โครงงานวิศวกรรมคอมพิวเตอร์ 1", "credit": 3, "prereq": [] },
-        { "id": "03-407-106-407", "thaiName": "วิทยาการมองเห็นด้วยคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-102-201"] },
-        { "id": "03-407-105-301", "thaiName": "อินเทอร์เน็ตของสรรพสิ่ง", "credit": 3, "prereq": ["03-407-104-305"] },
-        { "id": "03-407-103-303", "thaiName": "เครือข่ายคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-103-202"] },
+        { "id": "00-000-031-203", "thaiName": "การอ่านภาษาอังกฤษเพื่อวัตถุประสงค์ทางวิชาการ", "credit": 3, "prereq": [] },
+        { "id": "03-407-103-304", "thaiName": "ระบบปฏิบัติการ", "credit": 3, "prereq": ["03-407-102-201"] },
+        { "id": "03-407-101-207", "thaiName": "โครงงานวิศวกรรมคอมพิวเตอร์ 1", "credit": 3, "prereq": ["03-407-102-201", "03-407-102-303"] },
+        { "id": "03-407-106-302", "thaiName": "วิทยาการมองเห็นด้วยคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-102-404"] },
+        { "id": "03-407-105-305", "thaiName": "อินเทอร์เน็ตของสรรพสิ่ง", "credit": 3, "prereq": ["03-407-100-101"] },
+        { "id": "03-407-103-305", "thaiName": "เครือข่ายคอมพิวเตอร์", "credit": 3, "prereq": ["03-407-103-206"] },
+        
         # ปี 4 เทอม 1
-        { "id": "00-000-031-205", "thaiName": "การเขียนภาษาอังกฤษในชีวิตประจำวัน", "credit": 3, "prereq": ["00-000-031-101", "00-000-031-102"] },
-        { "id": "03-407-108-301", "thaiName": "เตรียมความพร้อมสหกิจศึกษา", "credit": 1, "prereq": [] },
-        { "id": "03-407-101-403", "thaiName": "โครงงานวิศวกรรมคอมพิวเตอร์ 2", "credit": 3, "prereq": ["03-407-101-302"] },
+        { "id": "00-000-031-205", "thaiName": "การเขียนภาษาอังกฤษในชีวิตประจำวัน", "credit": 3, "prereq": ["00-000-031-204"] },
+        { "id": "03-407-108-301", "thaiName": "เตรียมความพร้อมสหกิจศึกษา", "credit": 1, "prereq": ["03-407-100-101"] },
+        { "id": "03-407-104-301", "thaiName": "โครงงานวิศวกรรมคอมพิวเตอร์ 2", "credit": 3, "prereq": ["03-407-101-207"] },
         { "id": "03-407-106-411", "thaiName": "การวิเคราะห์ข้อมูลขนาดใหญ่", "credit": 3, "prereq": ["03-407-106-409"] },
-        { "id": "03-407-105-404", "thaiName": "การพัฒนาแอปพลิเคชันสำหรับอุปกรณ์พกพา", "credit": 3, "prereq": ["03-407-108-301"] },
-        { "id": "03-407-106-408", "thaiName": "ปัญญาประดิษฐ์", "credit": 3, "prereq": ["03-407-103-201"] },
+        { "id": "03-407-105-404", "thaiName": "การพัฒนาแอปพลิเคชันสำหรับอุปกรณ์พกพา", "credit": 3, "prereq": ["03-407-102-203"] },
+        { "id": "03-407-106-408", "thaiName": "ปัญญาประดิษฐ์", "credit": 3, "prereq": ["03-407-102-201"] },
+        
         # ปี 4 เทอม 2
         { "id": "03-407-108-402", "thaiName": "สหกิจศึกษาทางวิศวกรรมคอมพิวเตอร์", "credit": 6, "prereq": ["03-407-108-301"] },
     ]
 
     ALL_TERMS_DATA: List[Dict[str, Any]] = [
-        { "year": 1, "term": 1, "ids": ["00-000-012-002","00-000-032-101","00-000-031-101","02-005-011-109","02-005-030-101","02-005-030-102","03-407-100-101","03-407-100-102"]},
-        { "year": 1, "term": 2, "ids": ["00-000-041-004","00-000-031-102","00-000-022-003","02-005-011-110","02-005-030-103","02-005-030-104","03-407-000-100","03-407-100-103"]},
-        { "year": 2, "term": 1, "ids": ["03-407-102-201","03-407-101-201","03-407-102-202","03-407-100-204","03-407-100-205"]},
+        { "year": 1, "term": 1, "ids": ["00-000-012-002","00-000-032-101","00-000-031-101","02-005-030-109","02-005-030-101","02-005-030-110","03-407-100-101","03-407-100-102"]},
+        { "year": 1, "term": 2, "ids": ["00-000-041-004","00-000-031-102","00-000-022-003","02-005-011-110","02-005-030-103","02-005-030-113","03-407-103-203","03-407-100-103"]},
+        { "year": 2, "term": 1, "ids": ["03-407-102-201","03-407-102-202","03-407-102-203","03-407-102-204","03-407-100-205"]},
         { "year": 2, "term": 2, "ids": ["00-000-041-001","03-407-103-201","03-407-104-201","03-407-104-202","03-407-104-203","03-407-104-204","03-407-102-303"]},
-        { "year": 3, "term": 1, "ids": ["00-000-031-204","03-407-104-305","03-407-103-202","03-407-102-404","03-407-106-303","03-407-106-409"]},
-        { "year": 3, "term": 2, "ids": ["00-000-031-203","03-407-103-304","03-407-101-302","03-407-106-407","03-407-105-301","03-407-103-303"]},
-        { "year": 4, "term": 1, "ids": ["00-000-031-205","03-407-108-301","03-407-101-403","03-407-106-411","03-407-105-404","03-407-106-408"]},
+        { "year": 3, "term": 1, "ids": ["00-000-031-204","03-407-104-205","03-407-103-206","03-407-102-404","03-407-106-303","03-407-106-409"]},
+        { "year": 3, "term": 2, "ids": ["00-000-031-203","03-407-103-304","03-407-101-207","03-407-106-302","03-407-105-305","03-407-103-305"]},
+        { "year": 4, "term": 1, "ids": ["00-000-031-205","03-407-108-301","03-407-104-301","03-407-106-411","03-407-105-404","03-407-106-408"]},
         { "year": 4, "term": 2, "ids": ["03-407-108-402"]},
     ]
 
     CORE_SUBJECTS_IDS: List[str] = [
-        "02-005-011-109",  # แคลคูลัส 1 สำหรับวิศวกร
+        "02-005-030-109",  # แคลคูลัส 1 สำหรับวิศวกร
         "02-005-030-101",  # ฟิสิกส์ 1
         "03-407-100-101",  # การเขียนโปรแกรมคอมพิวเตอร์
         "03-407-102-201",  # โครงสร้างข้อมูลและอัลกอริทึม
@@ -208,52 +216,52 @@ class Config:
     ML_CONFIG: Dict[str, Any] = {
         'random_state': 42,
         'test_size': 0.2,
-        'cv_folds': 10,  # เพิ่มเป็น 10 folds สำหรับ accuracy สูงสุด
-        'n_estimators': 500,  # เพิ่มจำนวน trees
+        'cv_folds': 10,
+        'n_estimators': 500,
         'max_depth': 15,
         'min_samples_split': 2,
         'min_samples_leaf': 1,
         'max_features': 'sqrt',
         'bootstrap': True,
         'oob_score': True,
-        'n_jobs': 4,  # เปลี่ยนเป็นค่าที่แน่นอนเพื่อแก้ปัญหา
-        'verbose': 0  # ปิด verbose เพื่อหลีกเลี่ยง rate limit
+        'n_jobs': 4,
+        'verbose': 0
     }
 
-    # Hyperparameters สำหรับ GridSearchCV - FULL RANGE สำหรับ High Spec
+    # Hyperparameters สำหรับ GridSearchCV
     MODEL_HYPERPARAMETERS: Dict[str, Dict[str, List[Any]]] = {
         'RandomForest': {
-            'n_estimators': [100, 200],  # ลดลง
-            'max_depth': [5, 10, None],  # ลดลง
+            'n_estimators': [100, 200],
+            'max_depth': [5, 10, None],
             'min_samples_split': [2, 5],
             'min_samples_leaf': [1, 2],
-            'max_features': ['sqrt', None], # ลดลง
+            'max_features': ['sqrt', None],
             'bootstrap': [True],
             'class_weight': ['balanced', None]
         },
         'GradientBoosting': {
-            'n_estimators': [100, 200], # ลดลง
-            'learning_rate': [0.05, 0.1, 0.2], # ลดลง
-            'max_depth': [3, 5, 7], # ลดลง
+            'n_estimators': [100, 200],
+            'learning_rate': [0.05, 0.1, 0.2],
+            'max_depth': [3, 5, 7],
             'min_samples_split': [2, 5],
             'min_samples_leaf': [1, 2],
             'subsample': [0.8, 1.0],
-            'max_features': ['sqrt', None] # ลดลง
+            'max_features': ['sqrt', None]
         },
         'LogisticRegression': {
-            'C': [0.1, 1, 10], # ลดลง
-            'penalty': ['l1', 'l2'], # ลดลง
-            'solver': ['liblinear'], # ลดลง
-            'max_iter': [1000, 2000], # ลดลง
+            'C': [0.1, 1, 10],
+            'penalty': ['l1', 'l2'],
+            'solver': ['liblinear'],
+            'max_iter': [1000, 2000],
             'class_weight': ['balanced', None]
         },
         'SVM': {
-            'C': [1, 10], # ลดลง
-            'kernel': ['linear', 'rbf'], # ลดลง
-            'gamma': ['scale'], # ลดลง
+            'C': [1, 10],
+            'kernel': ['linear', 'rbf'],
+            'gamma': ['scale'],
             'class_weight': ['balanced', None]
         },
-        'XGBoost': {  # ลดลง
+        'XGBoost': {
             'n_estimators': [100, 200],
             'learning_rate': [0.05, 0.1],
             'max_depth': [3, 5],
@@ -261,24 +269,24 @@ class Config:
         }
     }
 
-    # Advanced Prediction Config สำหรับ High Performance
+    # Advanced Prediction Config
     ADVANCED_PREDICTION_CONFIG: Dict[str, Any] = {
         'enable_pattern_analysis': True,
-        'pattern_window_size': 5,  # เพิ่มจาก 3
-        'confidence_threshold_high': 0.85,  # เพิ่ม threshold
+        'pattern_window_size': 5,
+        'confidence_threshold_high': 0.85,
         'confidence_threshold_medium': 0.65,
         'prerequisite_weight': 0.6,
         'trend_weight': 0.3,
         'category_weight': 0.1,
-        'subject_correlation_threshold': 0.4,  # ลดลงเพื่อจับ correlation มากขึ้น
+        'subject_correlation_threshold': 0.4,
         'grade_variance_threshold': 0.8,
-        'enable_deep_analysis': True,  # เพิ่ม option สำหรับ deep analysis
-        'enable_ensemble_voting': True,  # ใช้ ensemble voting
-        'enable_feature_selection': True,  # เพิ่ม feature selection
-        'max_features_to_select': 50  # จำนวน features สูงสุด
+        'enable_deep_analysis': True,
+        'enable_ensemble_voting': True,
+        'enable_feature_selection': True,
+        'max_features_to_select': 50
     }
 
-    # Pattern Analysis Config - Enhanced
+    # Pattern Analysis Config
     PATTERN_ANALYSIS_CONFIG: Dict[str, Any] = {
         'min_grades_for_trend': 3,
         'trend_smoothing_factor': 0.3,
@@ -289,33 +297,33 @@ class Config:
         'seasonal_adjustment': True,
         'weighted_recent_performance': True,
         'recent_performance_weight': 0.5,
-        'enable_clustering': True,  # เพิ่ม clustering analysis
+        'enable_clustering': True,
         'n_clusters': 5,
-        'enable_anomaly_detection': True,  # เพิ่ม anomaly detection
+        'enable_anomaly_detection': True,
         'anomaly_threshold': 0.95
     }
 
-    # Advanced ML Config - FULL FEATURES
+    # Advanced ML Config
     ADVANCED_ML_CONFIG: Dict[str, Any] = {
         'enable_ensemble_methods': True,
-        'enable_deep_learning': False,  # ปิดไว้ก่อน ถ้าต้องการใช้ต้องติดตั้ง tensorflow
+        'enable_deep_learning': False,
         'enable_transfer_learning': True,
         'enable_incremental_learning': True,
         'auto_hyperparameter_tuning': True,
-        'cross_validation_folds': 10,  # เพิ่ม folds
+        'cross_validation_folds': 10,
         'early_stopping': True,
         'model_comparison_enabled': True,
         'feature_importance_analysis': True,
         'model_interpretability': True,
-        'enable_stacking': True,  # เพิ่ม stacking
-        'enable_voting': True,  # เพิ่ม voting classifier
-        'enable_calibration': True,  # เพิ่ม probability calibration
-        'parallel_processing': True,  # ใช้ parallel processing
-        'cache_models': True,  # cache models สำหรับความเร็ว
-        'optimize_memory': False,  # ไม่ต้อง optimize memory เพราะมี spec สูง
+        'enable_stacking': True,
+        'enable_voting': True,
+        'enable_calibration': True,
+        'parallel_processing': True,
+        'cache_models': True,
+        'optimize_memory': False,
     }
 
-    # Validation Config - Enhanced
+    # Validation Config
     VALIDATION_CONFIG: Dict[str, Any] = {
         'cross_validation_enabled': True,
         'stratified_cv': True,
@@ -327,13 +335,13 @@ class Config:
         'validation_metrics': [
             'accuracy', 'precision', 'recall', 'f1_score',
             'roc_auc', 'balanced_accuracy', 'matthews_corrcoef',
-            'cohen_kappa', 'log_loss', 'brier_score'  # เพิ่ม metrics
+            'cohen_kappa', 'log_loss', 'brier_score'
         ],
-        'bootstrap_confidence': True,  # คำนวณ confidence intervals
+        'bootstrap_confidence': True,
         'n_bootstrap_samples': 1000
     }
 
-    # Performance Analytics Config - FULL FEATURES
+    # Performance Analytics Config
     PERFORMANCE_ANALYTICS_CONFIG: Dict[str, bool] = {
         'track_learning_patterns': True,
         'analyze_study_habits': True,
@@ -343,15 +351,15 @@ class Config:
         'benchmark_against_peers': True,
         'seasonal_performance_analysis': True,
         'prerequisite_impact_analysis': True,
-        'course_difficulty_analysis': True,  # เพิ่ม
-        'instructor_effect_analysis': True,  # เพิ่ม
-        'time_series_forecasting': True,  # เพิ่ม
-        'cohort_analysis': True,  # เพิ่ม
-        'retention_prediction': True,  # เพิ่ม
-        'intervention_effectiveness': True  # เพิ่ม
+        'course_difficulty_analysis': True,
+        'instructor_effect_analysis': True,
+        'time_series_forecasting': True,
+        'cohort_analysis': True,
+        'retention_prediction': True,
+        'intervention_effectiveness': True
     }
 
-    # Enhanced Evaluation Metrics
+    # Evaluation Metrics
     EVALUATION_METRICS: Dict[str, Any] = {
         'primary_metrics': ['accuracy', 'precision', 'recall', 'f1_score'],
         'secondary_metrics': ['auc_roc', 'balanced_accuracy', 'matthews_corrcoef', 'cohen_kappa'],
@@ -360,8 +368,8 @@ class Config:
             'early_warning_precision': 0.85,
             'intervention_effectiveness': 0.75,
             'prediction_stability': 0.8,
-            'fairness_metric': 0.9,  # เพิ่ม fairness analysis
-            'explainability_score': 0.85  # เพิ่ม explainability
+            'fairness_metric': 0.9,
+            'explainability_score': 0.85
         },
         'benchmark_thresholds': {
             'excellent': 0.95,
@@ -371,13 +379,13 @@ class Config:
         }
     }
 
-    # Cache Configuration สำหรับ Performance
+    # Cache Configuration
     CACHE_CONFIG: Dict[str, Any] = {
         'enable_caching': True,
-        'cache_type': 'simple',  # หรือ 'redis' ถ้ามี Redis
-        'cache_timeout': 3600,  # 1 hour
+        'cache_type': 'simple',
+        'cache_timeout': 3600,
         'cache_key_prefix': 'ml_model_',
-        'max_cache_size': 1000,  # MB
+        'max_cache_size': 1000,
         'cache_predictions': True,
         'cache_features': True,
         'cache_models': True
@@ -386,28 +394,28 @@ class Config:
     # Parallel Processing Config
     PARALLEL_CONFIG: Dict[str, Any] = {
         'enable_parallel': True,
-        'n_jobs': -1,  # ใช้ CPU ทั้งหมด
-        'backend': 'threading',  # หรือ 'multiprocessing'
+        'n_jobs': -1,
+        'backend': 'threading',
         'batch_size': 1000,
         'chunk_size': 100,
-        'max_workers': None,  # None = auto detect
-        'prefer': 'threads'  # threads หรือ processes
+        'max_workers': None,
+        'prefer': 'threads'
     }
 
     # Optimization Config
     OPTIMIZATION_CONFIG: Dict[str, Any] = {
         'enable_optimization': True,
-        'optimization_method': 'bayesian',  # bayesian, grid, random
-        'n_iter': 100,  # สำหรับ bayesian optimization
+        'optimization_method': 'bayesian',
+        'n_iter': 100,
         'scoring': 'roc_auc',
         'refit': True,
         'return_train_score': True,
-        'enable_pruning': True,  # pruning สำหรับ decision trees
-        'enable_quantization': False,  # model quantization
-        'enable_distillation': False  # knowledge distillation
+        'enable_pruning': True,
+        'enable_quantization': False,
+        'enable_distillation': False
     }
 
-    # --- Logging Configuration (Optimized for Railway) ---
+    # --- Logging Configuration ---
     LOGGING_CONFIG: Dict[str, Any] = {
         'version': 1,
         'disable_existing_loggers': False,
@@ -424,7 +432,7 @@ class Config:
         },
         'handlers': {
             'default': {
-                'level': 'WARNING',  # ตั้งเป็น WARNING เพื่อลด logs
+                'level': 'WARNING',
                 'formatter': 'standard',
                 'class': 'logging.StreamHandler',
                 'stream': 'ext://sys.stdout',
@@ -448,8 +456,8 @@ class Config:
         },
         'loggers': {
             '': {
-                'handlers': ['default'],  # ใช้แค่ default handler
-                'level': 'WARNING',  # ตั้งเป็น WARNING
+                'handlers': ['default'],
+                'level': 'WARNING',
                 'propagate': False
             },
             'error': {
@@ -460,7 +468,7 @@ class Config:
         }
     }
 
-    # ส่วนที่เหลือคงเดิม...
+    # Messages
     MESSAGES = {
         'success': {
             'upload': 'อัพโหลดไฟล์สำเร็จ',
@@ -496,35 +504,33 @@ class DevelopmentConfig(Config):
     TESTING: bool = False
     ML_CONFIG: Dict[str, Any] = Config.ML_CONFIG.copy()
     ML_CONFIG.update({
-        'cv_folds': 3,  # ลดลงเพื่อความเร็วในการพัฒนา
-        'n_jobs': 1,  # ใช้ single thread เพื่อ debug
-        'verbose': 1  # เปิด verbose เพื่อดู progress
+        'cv_folds': 3,
+        'n_jobs': 1,
+        'verbose': 1
     })
 
 
 class ProductionConfig(Config):
-    """การตั้งค่าสำหรับ Production - Optimized for Railway High Spec"""
+    """การตั้งค่าสำหรับ Production"""
     DEBUG: bool = False
     TESTING: bool = False
     SESSION_COOKIE_SECURE: bool = True
     SESSION_COOKIE_HTTPONLY: bool = True
     PERMANENT_SESSION_LIFETIME: timedelta = timedelta(hours=2)
     
-    # Override logging สำหรับ Railway
     LOGGING_CONFIG = Config.LOGGING_CONFIG.copy()
-    LOGGING_CONFIG['loggers']['']['level'] = 'WARNING'  # ลด log level
+    LOGGING_CONFIG['loggers']['']['level'] = 'WARNING'
     
-    # ML Config for Production
     ML_CONFIG: Dict[str, Any] = Config.ML_CONFIG.copy()
     ML_CONFIG.update({
-        'n_jobs': 4, # Fix for parallel processing on Railway
-        'cv_folds': 5, # Reduce for faster training and less memory usage
+        'n_jobs': 4,
+        'cv_folds': 5,
     })
 
     MODEL_HYPERPARAMETERS: Dict[str, Dict[str, List[Any]]] = {
         'RandomForest': {
-            'n_estimators': [100, 200],  # Reduced
-            'max_depth': [5, 10],    # Reduced
+            'n_estimators': [100, 200],
+            'max_depth': [5, 10],
             'min_samples_split': [2, 5],
             'min_samples_leaf': [1, 2],
             'max_features': ['sqrt', None],
@@ -532,13 +538,13 @@ class ProductionConfig(Config):
             'class_weight': ['balanced', None]
         },
         'GradientBoosting': {
-            'n_estimators': [100, 200], # Reduced
+            'n_estimators': [100, 200],
             'learning_rate': [0.1],
             'max_depth': [3, 5],
             'subsample': [0.8, 1.0],
         },
         'LogisticRegression': {
-            'C': [1, 10], # Reduced
+            'C': [1, 10],
             'penalty': ['l2'],
             'solver': ['liblinear'],
         },
@@ -548,12 +554,12 @@ class ProductionConfig(Config):
         }
     }
     
-    # Parallel Processing Config
     PARALLEL_CONFIG: Dict[str, Any] = Config.PARALLEL_CONFIG.copy()
     PARALLEL_CONFIG.update({
-        'n_jobs': 4, # Fix for parallel processing
+        'n_jobs': 4,
         'backend': 'threading',
     })
+
 
 class TestingConfig(Config):
     """การตั้งค่าสำหรับการทดสอบ"""
@@ -572,10 +578,10 @@ config: Dict[str, type[Config]] = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
     'testing': TestingConfig,
-    'default': ProductionConfig  # ใช้ Production เป็น default
+    'default': ProductionConfig
 }
 
 def get_config() -> Config:
     """ดึงการตั้งค่าตาม Environment Variable"""
-    env: str = os.environ.get('FLASK_ENV', 'production')  # default เป็น production
+    env: str = os.environ.get('FLASK_ENV', 'production')
     return config.get(env, config['default'])()
