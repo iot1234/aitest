@@ -1288,8 +1288,8 @@ class UltimateModelTrainer:
                 return X, y
                 
         except Exception as e:
-            # เพิ่มหลังจาก imports ด้านบน
-
+            pass
+            
 # แทนที่ฟังก์ชัน train_ensemble_model เดิมด้วย:
 def train_ensemble_model(X, y):
     """Enhanced Ensemble model training with Ultimate Accuracy"""
@@ -1311,12 +1311,12 @@ def train_ensemble_model(X, y):
         eval_results = evaluator.comprehensive_evaluation(model, X, y)
         
         logger.info(f"✅ Model training completed:")
-        logger.info(f"   Accuracy: {metrics['accuracy']:.3f}")
-        logger.info(f"   Precision: {metrics['precision']:.3f}")
-        logger.info(f"   Recall: {metrics['recall']:.3f}")
-        logger.info(f"   F1-Score: {metrics['f1_score']:.3f}")
+        logger.info(f"    Accuracy: {metrics['accuracy']:.3f}")
+        logger.info(f"    Precision: {metrics['precision']:.3f}")
+        logger.info(f"    Recall: {metrics['recall']:.3f}")
+        logger.info(f"    F1-Score: {metrics['f1_score']:.3f}")
         if 'roc_auc' in metrics:
-            logger.info(f"   ROC-AUC: {metrics['roc_auc']:.3f}")
+            logger.info(f"    ROC-AUC: {metrics['roc_auc']:.3f}")
         
         return {
             'models': {'ultimate_ensemble': model},
