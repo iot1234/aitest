@@ -1,3 +1,5 @@
+# แก้ไขส่วนบนของ app.py
+from advanced_training import AdvancedFeatureEngineer
 from dotenv import load_dotenv
 import sys
 
@@ -1125,12 +1127,9 @@ def train_ensemble_model(X, y):
 
 @app.route('/train', methods=['POST'])
 def train_model():
-    """Handles model training with ULTIMATE accuracy"""
+    """Handles model training with the uploaded file."""
     try:
-        # ✅ เพิ่มบรรทัดนี้ - Import ที่นี่เพื่อหลีกเลี่ยง circular import
-        from advanced_training import AdvancedFeatureEngineer, train_ensemble_model
-        
-        logger.info("🚀 Starting ULTIMATE model training process...")
+        logger.info("🚀 Starting ADVANCED model training process...")
         data = request.get_json()
         filename = data.get('filename')
         use_advanced = data.get('use_advanced_training', True)  # Default to advanced
@@ -1174,53 +1173,76 @@ def train_model():
         data_format = detect_data_format(df)
         logger.info(f"📊 Detected data format for training: {data_format}")
 
-        # ใช้ ULTIMATE Feature Engineering
-        logger.info("🧬 Using ULTIMATE Context-Aware Training Strategy")
-        
-        # สร้าง Feature Engineer - ตอนนี้ AdvancedFeatureEngineer ถูก import แล้ว
-        engineer = AdvancedFeatureEngineer(
-            grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
-        )
-        
-        # เตรียมข้อมูลแบบ Advanced
-        X, y = engineer.prepare_training_data(df)
-        
-        if len(X) == 0:
-            return jsonify({'success': False, 'error': 'Could not prepare training data'})
-        
-        # บันทึก course profiles สำหรับใช้ในการ predict
-        course_profiles = engineer.course_profiles
-        
+        # เลือกวิธีการประมวลผล
+        if use_advanced and data_format == 'subject_based':
+            logger.info("🧬 Using ADVANCED Context-Aware Training Strategy")
+            
+            # ใช้ Advanced Feature Engineering
+            engineer = AdvancedFeatureEngineer(
+                grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+            )
+            
+            # เตรียมข้อมูลแบบ Advanced
+            X, y = engineer.prepare_training_data(df)
+            
+            if len(X) == 0:
+                return jsonify({'success': False, 'error': 'Could not prepare training data'})
+            
+            # บันทึก course profiles สำหรับใช้ในการ predict
+            course_profiles = engineer.course_profiles
+            
+        else:
+            # ใช้วิธีเดิม
+            logger.info("📊 Using standard training strategy")
+            if data_format == 'subject_based':
+                processed_df = process_subject_data(df)
+            elif data_format == 'gpa_based':
+                processed_df = process_gpa_data(df)
+            else:
+                return jsonify({'success': False, 'error': 'Unsupported data format.'})
+
+            feature_cols = [col for col in processed_df.columns if col not in ['ชื่อ', 'graduated']]
+            X = processed_df[feature_cols].fillna(0)
+            y = processed_df['graduated']
+            course_profiles = None
+
         min_students_for_training = app.config['DATA_CONFIG']['min_students_for_training']
         if len(X) < min_students_for_training:
             return jsonify({'success': False, 
                             'error': f'Insufficient data ({min_students_for_training} samples required).'})
 
-        logger.info(f"🎯 Training data prepared: {len(X)} samples, {X.shape[1]} advanced features")
+        logger.info(f"🎯 Training data prepared: {len(X)} samples, {X.shape[1]} features")
         logger.info(f"📈 Label distribution: {y.value_counts().to_dict()}")
 
-        # เทรนโมเดลด้วย Ultimate Ensemble
-        logger.info("🤖 Starting ULTIMATE ensemble model training...")
+        # เทรนโมเดล
+        logger.info("🤖 Starting ensemble model training...")
         model_result = train_ensemble_model(X, y)
 
-        # Extract top features
+        # คำนวณ feature importance
         feature_importances = {}
-        if 'feature_importance' in model_result:
-            feature_importances = model_result['feature_importance'].get('top_features', {})
+        if 'rf' in model_result['models']:
+            rf_model = model_result['models']['rf']
+            if hasattr(rf_model, 'feature_importances_'):
+                feature_cols = X.columns.tolist()
+                importances = pd.Series(
+                    rf_model.feature_importances_, 
+                    index=feature_cols
+                ).sort_values(ascending=False)
+                feature_importances = importances.head(10).to_dict()
 
         # สร้างชื่อไฟล์โมเดล
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        model_filename = f'{data_format}_model_ultimate_{timestamp}.joblib'
+        training_type = 'advanced' if use_advanced else 'standard'
+        model_filename = f'{data_format}_model_{training_type}_{timestamp}.joblib'
 
         # สร้างข้อมูลโมเดลสำหรับบันทึก
         model_data = {
             'models': model_result['models'],
-            'scaler': model_result.get('scaler'),
+            'scaler': model_result['scaler'],
             'feature_columns': X.columns.tolist(),
             'data_format': data_format,
-            'training_type': 'ultimate',
-            'course_profiles': course_profiles,
-            'threshold': model_result.get('threshold', 0.5),
+            'training_type': training_type,
+            'course_profiles': course_profiles,  # บันทึก course DNA
             'created_at': datetime.now().isoformat(),
             'training_data_info': {
                 'rows': len(X),
@@ -1233,57 +1255,45 @@ def train_model():
                 'accuracy': model_result['accuracy'],
                 'precision': model_result['precision'],
                 'recall': model_result['recall'],
-                'f1_score': model_result['f1_score'],
-                'roc_auc': model_result.get('roc_auc', 0),
-                'matthews_corrcoef': model_result.get('matthews_corrcoef', 0)
+                'f1_score': model_result['f1_score']
             },
             'feature_importances': feature_importances,
-            'evaluation_results': model_result.get('evaluation_results', {}),
             'hyperparameters': {
-                'ensemble_type': 'stacking_with_7_models',
-                'optimization': 'bayesian',
-                'threshold_optimized': True
+                'best_rf_params': model_result.get('best_rf_params', {}),
+                'best_gb_params': model_result.get('best_gb_params', {}),
+                'best_lr_params': model_result.get('best_lr_params', {})
             }
         }
 
         # บันทึกโมเดล
-        logger.info(f"💾 Saving ULTIMATE model: {model_filename}")
+        logger.info(f"💾 Saving model: {model_filename}")
         save_success = storage.save_model(model_data, model_filename)
         
         if save_success:
-            logger.info(f"✅ ULTIMATE Model saved successfully: {model_filename}")
+            logger.info(f"✅ Model saved successfully: {model_filename}")
         else:
             logger.warning(f"⚠️ Model save failed, but continuing...")
 
-        logger.info("🎉 ULTIMATE Model training completed successfully!")
+        logger.info("🎉 Model training completed successfully!")
 
         return jsonify({
             'success': True,
             'model_filename': model_filename,
-            'training_type': 'ultimate',
+            'training_type': training_type,
             'accuracy': model_result['accuracy'],
             'precision': model_result['precision'],
             'recall': model_result['recall'],
             'f1_score': model_result['f1_score'],
-            'roc_auc': model_result.get('roc_auc', 0),
-            'matthews_corrcoef': model_result.get('matthews_corrcoef', 0),
             'training_samples': len(X),
             'validation_samples': model_result.get('validation_samples', 0),
             'features_count': X.shape[1],
             'data_format': data_format,
-            'feature_importances': list(feature_importances.keys())[:10],  # Top 10 features
-            'threshold': model_result.get('threshold', 0.5),
-            'evaluation_metrics': {
-                'bootstrap_accuracy_95ci': model_result.get('evaluation_results', {})
-                    .get('bootstrap', {}).get('accuracy_ci_95', [0, 0]),
-                'cross_validation_mean': model_result.get('evaluation_results', {})
-                    .get('stratified_cv', {}).get('test_scores', {}).get('test_accuracy', 0)
-            },
+            'feature_importances': feature_importances,
             'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
         })
 
     except Exception as e:
-        logger.error(f"❌ Error during ULTIMATE model training: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error during model training: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': f'Training error: {str(e)}'})
 
 
@@ -1509,168 +1519,153 @@ def predict():
         X_predict = X_predict.fillna(0)
 
         # ทำนายผล
-        try:
-            trained_models = model_info.get('models', {})
-            scaler = model_info.get('scaler')
-            threshold = loaded_model_data.get('threshold', 0.5)
+        trained_models = model_info.get('models', {})
+        scaler = model_info.get('scaler')
+        
+        if not trained_models:
+            return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
 
-            if not trained_models:
-                return jsonify({'success': False, 'error': 'ไม่พบโมเดลที่ฝึกแล้วในไฟล์'})
-
-            # ตรวจสอบว่าเป็น Ultimate model หรือไม่
-            if 'ultimate_ensemble' in trained_models:
-                # Use Ultimate model with optimized threshold
-                predictions, probabilities = predict_with_threshold(loaded_model_data, X_predict)
-                predictions_proba_list = [probabilities]
-                successful_models = 1
-                model_errors = []
-            else:
-                # Use old ensemble approach
-                predictions_proba_list = []
-                successful_models = 0
-                model_errors = []
+        predictions_proba_list = []
+        successful_models = 0
+        model_errors = []
+        
+        for name, model in trained_models.items():
+            try:
+                logger.debug(f"Predicting with {name} model...")
+                if name == 'lr' and scaler is not None:
+                    X_scaled = scaler.transform(X_predict)
+                    pred_proba = model.predict_proba(X_scaled)
+                else:
+                    pred_proba = model.predict_proba(X_predict)
                 
-                for name, model in trained_models.items():
-                    try:
-                        logger.debug(f"Predicting with {name} model...")
-                        if name == 'lr' and scaler is not None:
-                            X_scaled = scaler.transform(X_predict)
-                            pred_proba = model.predict_proba(X_scaled)
-                        else:
-                            pred_proba = model.predict_proba(X_predict)
-                        
-                        # ตรวจสอบ shape ของ output
-                        if pred_proba.shape[1] == 1:
-                            pred_proba = np.hstack((1 - pred_proba, pred_proba))
-                        
-                        predictions_proba_list.append(pred_proba)
-                        successful_models += 1
-                        logger.debug(f"✅ Prediction successful with {name} model")
-                        
-                    except Exception as e:
-                        error_msg = f"Model {name} error: {str(e)}"
-                        model_errors.append(error_msg)
-                        logger.warning(error_msg)
-                        continue
+                # ตรวจสอบ shape ของ output
+                if pred_proba.shape[1] == 1:
+                    pred_proba = np.hstack((1 - pred_proba, pred_proba))
+                
+                predictions_proba_list.append(pred_proba)
+                successful_models += 1
+                logger.debug(f"✅ Prediction successful with {name} model")
+                
+            except Exception as e:
+                error_msg = f"Model {name} error: {str(e)}"
+                model_errors.append(error_msg)
+                logger.warning(error_msg)
+                continue
 
-            if not predictions_proba_list:
-                return jsonify({
-                    'success': False, 
-                    'error': 'ไม่สามารถทำนายได้ด้วยโมเดลใดเลย',
-                    'model_errors': model_errors
-                })
-
-            logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
-
-            # คำนวณผลลัพธ์
-            results = []
-            high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
-            medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
-
-            for i in range(len(processed_df)):
-                student_name = processed_df.iloc[i].get('ชื่อ', f'นักศึกษา_{i+1}')
-                gpa = processed_df.iloc[i].get('gpa', 0)
-
-                # คำนวณค่าเฉลี่ยความน่าจะเป็นจากทุกโมเดล
-                avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
-                avg_prob_fail = avg_prob_per_student[0]
-                avg_prob_pass = avg_prob_per_student[1]
-
-                prediction = 'จบ' if avg_prob_pass >= 0.5 else 'ไม่จบ'
-                confidence = max(avg_prob_pass, avg_prob_fail)
-
-                # กำหนดระดับความเสี่ยง
-                if confidence > high_confidence_threshold:
-                    risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-                elif confidence > medium_confidence_threshold:
-                    risk_level = 'ปานกลาง'
-                else:
-                    risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
-
-                # สร้างการวิเคราะห์และคำแนะนำ
-                analysis = []
-                recommendations = []
-
-                low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
-                warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
-                high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
-
-                if gpa < low_gpa_threshold:
-                    analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
-                    recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
-                elif gpa < warning_gpa_threshold:
-                    analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
-                    recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
-                elif gpa < 3.0:
-                    analysis.append(f"GPA พอใช้ ({gpa:.2f})")
-                    recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
-                else:
-                    analysis.append(f"GPA ดี ({gpa:.2f})")
-                    recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
-
-                if prediction == 'ไม่จบ':
-                    recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือจากอาจารย์ที่ปรึกษา")
-                    if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
-                        recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
-
-                # ตรวจสอบหมวดวิชาที่อ่อน (สำหรับ subject-based)
-                if data_format == 'subject_based':
-                    weak_categories = []
-                    for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
-                        gpa_col = f'gpa_{cat_key}'
-                        if gpa_col in processed_df.columns and processed_df.iloc[i].get(gpa_col, 0) < low_gpa_threshold:
-                            weak_categories.append(cat_key)
-
-                    if weak_categories:
-                        recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
-
-                results.append({
-                    'ชื่อ': student_name,
-                    'การทำนาย': prediction,
-                    'ความน่าจะเป็น': {
-                        'จบ': float(avg_prob_pass),
-                        'ไม่จบ': float(avg_prob_fail)
-                    },
-                    'เกรดเฉลี่ย': float(gpa),
-                    'ระดับความเสี่ยง': risk_level,
-                    'ความเชื่อมั่น': float(confidence),
-                    'การวิเคราะห์': list(set(analysis)),
-                    'คำแนะนำ': list(set(recommendations))
-                })
-
-            # สรุปผลรวม
-            total = len(results)
-            predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
-            predicted_fail = total - predicted_pass
-            pass_rate = (predicted_pass / total * 100) if total > 0 else 0
-
-            high_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'สูง')
-            medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
-            low_risk = total - high_risk - medium_risk
-
-            logger.info(f"🎉 Prediction completed: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
-
+        if not predictions_proba_list:
             return jsonify({
-                'success': True,
-                'results': results,
-                'summary': {
-                    'total': total,
-                    'predicted_pass': predicted_pass,
-                    'predicted_fail': predicted_fail,
-                    'pass_rate': float(pass_rate),
-                    'high_risk': high_risk,
-                    'medium_risk': medium_risk,
-                    'low_risk': low_risk
-                },
-                'model_used': model_filename,
-                'models_count': successful_models,
-                'data_format': data_format,
-                'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
+                'success': False, 
+                'error': 'ไม่สามารถทำนายได้ด้วยโมเดลใดเลย',
+                'model_errors': model_errors
             })
-            
-        except Exception as e:
-            logger.error(f"Error during prediction processing: {str(e)}")
-            return jsonify({'success': False, 'error': f'ข้อผิดพลาดในการประมวลผล: {str(e)}'})
+
+        logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
+
+        # คำนวณผลลัพธ์
+        results = []
+        high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
+        medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
+
+        for i in range(len(processed_df)):
+            student_name = processed_df.iloc[i].get('ชื่อ', f'นักศึกษา_{i+1}')
+            gpa = processed_df.iloc[i].get('gpa', 0)
+
+            # คำนวณค่าเฉลี่ยความน่าจะเป็นจากทุกโมเดล
+            avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
+            avg_prob_fail = avg_prob_per_student[0]
+            avg_prob_pass = avg_prob_per_student[1]
+
+            prediction = 'จบ' if avg_prob_pass >= 0.5 else 'ไม่จบ'
+            confidence = max(avg_prob_pass, avg_prob_fail)
+
+            # กำหนดระดับความเสี่ยง
+            if confidence > high_confidence_threshold:
+                risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
+            elif confidence > medium_confidence_threshold:
+                risk_level = 'ปานกลาง'
+            else:
+                risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
+
+            # สร้างการวิเคราะห์และคำแนะนำ
+            analysis = []
+            recommendations = []
+
+            low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
+            warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
+            high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
+
+            if gpa < low_gpa_threshold:
+                analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
+                recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
+            elif gpa < warning_gpa_threshold:
+                analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
+                recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
+            elif gpa < 3.0:
+                analysis.append(f"GPA พอใช้ ({gpa:.2f})")
+                recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
+            else:
+                analysis.append(f"GPA ดี ({gpa:.2f})")
+                recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
+
+            if prediction == 'ไม่จบ':
+                recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือจากอาจารย์ที่ปรึกษา")
+                if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
+                    recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
+
+            # ตรวจสอบหมวดวิชาที่อ่อน (สำหรับ subject-based)
+            if data_format == 'subject_based':
+                weak_categories = []
+                for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
+                    gpa_col = f'gpa_{cat_key}'
+                    if gpa_col in processed_df.columns and processed_df.iloc[i].get(gpa_col, 0) < low_gpa_threshold:
+                        weak_categories.append(cat_key)
+
+                if weak_categories:
+                    recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
+
+            results.append({
+                'ชื่อ': student_name,
+                'การทำนาย': prediction,
+                'ความน่าจะเป็น': {
+                    'จบ': float(avg_prob_pass),
+                    'ไม่จบ': float(avg_prob_fail)
+                },
+                'เกรดเฉลี่ย': float(gpa),
+                'ระดับความเสี่ยง': risk_level,
+                'ความเชื่อมั่น': float(confidence),
+                'การวิเคราะห์': list(set(analysis)),
+                'คำแนะนำ': list(set(recommendations))
+            })
+
+        # สรุปผลรวม
+        total = len(results)
+        predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
+        predicted_fail = total - predicted_pass
+        pass_rate = (predicted_pass / total * 100) if total > 0 else 0
+
+        high_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'สูง')
+        medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
+        low_risk = total - high_risk - medium_risk
+
+        logger.info(f"🎉 Prediction completed: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'summary': {
+                'total': total,
+                'predicted_pass': predicted_pass,
+                'predicted_fail': predicted_fail,
+                'pass_rate': float(pass_rate),
+                'high_risk': high_risk,
+                'medium_risk': medium_risk,
+                'low_risk': low_risk
+            },
+            'model_used': model_filename,
+            'models_count': successful_models,
+            'data_format': data_format,
+            'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
+        })
 
     except Exception as e:
         logger.error(f"❌ Critical error during prediction: {str(e)}", exc_info=True)
