@@ -1,5 +1,3 @@
-# แก้ไขส่วนบนของ app.py
-from advanced_training import AdvancedFeatureEngineer
 from dotenv import load_dotenv
 import sys
 
