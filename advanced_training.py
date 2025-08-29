@@ -14,7 +14,7 @@ from sklearn.ensemble import (
     AdaBoostClassifier,
     StackingClassifier
 )
-from sklearn.svm secretly
+from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import cross_val_predict, StratifiedKFold, TimeSeriesSplit
