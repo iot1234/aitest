@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}ฝึกโมเดล AI - {{ super() }}{% endblock %}
+{% block title %}ฝึกโมเดล AI ขั้นสูง - {{ super() }}{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -9,124 +9,359 @@
     <div class="row mb-5">
         <div class="col-12 text-center text-white">
             <h1 class="display-4 fw-bold mb-3">
-                <i class="bi bi-cpu-fill"></i> ฝึกฝนและทดสอบโมเดล AI
+                <i class="bi bi-cpu-fill"></i> ระบบฝึกโมเดล AI ขั้นสูง
             </h1>
             <p class="lead text-white-50">
-                อัปโหลดข้อมูล, ฝึกโมเดลเพื่อทำนายผลการเรียน, และวิเคราะห์ข้อมูลเชิงลึก
+                Advanced Context-Aware Training System
+            </p>
+            <p class="text-white-50">
+                วิเคราะห์บริบทของแต่ละวิชา • สร้าง DNA ความยาก-ง่าย • เรียนรู้พฤติกรรมหลายมิติ
             </p>
         </div>
     </div>
 
-    <div class="card mb-4">
+    <!-- System Features Card -->
+    <div class="card mb-4 border-0 shadow-lg">
+        <div class="card-body p-4">
+            <div class="row align-items-center">
+                <div class="col-lg-12 mb-4">
+                    <div class="alert alert-info border-0 shadow-sm">
+                        <h5 class="alert-heading">
+                            <i class="bi bi-stars me-2"></i> 
+                            Advanced Context-Aware Training System
+                        </h5>
+                        <hr>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="feature-icon bg-primary text-white rounded-circle p-2 me-3">
+                                        <i class="bi bi-diagram-3"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">🧬 Course DNA Profiling</h6>
+                                        <small class="text-muted">วิเคราะห์ DNA และความยากของแต่ละวิชา</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="feature-icon bg-success text-white rounded-circle p-2 me-3">
+                                        <i class="bi bi-camera"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">📸 Dynamic Snapshots</h6>
+                                        <small class="text-muted">สร้างภาพถ่ายการเรียนทุกช่วงเวลา</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="feature-icon bg-warning text-white rounded-circle p-2 me-3">
+                                        <i class="bi bi-lightbulb"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">🎯 Contextual Learning</h6>
+                                        <small class="text-muted">เข้าใจความหมายเชิงบริบท</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mb-0 mt-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <small>ระบบไม่ใช้กฎตายตัว แต่เรียนรู้จากข้อมูลว่าอะไรสำคัญ และปรับตัวตามบริบทของแต่ละวิชา</small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Training Card -->
+    <div class="card mb-4 shadow-lg">
         <div class="card-body p-5">
+            <!-- Upload Section -->
             <div class="row align-items-center mb-5 pb-4 border-bottom">
                 <div class="col-lg-7 mb-4 mb-lg-0">
                     <h5 class="fw-bold mb-3 text-primary">
-                        <i class="bi bi-cloud-arrow-up-fill me-2"></i> อัปโหลดข้อมูลและเลือกการทำงาน
+                        <i class="bi bi-cloud-arrow-up-fill me-2"></i> 
+                        ขั้นตอนที่ 1: อัปโหลดข้อมูล
                     </h5>
-                    <p class="text-muted">
-                        เลือกไฟล์ข้อมูล (.csv, .xlsx) เพื่อเริ่มต้นการฝึกโมเดล, การทำนายผล, หรือการวิเคราะห์เชิงลึก
+                    <p class="text-muted mb-3">
+                        อัปโหลดไฟล์ข้อมูลผลการเรียนของนักศึกษา (.csv, .xlsx)
                     </p>
-                    <div class="input-group input-group-lg">
+                    
+                    <div class="input-group input-group-lg mb-3">
                         <input class="form-control" type="file" id="fileUpload" accept=".csv, .xlsx, .xls">
-                        <button class="btn btn-primary" id="uploadBtn" onclick="uploadFile()">
+                        <button class="btn btn-primary" id="uploadBtn" onclick="uploadFile()" disabled>
                             <span id="uploadSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
                             <i class="bi bi-upload"></i> อัปโหลด
                         </button>
                     </div>
-                    <div class="form-text mt-2 text-muted">
-                        รองรับไฟล์: CSV, Excel (.xlsx, .xls) | ขนาดสูงสุด: 16MB
+                    
+                    <div class="form-text text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        รองรับไฟล์: CSV, Excel (.xlsx, .xls) | ขนาดสูงสุด: 100MB
                     </div>
                 </div>
 
                 <div class="col-lg-5">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h6 class="fw-bold mb-0">สถานะโมเดลที่ใช้งานได้</h6>
-        <span class="badge bg-secondary-subtle text-secondary" id="model-check-status">
-            <div class="spinner-border spinner-border-sm me-1" role="status"></div>
-            กำลังตรวจสอบ...
-        </span>
-    </div>
-    <ul class="list-group list-group-flush border-top">
-        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
-            <div>โมเดลรายวิชา <span class="badge bg-primary-subtle text-primary">Subject-based</span></div>
-            <div id="subject-model-status">
-                <span class="badge bg-secondary">กำลังตรวจสอบ...</span>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0">
+                            <i class="bi bi-speedometer2 me-1"></i> 
+                            สถานะระบบ
+                        </h6>
+                        <span class="badge bg-secondary-subtle text-secondary" id="model-check-status">
+                            <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                            กำลังตรวจสอบ...
+                        </span>
+                    </div>
+                    <ul class="list-group list-group-flush border-top">
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                            <div>
+                                <i class="bi bi-cpu me-1"></i>
+                                โมเดล AI ขั้นสูง
+                            </div>
+                            <div id="subject-model-status">
+                                <span class="badge bg-secondary">กำลังตรวจสอบ...</span>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                            <div>
+                                <i class="bi bi-database me-1"></i>
+                                ที่เก็บข้อมูล
+                            </div>
+                            <div id="storage-status">
+                                <span class="badge bg-secondary">กำลังตรวจสอบ...</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
             </div>
-        </li>
-    </ul>
-</div>
 
-            </div>
-
+            <!-- Actions Section (Initially Hidden) -->
             <div id="actionsCard" class="d-none">
                 <h5 class="fw-bold mb-4 text-primary">
-                    <i class="bi bi-tools me-2"></i> เลือกการดำเนินการ
+                    <i class="bi bi-gear-fill me-2"></i> 
+                    ขั้นตอนที่ 2: เลือกการดำเนินการ
                 </h5>
-                <div class="row g-4">
-                    <div class="col-lg-4">
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="advancedTraining" checked>
-                            <label class="form-check-label" for="advancedTraining">
-                                <i class="bi bi-rocket-takeoff"></i> ใช้ Advanced Context-Aware Training
-                            </label>
+                
+                <!-- File Info Display -->
+                <div class="alert alert-light border mb-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-1">
+                                <strong>ไฟล์ที่อัปโหลด:</strong> 
+                                <span id="fileName" class="text-dark"></span>
+                            </p>
+                            <p class="mb-0" id="fileInfo"></p>
                         </div>
-                        <div class="d-grid">
-                            <button class="btn btn-lg btn-primary" id="trainBtn" onclick="trainModel()">
-                                <span id="trainSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
-                                <i class="bi bi-cpu-fill"></i> ฝึกโมเดลใหม่
-                            </button>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="d-grid">
-                            <button class="btn btn-lg btn-success" id="predictBtn" onclick="predictData()" disabled>
-                                <span id="predictSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
-                                <i class="bi bi-magic"></i> ทำนายผล
-                            </button>
-                        </div>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="d-grid">
-                            <button class="btn btn-lg btn-info" id="analyzeBtn" onclick="analyzeSubjects()">
-                                <span id="analyzeSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
-                                <i class="bi bi-bar-chart-line-fill"></i> วิเคราะห์ข้อมูล
-                            </button>
+                        <div class="col-md-6">
+                            <div id="dataPreview" class="text-end"></div>
                         </div>
                     </div>
                 </div>
-                <div class="mt-4 text-center">
-                    <p class="text-muted mb-1">
-                        ไฟล์ที่อัปโหลด: <span id="fileName" class="fw-bold text-dark"></span>
-                    </p>
-                    <p class="text-muted mb-0" id="fileInfo"></p>
+                
+                <!-- Action Buttons -->
+                <div class="row g-4">
+                    <!-- Train Model Button -->
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-primary shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="bi bi-cpu-fill text-primary" style="font-size: 3rem;"></i>
+                                </div>
+                                <h6 class="card-title">ฝึกโมเดล AI ขั้นสูง</h6>
+                                <p class="card-text small text-muted">
+                                    ใช้ Advanced Context-Aware Training
+                                </p>
+                                <div class="d-grid">
+                                    <button class="btn btn-primary" id="trainBtn" onclick="trainModel()">
+                                        <span id="trainSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                        <i class="bi bi-play-circle-fill"></i> เริ่มฝึกโมเดล
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Predict Button -->
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-success shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="bi bi-magic text-success" style="font-size: 3rem;"></i>
+                                </div>
+                                <h6 class="card-title">ทำนายผลการเรียน</h6>
+                                <p class="card-text small text-muted">
+                                    ใช้โมเดลที่ฝึกแล้วทำนายผล
+                                </p>
+                                <div class="d-grid">
+                                    <button class="btn btn-success" id="predictBtn" onclick="predictData()" disabled>
+                                        <span id="predictSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                        <i class="bi bi-graph-up-arrow"></i> ทำนายผล
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Analyze Button -->
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-info shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="bi bi-bar-chart-line-fill text-info" style="font-size: 3rem;"></i>
+                                </div>
+                                <h6 class="card-title">วิเคราะห์ข้อมูลเชิงลึก</h6>
+                                <p class="card-text small text-muted">
+                                    วิเคราะห์รายวิชาและ Course DNA
+                                </p>
+                                <div class="d-grid">
+                                    <button class="btn btn-info" id="analyzeBtn" onclick="analyzeSubjects()">
+                                        <span id="analyzeSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                        <i class="bi bi-search"></i> วิเคราะห์
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Training Progress (shown during training) -->
+                <div id="trainingProgress" class="mt-4 d-none">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body">
+                            <h6 class="mb-3">
+                                <i class="bi bi-hourglass-split me-2"></i>
+                                กำลังฝึกโมเดล...
+                            </h6>
+                            <div class="progress mb-2" style="height: 25px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="progressBar" 
+                                     role="progressbar" 
+                                     style="width: 0%">
+                                    0%
+                                </div>
+                            </div>
+                            <small class="text-muted" id="progressText">กำลังเตรียมข้อมูล...</small>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="resultsCard" class="card d-none">
+    <!-- Results Card -->
+    <div id="resultsCard" class="card shadow-lg d-none">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i> ผลลัพธ์การประมวลผล</h5>
+            <h5 class="mb-0">
+                <i class="bi bi-graph-up-arrow me-2"></i> 
+                ผลลัพธ์การประมวลผล
+            </h5>
         </div>
         <div class="card-body">
-            <div id="predictionResults" class="d-none">
-                <h6 class="fw-bold text-primary mb-3">ภาพรวมการทำนาย</h6>
-                <div id="summary" class="mb-4"></div>
+            <!-- Training Results -->
+            <div id="trainingResults" class="d-none">
+                <h6 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-trophy-fill me-2"></i>
+                    ผลการฝึกโมเดล
+                </h6>
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <div class="display-4 text-success" id="accuracyDisplay">0%</div>
+                            <small class="text-muted">Accuracy</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <div class="display-4 text-info" id="precisionDisplay">0%</div>
+                            <small class="text-muted">Precision</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <div class="display-4 text-warning" id="recallDisplay">0%</div>
+                            <small class="text-muted">Recall</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <div class="display-4 text-primary" id="f1Display">0%</div>
+                            <small class="text-muted">F1-Score</small>
+                        </div>
+                    </div>
+                </div>
                 
-                <h6 class="fw-bold text-primary mb-3">ผลลัพธ์รายบุคคล</h6>
-                <div id="results" class="mb-4"></div>
+                <div id="trainingDetails" class="alert alert-light">
+                    <!-- Training details will be inserted here -->
+                </div>
+                
+                <div id="featureImportance" class="mt-4">
+                    <h6 class="fw-bold mb-3">
+                        <i class="bi bi-list-ol me-2"></i>
+                        Features ที่สำคัญที่สุด
+                    </h6>
+                    <div id="featureList"></div>
+                </div>
             </div>
             
+            <!-- Prediction Results -->
+            <div id="predictionResults" class="d-none">
+                <h6 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-people-fill me-2"></i>
+                    ผลการทำนาย
+                </h6>
+                <div id="summary" class="mb-4"></div>
+                
+                <ul class="nav nav-tabs mb-3" id="resultTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" 
+                                data-bs-target="#overview" type="button">
+                            ภาพรวม
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="details-tab" data-bs-toggle="tab" 
+                                data-bs-target="#details" type="button">
+                            รายละเอียด
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="recommendations-tab" data-bs-toggle="tab" 
+                                data-bs-target="#recommendations" type="button">
+                            คำแนะนำ
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="resultTabContent">
+                    <div class="tab-pane fade show active" id="overview">
+                        <div id="overviewContent"></div>
+                    </div>
+                    <div class="tab-pane fade" id="details">
+                        <div id="results"></div>
+                    </div>
+                    <div class="tab-pane fade" id="recommendations">
+                        <div id="recommendationsContent"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analysis Results -->
             <div id="analysisResults" class="d-none">
-                <h6 class="fw-bold text-primary mb-3">ผลการวิเคราะห์รายวิชา</h6>
+                <h6 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-microscope me-2"></i>
+                    ผลการวิเคราะห์ Course DNA
+                </h6>
                 <div id="analysis-summary" class="mb-3"></div>
                 <div id="analysis-recommendations" class="mb-3"></div>
-                <div id="analysis-tables" class="row">
+                
+                <div class="row" id="analysis-tables">
                     <div class="col-md-6 mb-3">
-                        <div class="card h-100">
+                        <div class="card h-100 border-danger">
                             <div class="card-header bg-danger text-white">
-                                <i class="bi bi-x-circle-fill"></i> วิชาที่มีอัตราตกสูง
+                                <i class="bi bi-x-circle-fill"></i> วิชา Killer Courses
                             </div>
                             <div class="card-body">
                                 <ul class="list-unstyled" id="highFailSubjects"></ul>
@@ -134,24 +369,23 @@
                         </div>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <div class="card h-100">
-                            <div class="card-header bg-warning text-dark">
-                                <i class="bi bi-bar-chart-fill"></i> วิชาที่มีเกรดเฉลี่ยต่ำ
+                        <div class="card h-100 border-success">
+                            <div class="card-header bg-success text-white">
+                                <i class="bi bi-check-circle-fill"></i> วิชา Easy Courses
                             </div>
                             <div class="card-body">
-                                <ul class="list-unstyled" id="lowGpaSubjects"></ul>
+                                <ul class="list-unstyled" id="easySubjects"></ul>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header bg-success text-white">
-                                <i class="bi bi-award-fill"></i> วิชาที่มีผลการเรียนดีเยี่ยม
-                            </div>
-                            <div class="card-body">
-                                <ul class="list-unstyled" id="excellentSubjects"></ul>
-                            </div>
-                        </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-award-fill"></i> Course Performance Distribution
+                    </div>
+                    <div class="card-body">
+                        <canvas id="courseDistributionChart" height="100"></canvas>
                     </div>
                 </div>
             </div>
@@ -161,21 +395,34 @@
 {% endblock %}
 
 {% block custom_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Global variables
 let currentFilename = '';
+let trainingInterval = null;
 
-// Helper function สำหรับแสดงข้อความแจ้งเตือน (Alert)
+// Helper Functions
 function showAlert(message, type) {
     const alertContainer = document.getElementById('alertContainer');
     const alertHtml = `
         <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'x-circle' : 'info-circle'}-fill me-2"></i>
             ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     `;
     alertContainer.innerHTML = alertHtml;
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+        const alert = alertContainer.querySelector('.alert');
+        if (alert) {
+            alert.classList.remove('show');
+            setTimeout(() => alert.remove(), 150);
+        }
+    }, 5000);
 }
 
-// Helper function สำหรับแสดงข้อความโหลด
 function showLoading(message) {
     const alertContainer = document.getElementById('alertContainer');
     alertContainer.innerHTML = `
@@ -188,125 +435,112 @@ function showLoading(message) {
     `;
 }
 
-// Helper function สำหรับซ่อนข้อความโหลด (ใช้ร่วมกับ showAlert)
 function hideLoading() {
     document.getElementById('alertContainer').innerHTML = '';
 }
 
+function toggleSpinner(buttonId, show) {
+    const button = document.getElementById(buttonId);
+    const spinner = button.querySelector('.spinner-border');
+    if (show) {
+        spinner.classList.remove('d-none');
+        button.disabled = true;
+    } else {
+        spinner.classList.add('d-none');
+        button.disabled = false;
+    }
+}
+
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    checkModelStatus();
+    checkSystemStatus();
     
-    // เช็คสถานะซ้ำทุก 5 วินาที
-    setInterval(checkModelStatus, 5000);
+    // Check status every 10 seconds
+    setInterval(checkSystemStatus, 10000);
     
-    document.getElementById('fileUpload').addEventListener('change', () => {
-        document.getElementById('uploadBtn').disabled = !document.getElementById('fileUpload').files.length;
+    // Enable upload button when file is selected
+    document.getElementById('fileUpload').addEventListener('change', function() {
+        document.getElementById('uploadBtn').disabled = !this.files.length;
     });
 });
 
-async function checkModelStatus() {
+// Check system status
+async function checkSystemStatus() {
     try {
-        // ลองเรียก API ดูรายการโมเดลจาก /api/models แทน
+        // Check models
         const response = await fetch('/api/models');
         const data = await response.json();
         
         if (data.success && data.models && data.models.length > 0) {
-            // หาโมเดล subject_based
-            const subjectModels = data.models.filter(m => 
-                m.data_format === 'subject_based' || 
-                m.filename.includes('subject_based')
+            const advancedModels = data.models.filter(m => 
+                m.data_format === 'advanced_context_aware' || 
+                m.filename.includes('advanced')
             );
             
-            // อัปเดต UI สำหรับ subject model
             const subjectStatus = document.getElementById('subject-model-status');
-            if (subjectModels.length > 0) {
-                const latestModel = subjectModels[0];
-                const accuracy = latestModel.performance?.accuracy || latestModel.performance_metrics?.accuracy || 0;
+            if (advancedModels.length > 0) {
+                const latestModel = advancedModels[0];
+                const accuracy = latestModel.performance?.accuracy || 0;
                 
-                subjectStatus.innerHTML = `<span class="badge bg-success">
-                    <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
-                </span>`;
+                subjectStatus.innerHTML = `
+                    <span class="badge bg-success">
+                        <i class="bi bi-check-circle-fill"></i> 
+                        ${advancedModels.length} โมเดล
+                    </span>
+                `;
                 
                 // Enable predict button
-                const predictBtn = document.getElementById('predictBtn');
-                if (predictBtn) {
-                    predictBtn.disabled = false;
-                    predictBtn.title = 'คลิกเพื่อทำนายผล';
-                }
+                document.getElementById('predictBtn').disabled = false;
             } else {
-                subjectStatus.innerHTML = `<span class="badge bg-danger">
-                    <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
-                </span>`;
+                subjectStatus.innerHTML = `
+                    <span class="badge bg-warning">
+                        <i class="bi bi-exclamation-circle-fill"></i> 
+                        ยังไม่มีโมเดล
+                    </span>
+                `;
+                document.getElementById('predictBtn').disabled = true;
             }
         } else {
-            // ถ้าไม่มีโมเดล
-            updateModelStatusUI({
-                subject_model: false,
-                gpa_model: false
-            });
+            document.getElementById('subject-model-status').innerHTML = `
+                <span class="badge bg-danger">
+                    <i class="bi bi-x-circle-fill"></i> 
+                    ไม่พร้อมใช้งาน
+                </span>
+            `;
+            document.getElementById('predictBtn').disabled = true;
+        }
+        
+        // Check storage status
+        const storageResponse = await fetch('/api/storage/status');
+        const storageData = await storageResponse.json();
+        
+        const storageStatus = document.getElementById('storage-status');
+        if (storageData.connected) {
+            storageStatus.innerHTML = `
+                <span class="badge bg-success">
+                    <i class="bi bi-check-circle-fill"></i> 
+                    Cloud R2
+                </span>
+            `;
+        } else {
+            storageStatus.innerHTML = `
+                <span class="badge bg-info">
+                    <i class="bi bi-hdd-fill"></i> 
+                    Local
+                </span>
+            `;
         }
         
     } catch (error) {
-        console.error('Error checking model status:', error);
-        // ถ้าเกิดข้อผิดพลาด ลองเรียก /model_status อีกครั้ง
-        try {
-            const response2 = await fetch('/model_status');
-            const data2 = await response2.json();
-            updateModelStatusUI(data2);
-            
-            // Enable/Disable predict button
-            const predictBtn = document.getElementById('predictBtn');
-            if (predictBtn) {
-                if (data2.subject_model) {
-                    predictBtn.disabled = false;
-                    predictBtn.title = 'คลิกเพื่อทำนายผล';
-                } else {
-                    predictBtn.disabled = true;
-                    predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
-                }
-            }
-        } catch (error2) {
-            console.error('Error checking model status (fallback):', error2);
-            showAlert('ไม่สามารถตรวจสอบสถานะโมเดลได้', 'warning');
-        }
+        console.error('Error checking status:', error);
     }
 }
 
-function updateModelStatusUI(data) {
-    const subjectStatus = document.getElementById('subject-model-status');
-    
-    // ตรวจสอบทั้งจาก flag และ model info
-    if (data.subject_model || (data.subject_model_info && data.subject_model_info.accuracy)) {
-        const accuracy = data.subject_model_info?.accuracy || 0;
-        subjectStatus.innerHTML = `<span class="badge bg-success">
-            <i class="bi bi-check-circle-fill"></i> พร้อมใช้งาน ${accuracy > 0 ? `(Accuracy: ${(accuracy * 100).toFixed(2)}%)` : ''}
-        </span>`;
-        
-        // Enable predict button
-        const predictBtn = document.getElementById('predictBtn');
-        if (predictBtn) {
-            predictBtn.disabled = false;
-            predictBtn.title = 'คลิกเพื่อทำนายผล';
-        }
-    } else {
-        subjectStatus.innerHTML = `<span class="badge bg-danger">
-            <i class="bi bi-x-circle-fill"></i> ไม่พร้อมใช้งาน
-        </span>`;
-        
-        // Disable predict button
-        const predictBtn = document.getElementById('predictBtn');
-        if (predictBtn) {
-            predictBtn.disabled = true;
-            predictBtn.title = 'กรุณาฝึกโมเดลก่อน';
-        }
-    }
-}
-
-
+// Upload file
 async function uploadFile() {
     const fileInput = document.getElementById('fileUpload');
     if (fileInput.files.length === 0) {
-        showAlert('กรุณาเลือกไฟล์ก่อนครับ', 'warning');
+        showAlert('กรุณาเลือกไฟล์ก่อน', 'warning');
         return;
     }
     
@@ -327,12 +561,25 @@ async function uploadFile() {
             currentFilename = result.filename;
             document.getElementById('fileName').textContent = result.filename;
             document.getElementById('fileInfo').innerHTML = `
-                <span class="badge bg-light text-dark me-2">${result.rows} แถว</span>
-                <span class="badge bg-light text-dark me-2">${result.columns} คอลัมน์</span>
-                <span class="badge bg-primary-subtle text-primary">${result.data_format}</span>
+                <span class="badge bg-light text-dark me-2">
+                    <i class="bi bi-file-earmark-text"></i> ${result.rows} แถว
+                </span>
+                <span class="badge bg-light text-dark me-2">
+                    <i class="bi bi-table"></i> ${result.columns} คอลัมน์
+                </span>
             `;
+            
+            // Show sample columns
+            if (result.sample_columns) {
+                document.getElementById('dataPreview').innerHTML = `
+                    <small class="text-muted">
+                        ตัวอย่างคอลัมน์: ${result.sample_columns.slice(0, 5).join(', ')}...
+                    </small>
+                `;
+            }
+            
             document.getElementById('actionsCard').classList.remove('d-none');
-            showAlert('อัปโหลดไฟล์สำเร็จ!', 'success');
+            showAlert('อัปโหลดไฟล์สำเร็จ! พร้อมสำหรับการฝึกโมเดล', 'success');
         } else {
             showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
@@ -345,55 +592,49 @@ async function uploadFile() {
     }
 }
 
+// Train model with Advanced Context-Aware System
 async function trainModel() {
     if (!currentFilename) {
-        showAlert('กรุณาอัปโหลดไฟล์ก่อนครับ', 'warning');
+        showAlert('กรุณาอัปโหลดไฟล์ก่อน', 'warning');
         return;
     }
 
-    const useAdvanced = document.getElementById('advancedTraining').checked;
     const trainBtn = document.getElementById('trainBtn');
     if (trainBtn.disabled) return;
 
-    const loadingText = useAdvanced ? 
-        'กำลังฝึกโมเดลด้วย Advanced Context-Aware Strategy...' : 
-        'กำลังฝึกโมเดล...';
-    
-    showLoading(loadingText);
+    showLoading('กำลังเริ่มต้น Advanced Context-Aware Training...');
     toggleSpinner('trainBtn', true);
+    
+    // Show training progress
+    document.getElementById('trainingProgress').classList.remove('d-none');
+    simulateTrainingProgress();
 
     try {
         const response = await fetch('/train', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                filename: currentFilename,
-                use_advanced_training: useAdvanced 
+                filename: currentFilename
             })
         });
         const result = await response.json();
 
         if (result.success) {
-            const trainingType = result.training_type === 'advanced' ? 
-                ' (Advanced Context-Aware)' : ' (Standard)';
-            showAlert(`✅ ฝึกโมเดลสำเร็จ${trainingType}: ${result.model_filename}`, 'success');
+            // Stop progress simulation
+            if (trainingInterval) {
+                clearInterval(trainingInterval);
+                trainingInterval = null;
+            }
             
-            // แสดง metrics
-            const metricsHtml = `
-                <div class="mt-2 text-muted">
-                    <small>
-                        Accuracy: ${(result.accuracy * 100).toFixed(2)}% | 
-                        Precision: ${(result.precision * 100).toFixed(2)}% | 
-                        Recall: ${(result.recall * 100).toFixed(2)}% | 
-                        F1: ${(result.f1_score * 100).toFixed(2)}%
-                    </small>
-                </div>
-            `;
-            document.getElementById('trainBtn').insertAdjacentHTML('afterend', metricsHtml);
+            // Show success
+            showAlert(`✅ ฝึกโมเดล Advanced สำเร็จ: ${result.model_filename}`, 'success');
             
-            // รอสักครู่แล้วเช็คสถานะโมเดลใหม่
+            // Display training results
+            displayTrainingResults(result);
+            
+            // Update status after 1 second
             setTimeout(() => {
-                checkModelStatus();
+                checkSystemStatus();
             }, 1000);
             
         } else {
@@ -405,46 +646,143 @@ async function trainModel() {
     } finally {
         hideLoading();
         toggleSpinner('trainBtn', false);
+        document.getElementById('trainingProgress').classList.add('d-none');
+        if (trainingInterval) {
+            clearInterval(trainingInterval);
+            trainingInterval = null;
+        }
     }
 }
 
+// Simulate training progress
+function simulateTrainingProgress() {
+    let progress = 0;
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    
+    const stages = [
+        { at: 10, text: 'กำลังวิเคราะห์ข้อมูล...' },
+        { at: 25, text: 'กำลังสร้าง Course DNA Profiles...' },
+        { at: 40, text: 'กำลังสร้าง Dynamic Snapshots...' },
+        { at: 60, text: 'กำลังสร้าง Contextual Features...' },
+        { at: 80, text: 'กำลังฝึก Ensemble Models...' },
+        { at: 95, text: 'กำลังประเมินผลและบันทึก...' }
+    ];
+    
+    trainingInterval = setInterval(() => {
+        if (progress < 95) {
+            progress += Math.random() * 5;
+            progress = Math.min(95, progress);
+            
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = Math.round(progress) + '%';
+            
+            // Update stage text
+            for (let stage of stages) {
+                if (progress >= stage.at && progress < stage.at + 15) {
+                    progressText.textContent = stage.text;
+                    break;
+                }
+            }
+        }
+    }, 500);
+}
 
+// Display training results
+function displayTrainingResults(result) {
+    document.getElementById('resultsCard').classList.remove('d-none');
+    document.getElementById('trainingResults').classList.remove('d-none');
+    document.getElementById('predictionResults').classList.add('d-none');
+    document.getElementById('analysisResults').classList.add('d-none');
+    
+    // Display metrics
+    document.getElementById('accuracyDisplay').textContent = (result.accuracy * 100).toFixed(1) + '%';
+    document.getElementById('precisionDisplay').textContent = (result.precision * 100).toFixed(1) + '%';
+    document.getElementById('recallDisplay').textContent = (result.recall * 100).toFixed(1) + '%';
+    document.getElementById('f1Display').textContent = (result.f1_score * 100).toFixed(1) + '%';
+    
+    // Display training details
+    document.getElementById('trainingDetails').innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <p class="mb-1"><strong>ชื่อโมเดล:</strong> ${result.model_filename}</p>
+                <p class="mb-1"><strong>จำนวนตัวอย่าง:</strong> ${result.training_samples} samples</p>
+                <p class="mb-1"><strong>จำนวน Features:</strong> ${result.features_count} features</p>
+            </div>
+            <div class="col-md-6">
+                <p class="mb-1"><strong>Course Profiles:</strong> ${result.course_profiles_count || 'N/A'} วิชา</p>
+                <p class="mb-1"><strong>Training Type:</strong> Advanced Context-Aware</p>
+                <p class="mb-1"><strong>Storage:</strong> ${result.storage_provider === 'cloudflare_r2' ? 'Cloud R2' : 'Local'}</p>
+            </div>
+        </div>
+    `;
+    
+    // Display feature importance
+    if (result.feature_importances) {
+        const featureList = document.getElementById('featureList');
+        let featureHtml = '<div class="row">';
+        
+        const features = Object.entries(result.feature_importances)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+        
+        features.forEach(([feature, importance], index) => {
+            const percentage = (importance * 100).toFixed(2);
+            featureHtml += `
+                <div class="col-md-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-primary me-2">${index + 1}</span>
+                        <div class="flex-grow-1">
+                            <small>${feature}</small>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar" style="width: ${percentage}%"></div>
+                            </div>
+                        </div>
+                        <small class="ms-2">${percentage}%</small>
+                    </div>
+                </div>
+            `;
+        });
+        
+        featureHtml += '</div>';
+        featureList.innerHTML = featureHtml;
+    }
+    
+    // Scroll to results
+    document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Predict data
 async function predictData() {
     if (!currentFilename) {
-        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
+        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อน', 'warning');
         return;
     }
     
-    showLoading('กำลังทำนายผล...');
+    showLoading('กำลังทำนายผลด้วย Advanced Model...');
     toggleSpinner('predictBtn', true);
 
     try {
-        // หาโมเดลล่าสุดที่ใช้งานได้
+        // Get available models
         const modelsResponse = await fetch('/api/models');
         const modelsData = await modelsResponse.json();
         
         let modelFilename = null;
         if (modelsData.success && modelsData.models.length > 0) {
-            // หาโมเดล subject_based ล่าสุด
-            const subjectModels = modelsData.models.filter(m => 
-                m.data_format === 'subject_based' || 
-                m.filename.includes('subject_based')
+            // Find advanced models
+            const advancedModels = modelsData.models.filter(m => 
+                m.data_format === 'advanced_context_aware' || 
+                m.filename.includes('advanced')
             );
             
-            if (subjectModels.length > 0) {
-                // เรียงตามวันที่สร้าง และเลือกตัวล่าสุด
-                subjectModels.sort((a, b) => {
-                    const dateA = new Date(a.created_at || 0);
-                    const dateB = new Date(b.created_at || 0);
-                    return dateB - dateA;
-                });
-                modelFilename = subjectModels[0].filename;
-                console.log('Using model:', modelFilename);
+            if (advancedModels.length > 0) {
+                modelFilename = advancedModels[0].filename;
+                console.log('Using advanced model:', modelFilename);
             }
         }
         
         if (!modelFilename) {
-            showAlert('ไม่พบโมเดลที่ใช้งานได้ กรุณาฝึกโมเดลก่อน', 'warning');
+            showAlert('ไม่พบโมเดล Advanced กรุณาฝึกโมเดลก่อน', 'warning');
             hideLoading();
             toggleSpinner('predictBtn', false);
             return;
@@ -462,75 +800,184 @@ async function predictData() {
 
         if (result.success) {
             displayPredictionResults(result.results, result.summary);
-            showAlert('ทำนายผลสำเร็จ! (ใช้โมเดล: ' + modelFilename + ')', 'success');
+            showAlert(`ทำนายผลสำเร็จ! (ใช้โมเดล: ${modelFilename})`, 'success');
         } else {
-            showAlert(`เกิดข้อผิดพลาดในการทำนาย: ${result.error}`, 'danger');
+            showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
     } catch (error) {
         console.error('Prediction error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อทำนาย', 'danger');
+        showAlert('เกิดข้อผิดพลาดในการทำนาย', 'danger');
     } finally {
         hideLoading();
         toggleSpinner('predictBtn', false);
     }
 }
 
+// Display prediction results
 function displayPredictionResults(results, summary) {
-    const resultsCard = document.getElementById('resultsCard');
-    resultsCard.classList.remove('d-none');
-    
-    // ซ่อนผลลัพธ์การวิเคราะห์
+    document.getElementById('resultsCard').classList.remove('d-none');
+    document.getElementById('predictionResults').classList.remove('d-none');
+    document.getElementById('trainingResults').classList.add('d-none');
     document.getElementById('analysisResults').classList.add('d-none');
 
-    // แสดงผลลัพธ์การทำนาย
-    const predictionResultsDiv = document.getElementById('predictionResults');
-    predictionResultsDiv.classList.remove('d-none');
-
+    // Summary
     const summaryDiv = document.getElementById('summary');
     summaryDiv.innerHTML = `
-        <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${summary.total} คน</p>
-        <p class="mb-1"><strong>คาดว่าจะจบ:</strong> ${summary.predicted_pass} คน (${summary.pass_rate.toFixed(2)}%)</p>
-        <p class="mb-1"><strong>คาดว่าจะไม่จบ:</strong> ${summary.predicted_fail} คน</p>
+        <div class="row text-center">
+            <div class="col-md-3">
+                <div class="card border-primary">
+                    <div class="card-body">
+                        <h3 class="text-primary">${summary.total}</h3>
+                        <small>นักศึกษาทั้งหมด</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-success">
+                    <div class="card-body">
+                        <h3 class="text-success">${summary.predicted_pass}</h3>
+                        <small>คาดว่าจะจบ (${summary.pass_rate.toFixed(1)}%)</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <h3 class="text-danger">${summary.predicted_fail}</h3>
+                        <small>คาดว่าไม่จบ</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-warning">
+                    <div class="card-body">
+                        <h3 class="text-warning">${summary.high_risk}</h3>
+                        <small>ความเสี่ยงสูง</small>
+                    </div>
+                </div>
+            </div>
+        </div>
     `;
 
+    // Overview content
+    const overviewContent = document.getElementById('overviewContent');
+    overviewContent.innerHTML = `
+        <canvas id="predictionChart" height="100"></canvas>
+    `;
+    
+    // Create chart
+    setTimeout(() => {
+        const ctx = document.getElementById('predictionChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['คาดว่าจะจบ', 'คาดว่าไม่จบ'],
+                datasets: [{
+                    data: [summary.predicted_pass, summary.predicted_fail],
+                    backgroundColor: ['#28a745', '#dc3545']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }, 100);
+
+    // Details table
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = `
         <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
+            <table class="table table-hover">
+                <thead class="table-light">
                     <tr>
                         <th>ชื่อ</th>
                         <th>การทำนาย</th>
-                        <th>เกรดเฉลี่ย</th>
-                        <th>ความน่าจะเป็น (จบ)</th>
+                        <th>GPA</th>
+                        <th>ความน่าจะเป็น</th>
+                        <th>ระดับความเสี่ยง</th>
                         <th>คำแนะนำ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${results.map(r => `
+                    ${results.slice(0, 100).map(r => `
                         <tr>
                             <td>${r.ชื่อ}</td>
-                            <td><span class="badge bg-${r.การทำนาย === 'จบ' ? 'success' : 'danger'}">${r.การทำนาย}</span></td>
+                            <td>
+                                <span class="badge bg-${r.การทำนาย === 'จบ' ? 'success' : 'danger'}">
+                                    ${r.การทำนาย}
+                                </span>
+                            </td>
                             <td>${r.เกรดเฉลี่ย.toFixed(2)}</td>
-                            <td>${(r.ความน่าจะเป็น.จบ * 100).toFixed(2)}%</td>
-                            <td>${r.คำแนะนำ.join(', ')}</td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar bg-success" 
+                                         style="width: ${r.ความน่าจะเป็น.จบ * 100}%">
+                                        ${(r.ความน่าจะเป็น.จบ * 100).toFixed(0)}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-${
+                                    r.ระดับความเสี่ยง === 'ต่ำ' ? 'success' :
+                                    r.ระดับความเสี่ยง === 'ปานกลาง' ? 'warning' : 'danger'
+                                }">
+                                    ${r.ระดับความเสี่ยง}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" 
+                                        onclick="showRecommendations('${encodeURIComponent(JSON.stringify(r.คำแนะนำ))}')">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         </div>
     `;
+
+    // Recommendations summary
+    const recommendationsContent = document.getElementById('recommendationsContent');
+    const allRecommendations = [...new Set(results.flatMap(r => r.คำแนะนำ))];
+    recommendationsContent.innerHTML = `
+        <div class="row">
+            ${allRecommendations.map(rec => `
+                <div class="col-md-6 mb-3">
+                    <div class="alert alert-info">
+                        <i class="bi bi-lightbulb-fill me-2"></i>
+                        ${rec}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
     
-    resultsCard.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth' });
 }
 
+// Show individual recommendations
+function showRecommendations(encodedRecs) {
+    const recommendations = JSON.parse(decodeURIComponent(encodedRecs));
+    let html = '<ul class="list-unstyled">';
+    recommendations.forEach(rec => {
+        html += `<li><i class="bi bi-check-circle text-success me-2"></i>${rec}</li>`;
+    });
+    html += '</ul>';
+    
+    // Use Bootstrap modal or alert
+    showAlert(html, 'info');
+}
+
+// Analyze subjects with Course DNA
 async function analyzeSubjects() {
     if (!currentFilename) {
-        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อนครับ', 'warning');
+        showAlert('กรุณาอัปโหลดไฟล์ข้อมูลก่อน', 'warning');
         return;
     }
 
-    showLoading('กำลังวิเคราะห์รายวิชา...');
+    showLoading('กำลังวิเคราะห์ Course DNA และความยากของแต่ละวิชา...');
     toggleSpinner('analyzeBtn', true);
     
     try {
@@ -543,80 +990,158 @@ async function analyzeSubjects() {
         
         if (result.success) {
             displayAnalysisResults(result);
-            showAlert('วิเคราะห์รายวิชาสำเร็จ!', 'success');
+            showAlert('วิเคราะห์ Course DNA สำเร็จ!', 'success');
         } else {
-            showAlert(`เกิดข้อผิดพลาดในการวิเคราะห์: ${result.error}`, 'danger');
+            showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
     } catch (error) {
         console.error('Analysis error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อวิเคราะห์', 'danger');
+        showAlert('เกิดข้อผิดพลาดในการวิเคราะห์', 'danger');
     } finally {
         hideLoading();
         toggleSpinner('analyzeBtn', false);
     }
 }
 
+// Display analysis results
 function displayAnalysisResults(data) {
-    const resultsCard = document.getElementById('resultsCard');
-    resultsCard.classList.remove('d-none');
-    
-    // ซ่อนผลลัพธ์การทำนาย
+    document.getElementById('resultsCard').classList.remove('d-none');
+    document.getElementById('analysisResults').classList.remove('d-none');
+    document.getElementById('trainingResults').classList.add('d-none');
     document.getElementById('predictionResults').classList.add('d-none');
-
-    // แสดงผลลัพธ์การวิเคราะห์
-    const analysisResultsDiv = document.getElementById('analysisResults');
-    analysisResultsDiv.classList.remove('d-none');
     
+    // Summary
     const summaryDiv = document.getElementById('analysis-summary');
     summaryDiv.innerHTML = `
-        <p class="mb-1"><strong>นักศึกษาทั้งหมด:</strong> ${data.overall_stats.total_students} คน</p>
-        <p class="mb-1"><strong>จำนวนวิชาที่วิเคราะห์:</strong> ${data.overall_stats.total_subjects} วิชา</p>
-        <p class="mb-1"><strong>เกรดเฉลี่ยรวม:</strong> ${data.overall_stats.avg_gpa.toFixed(2)}</p>
-        <p class="mb-1"><strong>อัตราการตกโดยรวม:</strong> ${(data.overall_stats.overall_fail_rate * 100).toFixed(1)}%</p>
+        <div class="alert alert-light">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>นักศึกษาทั้งหมด:</strong> ${data.overall_stats.total_students} คน
+                </div>
+                <div class="col-md-3">
+                    <strong>จำนวนวิชา:</strong> ${data.overall_stats.total_subjects} วิชา
+                </div>
+                <div class="col-md-3">
+                    <strong>GPA เฉลี่ย:</strong> ${data.overall_stats.avg_gpa.toFixed(2)}
+                </div>
+                <div class="col-md-3">
+                    <strong>อัตราตกรวม:</strong> ${(data.overall_stats.overall_fail_rate * 100).toFixed(1)}%
+                </div>
+            </div>
+        </div>
     `;
 
+    // Recommendations
     const recommendationsDiv = document.getElementById('analysis-recommendations');
     if (data.recommendations && data.recommendations.length > 0) {
         recommendationsDiv.innerHTML = `
-            <h6 class="fw-bold text-primary mb-2">คำแนะนำจากผลการวิเคราะห์</h6>
-            <ul>
-                ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
-            </ul>
+            <div class="alert alert-warning">
+                <h6 class="alert-heading">
+                    <i class="bi bi-lightbulb-fill me-2"></i>
+                    คำแนะนำจากการวิเคราะห์ Course DNA
+                </h6>
+                <ul class="mb-0">
+                    ${data.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+            </div>
         `;
-    } else {
-        recommendationsDiv.innerHTML = `<p class="text-muted">ไม่มีคำแนะนำพิเศษ</p>`;
     }
 
-    const highFailSubjectsList = document.getElementById('highFailSubjects');
-    highFailSubjectsList.innerHTML = data.problem_subjects.high_fail_rate.length > 0 ?
-        data.problem_subjects.high_fail_rate.map(s => 
-            `<li>${s.subject} <span class="badge bg-danger">${(s.fail_rate * 100).toFixed(1)}%</span></li>`
-        ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีอัตราตกสูง</p>';
-    
-    const lowGpaSubjectsList = document.getElementById('lowGpaSubjects');
-    lowGpaSubjectsList.innerHTML = data.problem_subjects.low_gpa.length > 0 ?
-        data.problem_subjects.low_gpa.map(s => 
-            `<li>${s.subject} <span class="badge bg-warning">${s.average.toFixed(2)}</span></li>`
-        ).join('') : '<p class="text-muted mb-0">ไม่มีวิชาที่มีเกรดเฉลี่ยต่ำ</p>';
-    
-    const excellentSubjectsList = document.getElementById('excellentSubjects');
-    excellentSubjectsList.innerHTML = data.excellent_subjects.length > 0 ?
-        data.excellent_subjects.map(s => 
-            `<li>${s.subject} <span class="badge bg-success">${s.average.toFixed(2)}</span></li>`
-        ).join('') : '<p class="text-muted mb-0">ไม่พบวิชาที่ผลการเรียนดีเยี่ยม</p>';
-    
-    resultsCard.scrollIntoView({ behavior: 'smooth' });
-}
-
-function toggleSpinner(buttonId, show) {
-    const button = document.getElementById(buttonId);
-    const spinner = button.querySelector('.spinner-border');
-    if (show) {
-        spinner.classList.remove('d-none');
-        button.disabled = true;
+    // Killer courses (high fail rate)
+    const highFailList = document.getElementById('highFailSubjects');
+    if (data.problem_subjects.high_fail_rate.length > 0) {
+        highFailList.innerHTML = data.problem_subjects.high_fail_rate.slice(0, 10).map(s => `
+            <li class="mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>${s.subject}</span>
+                    <div>
+                        <span class="badge bg-danger">ตก ${(s.fail_rate * 100).toFixed(1)}%</span>
+                        <span class="badge bg-secondary ms-1">GPA ${s.average.toFixed(2)}</span>
+                    </div>
+                </div>
+                <small class="text-muted">Difficulty Score: ${(s.fail_rate * 2 + (4 - s.average) / 4).toFixed(2)}</small>
+            </li>
+        `).join('');
     } else {
-        spinner.classList.add('d-none');
-        button.disabled = false;
+        highFailList.innerHTML = '<p class="text-muted mb-0">ไม่พบวิชา Killer</p>';
     }
+
+    // Easy courses
+    const easySubjectsList = document.getElementById('easySubjects');
+    if (data.excellent_subjects && data.excellent_subjects.length > 0) {
+        easySubjectsList.innerHTML = data.excellent_subjects.slice(0, 10).map(s => `
+            <li class="mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>${s.subject}</span>
+                    <div>
+                        <span class="badge bg-success">GPA ${s.average.toFixed(2)}</span>
+                        <span class="badge bg-info ms-1">${s.num_students} คน</span>
+                    </div>
+                </div>
+                <small class="text-muted">Pass Rate: ${((1 - s.fail_rate) * 100).toFixed(1)}%</small>
+            </li>
+        `).join('');
+    } else {
+        easySubjectsList.innerHTML = '<p class="text-muted mb-0">ไม่พบวิชา Easy</p>';
+    }
+
+    // Create distribution chart
+    setTimeout(() => {
+        const ctx = document.getElementById('courseDistributionChart').getContext('2d');
+        
+        // Prepare data for chart
+        const categories = Object.keys(data.category_summary || {});
+        const avgGPAs = categories.map(cat => data.category_summary[cat].avg_gpa);
+        const failRates = categories.map(cat => data.category_summary[cat].avg_fail_rate * 100);
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: categories,
+                datasets: [
+                    {
+                        label: 'GPA เฉลี่ย',
+                        data: avgGPAs,
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'อัตราตก (%)',
+                        data: failRates,
+                        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        max: 4
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        max: 100,
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+    }, 100);
+    
+    document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth' });
 }
+</script>
 {% endblock %}
