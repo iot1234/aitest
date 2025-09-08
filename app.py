@@ -2046,12 +2046,27 @@ def index():
 @app.route('/test')
 def curriculum_prediction_form():
     """Page for predicting graduation based on curriculum and prerequisites."""
-    return render_template(
-        'curriculum_prediction_form.html',
-        coursesData=json.dumps(app.config['COURSES_DATA']),  # Convert to JSON string
-        allTermsData=json.dumps(app.config['ALL_TERMS_DATA']),  # Convert to JSON string
-        gradeMapping=json.dumps(app.config['DATA_CONFIG']['grade_mapping'])  # Convert to JSON string
-    )
+    try:
+        # ส่งข้อมูลเป็น JSON string ที่ปลอดภัย
+        courses_json = json.dumps(app.config.get('COURSES_DATA', []))
+        terms_json = json.dumps(app.config.get('ALL_TERMS_DATA', []))
+        grades_json = json.dumps(app.config.get('DATA_CONFIG', {}).get('grade_mapping', {}))
+        
+        return render_template(
+            'curriculum_prediction_form.html',
+            coursesData=courses_json,
+            allTermsData=terms_json,
+            gradeMapping=grades_json
+        )
+    except Exception as e:
+        logger.error(f"Error rendering curriculum form: {str(e)}")
+        # Fallback ถ้ามีปัญหา
+        return render_template(
+            'curriculum_prediction_form.html',
+            coursesData='[]',
+            allTermsData='[]',
+            gradeMapping='{}'
+        )
 
 
 @app.route('/status')
@@ -2197,19 +2212,20 @@ def test_r2():
         
 @app.route('/api/config', methods=['GET'])
 def get_config_for_frontend():
-    """Provides frontend with necessary configuration data like courses and terms."""
+    """Provides frontend with necessary configuration data."""
     try:
         config_data = {
-            'COURSES_DATA': app.config['COURSES_DATA'],
-            'ALL_TERMS_DATA': app.config['ALL_TERMS_DATA'],
-            'GRADE_MAPPING': app.config['DATA_CONFIG']['grade_mapping'],
-            'MESSAGES': app.config['MESSAGES'],
-            'DATA_CONFIG_RISK_LEVELS': app.config['DATA_CONFIG']['risk_levels']
+            'success': True,
+            'COURSES_DATA': app.config.get('COURSES_DATA', []),
+            'ALL_TERMS_DATA': app.config.get('ALL_TERMS_DATA', []),
+            'GRADE_MAPPING': app.config.get('DATA_CONFIG', {}).get('grade_mapping', {}),
+            'MESSAGES': app.config.get('MESSAGES', {}),
+            'DATA_CONFIG_RISK_LEVELS': app.config.get('DATA_CONFIG', {}).get('risk_levels', {})
         }
-        return jsonify({'success': True, **config_data})
+        return jsonify(config_data)
     except Exception as e:
-        logger.error(f"Error loading config data for frontend: {str(e)}")
-        return jsonify({'success': False, 'error': 'Failed to load configuration data'}), 500
+        logger.error(f"Error loading config data: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -2826,11 +2842,26 @@ def main_page():
 # แก้ไข route /curriculum  
 @app.route('/curriculum')
 def curriculum_page():
-    return render_template('curriculum_prediction_form.html',
-        coursesData=json.dumps(app.config['COURSES_DATA']),  # Convert to JSON string
-        allTermsData=json.dumps(app.config['ALL_TERMS_DATA']),  # Convert to JSON string
-        gradeMapping=json.dumps(app.config['DATA_CONFIG']['grade_mapping'])  # Convert to JSON string
-    )
+    """Page for curriculum analysis."""
+    try:
+        courses_json = json.dumps(app.config.get('COURSES_DATA', []))
+        terms_json = json.dumps(app.config.get('ALL_TERMS_DATA', []))
+        grades_json = json.dumps(app.config.get('DATA_CONFIG', {}).get('grade_mapping', {}))
+        
+        return render_template(
+            'curriculum_prediction_form.html',
+            coursesData=courses_json,
+            allTermsData=terms_json,
+            gradeMapping=grades_json
+        )
+    except Exception as e:
+        logger.error(f"Error rendering curriculum page: {str(e)}")
+        return render_template(
+            'curriculum_prediction_form.html',
+            coursesData='[]',
+            allTermsData='[]',
+            gradeMapping='{}'
+        )
 
 @app.route('/predict-batch')
 def predict_batch_page():
