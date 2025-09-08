@@ -1635,6 +1635,7 @@ def load_existing_models():
                 except Exception as e:
                     logger.error(f"Could not load model: {e}")
             
+            # ✅ เพิ่มการตรวจสอบว่าโหลดข้อมูลโมเดลสำเร็จหรือไม่
             if loaded_data:
                 models['subject_model'] = {
                     'models': loaded_data.get('models', {}),
@@ -1647,7 +1648,9 @@ def load_existing_models():
                 models['subject_model_info']['loaded_from_file'] = True
                 models['subject_model_info']['filename'] = latest_subject['filename']
                 logger.info(f"✅ Loaded latest subject model: {latest_subject['filename']}")
-
+            else:
+                logger.warning("❌ No valid subject-based model found or could be loaded. Prediction functionality will be disabled.")
+                
     except Exception as e:
         logger.error(f"❌ Error loading existing models: {str(e)}")
 
