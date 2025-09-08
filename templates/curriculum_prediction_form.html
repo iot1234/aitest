@@ -649,50 +649,40 @@ async function initializeApp() {
         hideLoadingModal();
     }
 }
-
+// แก้ไขฟังก์ชัน loadAIModels()
 async function loadAIModels() {
     try {
-        console.log('🔍 Loading AI models...');
+        console.log('🔍 Loading Advanced AI models...');
         const response = await fetch('/api/models');
         const data = await response.json();
         const modelSelect = document.getElementById('modelSelect');
         
         if (data.success && data.models.length > 0) {
-            // กรองเฉพาะโมเดล subject_based ที่ฝึกแล้ว
-            const aiModels = data.models.filter(m => 
-                m.data_format === 'subject_based' && 
-                m.performance && 
-                m.performance.accuracy > 0
-            );
+            // ทั้งหมดเป็น advanced models แล้ว
+            const aiModels = data.models;
             
-            if (aiModels.length > 0) {
-                // เรียงตามความแม่นยำ
-                aiModels.sort((a, b) => (b.performance.accuracy || 0) - (a.performance.accuracy || 0));
-                
-                modelSelect.innerHTML = '';
-                aiModels.forEach((model, index) => {
-                    const accuracy = (model.performance.accuracy * 100).toFixed(1);
-                    const option = document.createElement('option');
-                    option.value = model.filename;
-                    option.textContent = `${model.filename} (ความแม่นยำ: ${accuracy}%)`;
-                    if (index === 0) option.selected = true; // เลือกโมเดลที่แม่นยำที่สุด
-                    modelSelect.appendChild(option);
-                });
-                
-                // เลือกโมเดลแรก
-                selectedModel = aiModels[0];
-                updateModelStatus(selectedModel);
-                document.getElementById('analyzeAndPredictBtn').disabled = false;
-                
-                console.log(`✅ Loaded ${aiModels.length} AI models, selected: ${selectedModel.filename}`);
-            } else {
-                showNoModelWarning();
-            }
+            // เรียงตามความแม่นยำ
+            aiModels.sort((a, b) => (b.performance.accuracy || 0) - (a.performance.accuracy || 0));
+            
+            modelSelect.innerHTML = '';
+            aiModels.forEach((model, index) => {
+                const accuracy = (model.performance.accuracy * 100).toFixed(1);
+                const option = document.createElement('option');
+                option.value = model.filename;
+                option.textContent = `AI Model - ${accuracy}% (${model.filename.replace('subject_based_model_advanced_', '')})`;
+                if (index === 0) option.selected = true;
+                modelSelect.appendChild(option);
+            });
+            
+            selectedModel = aiModels[0];
+            updateModelStatus(selectedModel);
+            document.getElementById('analyzeAndPredictBtn').disabled = false;
+            
+            console.log(`✅ Loaded ${aiModels.length} Advanced AI models`);
         } else {
             showNoModelWarning();
         }
         
-        // Event listener สำหรับการเปลี่ยนโมเดล
         modelSelect.addEventListener('change', function() {
             const selectedFilename = this.value;
             const model = data.models.find(m => m.filename === selectedFilename);
