@@ -522,6 +522,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function initializeApp() {
+    let timeoutId;
     try {
         if (!coursesData || !allTermsData || !gradeMapping) {
             console.error('Missing curriculum data');
@@ -530,15 +531,31 @@ async function initializeApp() {
         }
         
         showLoadingModal('กำลังโหลดโมเดล AI...');
-        await loadModels();
+        
+        // Set a timeout for the model loading
+        const timeoutPromise = new Promise((resolve, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(new Error('Model loading timed out after 10 seconds.'));
+            }, 10000); // 10 seconds
+        });
+
+        // Use Promise.race to race the model loading against the timeout
+        await Promise.race([loadModels(), timeoutPromise]);
+        
+        // If loading succeeds, clear the timeout
+        clearTimeout(timeoutId);
+
         setupEventListeners();
         updateLiveStats();
         hideLoadingModal();
         showAlert('ระบบพร้อมใช้งาน!', 'success');
     } catch (error) {
         console.error('Initialization error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเริ่มต้นระบบ', 'danger');
+        clearTimeout(timeoutId);
         hideLoadingModal();
+        showAlert('เกิดข้อผิดพลาดในการโหลดโมเดล: ' + error.message, 'danger');
+        setupEventListeners(); // Ensure event listeners are still set up
+        updateLiveStats();
     }
 }
 
@@ -571,6 +588,7 @@ async function loadModels() {
         console.error('Error loading models:', error);
         const modelSelect = document.getElementById('modelSelect');
         modelSelect.innerHTML = '<option value="">ไม่สามารถโหลดโมเดลได้</option>';
+        throw new Error('Could not fetch model list from server.');
     }
 }
 
