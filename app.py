@@ -1,4 +1,4 @@
-# แก้ไขส่วนบนของ app.py
+# app.py
 from advanced_training import AdvancedFeatureEngineer
 from dotenv import load_dotenv
 import sys
@@ -163,29 +163,29 @@ for folder_name, folder_path in [('uploads', UPLOAD_FOLDER), ('models', MODEL_FO
             if not os.path.exists(gitkeep_path):
                 with open(gitkeep_path, 'w') as f:
                     f.write('')
-                logger.info(f"   Created .gitkeep in {folder_name}")
+                logger.info(f"    Created .gitkeep in {folder_name}")
         else:
             logger.info(f"✅ {folder_name} folder exists: {folder_path}")
             
         # ตรวจสอบ permissions
         if os.access(folder_path, os.W_OK):
-            logger.info(f"   ✅ Write permission: OK")
+            logger.info(f"    ✅ Write permission: OK")
         else:
-            logger.error(f"   ❌ Write permission: DENIED")
+            logger.error(f"    ❌ Write permission: DENIED")
             
         # แสดงไฟล์ที่มีอยู่
         files = os.listdir(folder_path)
         if files:
-            logger.info(f"   Files in {folder_name}: {len(files)} file(s)")
+            logger.info(f"    Files in {folder_name}: {len(files)} file(s)")
             for file in files[:5]:  # แสดงแค่ 5 ไฟล์แรก
                 file_path = os.path.join(folder_path, file)
                 file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
-                logger.info(f"     - {file} ({file_size} bytes)")
+                logger.info(f"      - {file} ({file_size} bytes)")
                 
     except Exception as e:
         logger.error(f"❌ Error with {folder_name} folder: {str(e)}")
-        logger.error(f"   Current working directory: {os.getcwd()}")
-        logger.error(f"   Python executable: {sys.executable}")
+        logger.error(f"    Current working directory: {os.getcwd()}")
+        logger.error(f"    Python executable: {sys.executable}")
 
 # Variables to store loaded models
 models = {
@@ -250,8 +250,8 @@ class S3Storage:
             
             # พยายามสร้าง S3 client
             logger.info("🔗 Attempting to connect to Cloudflare R2...")
-            logger.info(f"   Endpoint: {self.endpoint_url}")
-            logger.info(f"   Bucket: {self.bucket_name}")
+            logger.info(f"    Endpoint: {self.endpoint_url}")
+            logger.info(f"    Bucket: {self.bucket_name}")
             
             try:
                 config = Config(
@@ -278,7 +278,7 @@ class S3Storage:
                 )
                 
                 logger.info("✅ R2 CONNECTION SUCCESSFUL!")
-                logger.info(f"   Objects in bucket: {len(test_response.get('Contents', []))}")
+                logger.info(f"    Objects in bucket: {len(test_response.get('Contents', []))}")
                 self.use_local = False
                 
             except ClientError as e:
@@ -425,7 +425,7 @@ class S3Storage:
             os.remove(tmp_path)
             logger.info(f"✅ Model {filename} loaded from R2")
             return model_data
-            
+        
         except Exception as e:
             logger.warning(f"R2 load failed: {str(e)}, trying local...")
             if tmp_path and os.path.exists(tmp_path):
@@ -1564,52 +1564,89 @@ def delete_model(filename):
         return jsonify({'success': False, 'error': f'An error occurred while deleting the model: {str(e)}'}), 500
 
 def load_existing_models():
-    """Loads existing trained models from S3 or local storage."""
+    """Loads existing trained models from storage."""
     try:
         logger.info("🔍 Searching for existing models...")
         
-        # Get models list from storage
-        models_list = storage.list_models()
+        # ลองหาโมเดลจากทั้ง storage และ local
+        models_found = []
         
-        if not models_list:
+        # 1. ลองจาก storage ก่อน
+        try:
+            models_list = storage.list_models()
+            if models_list:
+                models_found.extend(models_list)
+                logger.info(f"Found {len(models_list)} models in storage")
+        except Exception as e:
+            logger.warning(f"Could not load from storage: {e}")
+        
+        # 2. ลองจาก local folder
+        try:
+            model_folder = app.config['MODEL_FOLDER']
+            if os.path.exists(model_folder):
+                for filename in os.listdir(model_folder):
+                    if filename.endswith('.joblib'):
+                        # ตรวจสอบว่าไม่ซ้ำกับที่มีอยู่แล้ว
+                        if not any(m.get('filename') == filename for m in models_found):
+                            filepath = os.path.join(model_folder, filename)
+                            try:
+                                model_data = joblib.load(filepath)
+                                models_found.append({
+                                    'filename': filename,
+                                    'created_at': model_data.get('created_at', datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
+                                    'data_format': model_data.get('data_format', 'subject_based'),
+                                    'performance_metrics': model_data.get('performance_metrics', {}),
+                                    'storage': 'local'
+                                })
+                            except Exception as e:
+                                logger.warning(f"Could not load local model {filename}: {e}")
+        except Exception as e:
+            logger.warning(f"Could not check local folder: {e}")
+        
+        if not models_found:
             logger.info("No existing models found")
             return
         
-        # Load subject-based model
-        subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '')]
+        # Load subject-based model เท่านั้น (ตัด GPA-based ออก)
+        subject_models = [m for m in models_found if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+        
         if subject_models:
+            # เรียงตามวันที่สร้าง
+            subject_models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
             latest_subject = subject_models[0]
-            loaded_data = storage.load_model(latest_subject['filename'])
+            
+            # โหลดโมเดล
+            loaded_data = None
+            
+            # ลองโหลดจาก storage ก่อน
+            if latest_subject.get('storage') != 'local':
+                try:
+                    loaded_data = storage.load_model(latest_subject['filename'])
+                except Exception as e:
+                    logger.warning(f"Could not load from storage: {e}")
+            
+            # ถ้าไม่ได้ ลองโหลดจาก local
+            if not loaded_data:
+                try:
+                    filepath = os.path.join(app.config['MODEL_FOLDER'], latest_subject['filename'])
+                    if os.path.exists(filepath):
+                        loaded_data = joblib.load(filepath)
+                        logger.info(f"Loaded from local: {latest_subject['filename']}")
+                except Exception as e:
+                    logger.error(f"Could not load model: {e}")
+            
             if loaded_data:
                 models['subject_model'] = {
-                    'models': loaded_data['models'],
-                    'scaler': loaded_data['scaler']
+                    'models': loaded_data.get('models', {}),
+                    'scaler': loaded_data.get('scaler')
                 }
-                models['subject_feature_cols'] = loaded_data['feature_columns']
+                models['subject_feature_cols'] = loaded_data.get('feature_columns', [])
                 models['subject_model_info'] = loaded_data.get('performance_metrics', 
                     {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
                 models['subject_model_info']['created_at'] = loaded_data.get('created_at', datetime.now().isoformat())
                 models['subject_model_info']['loaded_from_file'] = True
                 models['subject_model_info']['filename'] = latest_subject['filename']
                 logger.info(f"✅ Loaded latest subject model: {latest_subject['filename']}")
-
-        # Load GPA-based model
-        gpa_models = [m for m in models_list if 'gpa_based' in m.get('filename', '')]
-        if gpa_models:
-            latest_gpa = gpa_models[0]
-            loaded_data = storage.load_model(latest_gpa['filename'])
-            if loaded_data:
-                models['gpa_model'] = {
-                    'models': loaded_data['models'],
-                    'scaler': loaded_data['scaler']
-                }
-                models['gpa_feature_cols'] = loaded_data['feature_columns']
-                models['gpa_model_info'] = loaded_data.get('performance_metrics', 
-                    {'accuracy': 0.85, 'precision': 0.85, 'recall': 0.85, 'f1_score': 0.85})
-                models['gpa_model_info']['created_at'] = loaded_data.get('created_at', datetime.now().isoformat())
-                models['gpa_model_info']['loaded_from_file'] = True
-                models['gpa_model_info']['filename'] = latest_gpa['filename']
-                logger.info(f"✅ Loaded latest GPA model: {latest_gpa['filename']}")
 
     except Exception as e:
         logger.error(f"❌ Error loading existing models: {str(e)}")
@@ -2267,7 +2304,7 @@ def upload_file():
                     except Exception as e:
                         logger.debug(f"Failed with {encoding}: {e}")
                         continue
-                        
+                    
                 if df is None:
                     # ถ้าอ่านไม่ได้ ลองใช้ engine python
                     try:
@@ -2277,7 +2314,7 @@ def upload_file():
                         
             else:  # Excel files
                 df = pd.read_excel(filepath, engine='openpyxl')
-                logger.info(f"Successfully read Excel file")
+                logger.info(f"✅ Successfully read Excel file")
 
             if df is None or df.empty:
                 os.remove(filepath)
@@ -2708,7 +2745,7 @@ def analyze_curriculum():
                             predictions_proba_list.append(pred_proba)
                         except Exception as e:
                             logger.warning(f"Could not predict with model {name}: {str(e)}")
-                    
+                            
                     if predictions_proba_list:
                         avg_prob_per_student = np.mean([pred[0] for pred in predictions_proba_list], axis=0)
                         prob_pass = avg_prob_per_student[1]
@@ -3120,6 +3157,7 @@ def load_existing_models():
 
     except Exception as e:
         logger.error(f"❌ Error loading existing models: {str(e)}")
+
 
 if __name__ == '__main__':
     logger.info("=== FLASK APP CONFIGURATION ===")
