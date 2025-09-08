@@ -472,45 +472,29 @@ async function checkSystemStatus() {
         const data = await response.json();
         
         if (data.success && data.models && data.models.length > 0) {
-            const advancedModels = data.models.filter(m => 
-                m.data_format === 'advanced_context_aware' || 
-                m.filename.includes('advanced')
-            );
-            
             const subjectStatus = document.getElementById('subject-model-status');
-            if (advancedModels.length > 0) {
-                const latestModel = advancedModels[0];
-                const accuracy = latestModel.performance?.accuracy || 0;
-                
-                subjectStatus.innerHTML = `
-                    <span class="badge bg-success">
-                        <i class="bi bi-check-circle-fill"></i> 
-                        ${advancedModels.length} โมเดล
-                    </span>
-                `;
-                
-                // Enable predict button
-                document.getElementById('predictBtn').disabled = false;
-            } else {
-                subjectStatus.innerHTML = `
-                    <span class="badge bg-warning">
-                        <i class="bi bi-exclamation-circle-fill"></i> 
-                        ยังไม่มีโมเดล
-                    </span>
-                `;
-                document.getElementById('predictBtn').disabled = true;
-            }
+            const advancedModels = data.models; // ทั้งหมดเป็น advanced แล้ว
+            
+            subjectStatus.innerHTML = `
+                <span class="badge bg-success">
+                    <i class="bi bi-stars"></i> 
+                    ${advancedModels.length} AI Models
+                </span>
+            `;
+            
+            // Enable predict button
+            document.getElementById('predictBtn').disabled = false;
         } else {
             document.getElementById('subject-model-status').innerHTML = `
-                <span class="badge bg-danger">
-                    <i class="bi bi-x-circle-fill"></i> 
-                    ไม่พร้อมใช้งาน
+                <span class="badge bg-warning">
+                    <i class="bi bi-exclamation-circle-fill"></i> 
+                    ยังไม่มีโมเดล AI
                 </span>
             `;
             document.getElementById('predictBtn').disabled = true;
         }
         
-        // Check storage status
+        // Check storage status (เหมือนเดิม)
         const storageResponse = await fetch('/api/storage/status');
         const storageData = await storageResponse.json();
         
@@ -535,7 +519,6 @@ async function checkSystemStatus() {
         console.error('Error checking status:', error);
     }
 }
-
 // Upload file
 async function uploadFile() {
     const fileInput = document.getElementById('fileUpload');
@@ -602,7 +585,7 @@ async function trainModel() {
     const trainBtn = document.getElementById('trainBtn');
     if (trainBtn.disabled) return;
 
-    showLoading('กำลังเริ่มต้น Advanced Context-Aware Training...');
+    showLoading('กำลังเริ่มต้น Advanced AI Training...');
     toggleSpinner('trainBtn', true);
     
     // Show training progress
@@ -615,6 +598,7 @@ async function trainModel() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 filename: currentFilename
+                // ไม่ต้องส่ง use_advanced เพราะบังคับใช้ advanced อยู่แล้ว
             })
         });
         const result = await response.json();
@@ -627,7 +611,7 @@ async function trainModel() {
             }
             
             // Show success
-            showAlert(`✅ ฝึกโมเดล Advanced สำเร็จ: ${result.model_filename}`, 'success');
+            showAlert(`✅ ฝึกโมเดล AI สำเร็จ: ${result.model_filename}`, 'success');
             
             // Display training results
             displayTrainingResults(result);
@@ -759,7 +743,7 @@ async function predictData() {
         return;
     }
     
-    showLoading('กำลังทำนายผลด้วย Advanced Model...');
+    showLoading('กำลังทำนายผลด้วย Advanced AI Model...');
     toggleSpinner('predictBtn', true);
 
     try {
@@ -767,26 +751,16 @@ async function predictData() {
         const modelsResponse = await fetch('/api/models');
         const modelsData = await modelsResponse.json();
         
-        let modelFilename = null;
-        if (modelsData.success && modelsData.models.length > 0) {
-            // Find advanced models
-            const advancedModels = modelsData.models.filter(m => 
-                m.data_format === 'advanced_context_aware' || 
-                m.filename.includes('advanced')
-            );
-            
-            if (advancedModels.length > 0) {
-                modelFilename = advancedModels[0].filename;
-                console.log('Using advanced model:', modelFilename);
-            }
-        }
-        
-        if (!modelFilename) {
-            showAlert('ไม่พบโมเดล Advanced กรุณาฝึกโมเดลก่อน', 'warning');
+        if (!modelsData.success || modelsData.models.length === 0) {
+            showAlert('ไม่พบโมเดล AI กรุณาฝึกโมเดลก่อน', 'warning');
             hideLoading();
             toggleSpinner('predictBtn', false);
             return;
         }
+        
+        // ใช้โมเดลแรก (ล่าสุด)
+        const modelFilename = modelsData.models[0].filename;
+        console.log('Using Advanced AI model:', modelFilename);
 
         const response = await fetch('/predict', {
             method: 'POST',
@@ -800,7 +774,7 @@ async function predictData() {
 
         if (result.success) {
             displayPredictionResults(result.results, result.summary);
-            showAlert(`ทำนายผลสำเร็จ! (ใช้โมเดล: ${modelFilename})`, 'success');
+            showAlert(`✅ AI ทำนายผลสำเร็จ! (Course DNA: ${result.course_profiles_used} profiles)`, 'success');
         } else {
             showAlert(`เกิดข้อผิดพลาด: ${result.error}`, 'danger');
         }
