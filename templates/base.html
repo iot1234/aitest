@@ -1,315 +1,267 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" data-theme="auto">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}</title>
-    
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --success-gradient: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            --danger-gradient: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
-            --warning-gradient: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
-            --info-gradient: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%);
-        }
-        
-        body {
-            font-family: 'Kanit', sans-serif;
-            background: var(--primary-gradient);
-            min-height: 100vh;
-            color: #333;
-            transition: all 0.3s ease;
-        }
-        
-        body.dark-mode {
-            background: linear-gradient(135deg, #1f1f1f 0%, #2d3748 100%);
-            color: #ddd;
-        }
-        
-        /* Navigation Styles */
-        .navbar {
-            background: rgba(255,255,255,0.95) !important;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-            border-radius: 0 0 15px 15px;
-        }
-        
-        .navbar-brand {
-            font-weight: 700;
-            font-size: 1.5rem;
-            color: #667eea !important;
-        }
-        
-        .navbar-nav .nav-link {
-            font-weight: 500;
-            transition: all 0.3s ease;
-            margin: 0 5px;
-            border-radius: 8px;
-        }
-        
-        .navbar-nav .nav-link:hover {
-            background: rgba(102, 126, 234, 0.1);
-            color: #667eea !important;
-        }
-        
-        /* Card Styles */
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            border: none;
-            backdrop-filter: blur(10px);
-            background: rgba(255,255,255,0.95);
-            transition: transform 0.3s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .card-header {
-            background: var(--primary-gradient);
-            color: white;
-            font-weight: 600;
-            border-radius: 15px 15px 0 0 !important;
-            padding: 20px;
-        }
-        
-        /* Button Styles */
-        .btn-primary {
-            background: var(--primary-gradient);
-            border: none;
-            border-radius: 25px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-success { background: var(--success-gradient); border: none; }
-        .btn-danger { background: var(--danger-gradient); border: none; }
-        .btn-warning { background: var(--warning-gradient); border: none; }
-        .btn-info { background: var(--info-gradient); border: none; }
-        
-        /* Alert Styles */
-        .alert {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        
-        /* Footer */
-        .footer {
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 40px 0;
-            margin-top: 50px;
-            border-radius: 15px 15px 0 0;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container {
-                margin-left: auto;
-                margin-right: auto;
-            }
-        }
-        
-        /* Loading Animation */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(102, 126, 234, 0.9);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            backdrop-filter: blur(10px);
-        }
-        
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top: 4px solid white;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        {% block custom_css %}{% endblock %}
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}</title>
+
+  <!-- Bootstrap & Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+
+  <!-- Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ===================
+       Design Tokens
+       =================== */
+    :root{
+      --bg: #0b1220;
+      --bg-2: #0f1a2d;
+      --surface: #0f1a2d;
+      --surface-2: #111f36;
+      --text: #eaf1ff;
+      --muted: #9fb0cc;
+      --primary: #4f8cff;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 18px;
+      --shadow: 0 12px 30px rgba(0,0,0,.25);
+      --glass: rgba(255,255,255,.06);
+    }
+    /* Light theme */
+    @media (prefers-color-scheme: light){
+      :root{ --bg:#f6f8fb; --bg-2:#eef2f8; --surface:#ffffff; --surface-2:#ffffff; --text:#1b2540; --muted:#5a6a84; --shadow:0 10px 22px rgba(16,26,43,.08); --glass: rgba(16,26,43,.06); }
+    }
+    [data-theme="light"]{ --bg:#f6f8fb; --bg-2:#eef2f8; --surface:#ffffff; --surface-2:#ffffff; --text:#1b2540; --muted:#5a6a84; --shadow:0 10px 22px rgba(16,26,43,.08); --glass: rgba(16,26,43,.06); }
+    [data-theme="dark"]{ --bg:#0b1220; --bg-2:#0f1a2d; --surface:#0f1a2d; --surface-2:#111f36; --text:#eaf1ff; --muted:#9fb0cc; --shadow:0 12px 30px rgba(0,0,0,.25); --glass: rgba(255,255,255,.06); }
+
+    /* ===================
+       Base
+       =================== */
+    html, body{ height:100% }
+    body{
+      font-family: 'Kanit', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(79,140,255,.25), transparent 40%),
+        radial-gradient(900px 500px at 110% 10%, rgba(34,197,94,.18), transparent 40%),
+        var(--bg);
+      transition: background-color .3s ease, color .3s ease;
+    }
+
+    .container, .container-lg, .container-xl{ max-width: 1200px }
+
+    /* ===================
+       Navbar
+       =================== */
+    .navbar{
+      background: linear-gradient(135deg, var(--surface), var(--surface-2)) !important;
+      border-bottom: 1px solid var(--glass);
+      box-shadow: var(--shadow);
+    }
+    .navbar .navbar-brand{ font-weight:700; color: var(--primary) !important }
+    .navbar .nav-link{ color: var(--text); opacity:.9; border-radius: 10px; margin: 0 4px }
+    .navbar .nav-link:hover, .navbar .nav-link:focus{ background: var(--glass); color: var(--text) }
+    .navbar .dropdown-menu{ border:1px solid var(--glass); background: var(--surface); box-shadow: var(--shadow); border-radius: 14px; overflow:hidden }
+    .navbar .dropdown-item{ color: var(--text) }
+    .navbar .dropdown-item:hover{ background: var(--glass); color: var(--text) }
+
+    /* ===================
+       Cards & Surfaces
+       =================== */
+    .card{
+      background: var(--surface);
+      border: 1px solid var(--glass);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      color: var(--text);
+    }
+    .card-header{
+      background: linear-gradient(135deg, rgba(79,140,255,.25), rgba(79,140,255,.08));
+      color: var(--text);
+      border-bottom: 1px solid var(--glass);
+      border-radius: var(--radius) var(--radius) 0 0 !important;
+    }
+    .card:hover{ transform: translateY(-2px); transition: transform .25s ease }
+
+    /* ===================
+       Buttons
+       =================== */
+    .btn{ border-radius: 999px; font-weight:600 }
+    .btn-primary{ background: linear-gradient(135deg, #4f8cff, #7aa5ff); border:0 }
+    .btn-success{ background: linear-gradient(135deg, #22c55e, #34d399); border:0 }
+    .btn-warning{ background: linear-gradient(135deg, #f59e0b, #fbbf24); border:0 }
+    .btn-danger{ background: linear-gradient(135deg, #ef4444, #f87171); border:0 }
+    .btn-info{ background: linear-gradient(135deg, #22d3ee, #60a5fa); border:0 }
+    .btn-outline-light{ border-color: var(--glass); color: var(--text) }
+    .btn-outline-light:hover{ background: var(--glass); }
+
+    /* ===================
+       Utilities
+       =================== */
+    .glass{ background: var(--surface); border: 1px solid var(--glass); border-radius: var(--radius); box-shadow: var(--shadow) }
+    .muted{ color: var(--muted) }
+
+    /* Tables */
+    .table{ color: var(--text) }
+    .table thead{ color: var(--muted) }
+
+    /* Tabs */
+    .nav-tabs{ border-bottom: 1px solid var(--glass) }
+    .nav-tabs .nav-link{ border:0; color: var(--muted) }
+    .nav-tabs .nav-link.active{ color: var(--text); background: var(--glass); border-radius: 999px }
+
+    /* Forms */
+    .form-control, .form-select{ background: var(--surface-2); color: var(--text); border:1px solid var(--glass) }
+    .form-control:focus, .form-select:focus{ box-shadow: 0 0 0 4px rgba(79,140,255,.25); border-color: #7aa5ff }
+
+    /* Footer */
+    .footer{ background: var(--surface); border-top: 1px solid var(--glass); color: var(--text); margin-top: 56px; }
+
+    /* Loading Overlay */
+    .loading-overlay{ position: fixed; inset: 0; display: grid; place-items: center; background: rgba(12,18,32,.72); backdrop-filter: blur(10px); z-index: 1050 }
+    .loading-card{ text-align:center; padding: 24px 28px; border-radius: 16px; background: var(--surface); border:1px solid var(--glass) }
+    .spinner{ border: 4px solid rgba(255,255,255,.25); border-top-color: #fff; width: 48px; height: 48px; border-radius: 50%; animation: spin 1s linear infinite; margin-inline: auto }
+    @keyframes spin{ to{ transform: rotate(360deg) } }
+
+    /* Motion Safety */
+    @media (prefers-reduced-motion: reduce){
+      *{ animation: none !important; transition: none !important }
+    }
+
+    /* Focus */
+    :focus-visible{ outline: 3px solid #7aa5ff; outline-offset: 2px; border-radius: 10px }
+
+    /* Custom CSS slot */
+    {% block custom_css %}{% endblock %}
+  </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('main_page') }}">
-                <i class="bi bi-mortarboard-fill"></i> Student Predictor
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg fixed-top">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main_page') }}">
+        <i class="bi bi-mortarboard-fill"></i>
+        <span>Student Predictor</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('main_page') }}"><i class="bi bi-house-fill me-1"></i>หน้าหลัก</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-cpu-fill me-1"></i>ฝึกโมเดล</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('status_page') }}"><i class="bi bi-activity me-1"></i>สถานะระบบ</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('curriculum_prediction_form') }}"><i class="bi bi-person-check-fill me-1"></i>ทำนายรายบุคคล</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi bi-tools me-1"></i>เครื่องมือ</a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+              <li><a class="dropdown-item" href="{{ url_for('models_page') }}"><i class="bi bi-folder-fill me-2"></i>จัดการโมเดล</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('curriculum_page') }}"><i class="bi bi-diagram-3-fill me-2"></i>วิเคราะห์หลักสูตร</a></li>
+            </ul>
+          </li>
+          <li class="nav-item ms-lg-2">
+            <button class="btn btn-outline-light btn-sm" onclick="toggleTheme()" id="themeToggle">
+              <i class="bi bi-moon-stars"></i> <span class="d-none d-sm-inline">โหมดมืด/สว่าง</span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main_page') }}">
-                            <i class="bi bi-house-fill"></i> หน้าหลัก
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="bi bi-cpu-fill"></i> ฝึกโมเดล
-                        </a>
-                    </li>
-
-                    <li><a class="dropdown-item" href="{{ url_for('status_page') }}">
-    <i class="bi bi-activity"></i> สถานะระบบ
-</a></li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('curriculum_prediction_form') }}">
-                            <i class="bi bi-person-check-fill"></i> ทำนายรายบุคคล
-                        </a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-tools"></i> เครื่องมือ
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('models_page') }}">
-                                <i class="bi bi-folder-fill"></i> จัดการโมเดล
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('curriculum_page') }}">
-                                <i class="bi bi-diagram-3-fill"></i> วิเคราะห์หลักสูตร
-                            </a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link btn" onclick="toggleDarkMode()" id="darkModeToggle">
-                            <i class="bi bi-moon-fill"></i> โหมดมืด
-                        </button>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-    
-    <main class="main-content" style="margin-top: 100px;">
-        {% block content %}{% endblock %}
-    </main>
-    
-    <footer class="footer mt-5">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6">
-                    <h5><i class="bi bi-mortarboard-fill"></i> Student Predictor</h5>
-                    <p>ระบบทำนายความสำเร็จของนักศึกษาด้วย AI และ Machine Learning</p>
-                </div>
-                
-                </div>
-            </div>
-        </div>
-    </footer>
-    
-    <div class="loading-overlay d-none" id="loadingOverlay">
-        <div class="text-center text-white">
-            <div class="spinner mb-3"></div>
-            <h5>กำลังประมวลผล...</h5>
-        </div>
+          </li>
+        </ul>
+      </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <script>
-        // Dark Mode Toggle
-        function toggleDarkMode() {
-            const body = document.body;
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            
-            body.classList.toggle('dark-mode');
-            
-            if (body.classList.contains('dark-mode')) {
-                darkModeToggle.innerHTML = '<i class="bi bi-sun-fill"></i> โหมดสว่าง';
-                localStorage.setItem('darkMode', 'true');
-            } else {
-                darkModeToggle.innerHTML = '<i class="bi bi-moon-fill"></i> โหมดมืด';
-                localStorage.setItem('darkMode', 'false');
-            }
-        }
-        
-        // Load Dark Mode Preference
-        document.addEventListener('DOMContentLoaded', function() {
-            if (localStorage.getItem('darkMode') === 'true') {
-                toggleDarkMode();
-            }
-        });
-        
-        // Loading Overlay Functions
-        function showLoading(message = 'กำลังประมวลผล...') {
-            const overlay = document.getElementById('loadingOverlay');
-            overlay.querySelector('h5').textContent = message;
-            overlay.classList.remove('d-none');
-        }
-        
-        function hideLoading() {
-            document.getElementById('loadingOverlay').classList.add('d-none');
-        }
-        
-        // Alert Functions
-        function showAlert(message, type = 'info', containerId = 'alertContainer') {
-            const alertContainer = document.getElementById(containerId) || document.querySelector('.container');
-            if (!alertContainer) return;
-            
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-            alertDiv.innerHTML = `
-                <i class="bi bi-info-circle-fill me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            alertContainer.insertBefore(alertDiv, alertContainer.firstChild);
-            
-            // Auto dismiss after 5 seconds
-            setTimeout(() => {
-                if (alertDiv.parentNode) {
-                    alertDiv.classList.add('fade');
-                    setTimeout(() => alertDiv.remove(), 150);
-                }
-            }, 5000);
-        }
-        
-        // Smooth Scrolling
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
-            });
-        });
-        
-        {% block custom_js %}{% endblock %}
-        
-    </script>
+  </nav>
+
+  <!-- Main -->
+  <main class="main-content" style="padding-top: 96px;">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer py-4">
+    <div class="container">
+      <div class="row g-3 align-items-center">
+        <div class="col-md-7">
+          <h5 class="mb-1"><i class="bi bi-mortarboard-fill me-2"></i>Student Predictor</h5>
+          <div class="muted">ระบบทำนายความสำเร็จของนักศึกษาด้วย AI และ Machine Learning</div>
+        </div>
+        <div class="col-md-5 text-md-end">
+          <span class="muted me-2">© {{ current_year or '' }}</span>
+          <a href="#" class="text-decoration-none me-2"><i class="bi bi-github"></i></a>
+          <a href="#" class="text-decoration-none me-2"><i class="bi bi-twitter-x"></i></a>
+          <a href="#" class="text-decoration-none"><i class="bi bi-globe"></i></a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Loading -->
+  <div class="loading-overlay d-none" id="loadingOverlay" aria-live="polite" aria-busy="true">
+    <div class="loading-card">
+      <div class="spinner mb-3" role="status" aria-label="กำลังประมวลผล"></div>
+      <h6 class="mb-0">กำลังประมวลผล...</h6>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // =================== Theme ===================
+    (function(){
+      const root = document.documentElement;
+      const key = 'sp-theme-preference'; // 'light' | 'dark' | 'auto'
+      const apply = (mode)=>{ root.setAttribute('data-theme', mode); };
+
+      // Load saved preference
+      const saved = localStorage.getItem(key) || 'auto';
+      apply(saved);
+
+      // Auto follow system if 'auto'
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleScheme = () => { if ((localStorage.getItem(key)||'auto') === 'auto'){ apply(media.matches ? 'dark' : 'light'); } };
+      media.addEventListener?.('change', handleScheme);
+      handleScheme();
+
+      window.toggleTheme = function(){
+        // cycle: auto -> dark -> light -> auto
+        const current = root.getAttribute('data-theme') || 'auto';
+        const next = current === 'auto' ? 'dark' : current === 'dark' ? 'light' : 'auto';
+        apply(next); localStorage.setItem(key, next);
+        const icon = document.querySelector('#themeToggle i');
+        if(icon){ icon.className = next === 'dark' ? 'bi bi-sun' : next === 'light' ? 'bi bi-moon' : 'bi bi-moon-stars'; }
+      }
+    })();
+
+    // =================== Loading Overlay ===================
+    function showLoading(message='กำลังประมวลผล...'){
+      const overlay = document.getElementById('loadingOverlay');
+      overlay.querySelector('h6').textContent = message;
+      overlay.classList.remove('d-none');
+    }
+    function hideLoading(){ document.getElementById('loadingOverlay').classList.add('d-none'); }
+
+    // =================== Alerts ===================
+    function showAlert(message, type='info', containerId='alertContainer'){
+      const container = document.getElementById(containerId) || document.querySelector('.container');
+      if(!container) return;
+      const wrap = document.createElement('div');
+      wrap.className = `alert alert-${type} alert-dismissible fade show glass mt-3`;
+      wrap.innerHTML = `<i class="bi bi-info-circle-fill me-2"></i>${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+      container.insertAdjacentElement('afterbegin', wrap);
+      setTimeout(()=>{ wrap.classList.remove('show'); setTimeout(()=>wrap.remove(), 150); }, 6000);
+    }
+
+    // =================== Smooth Anchor ===================
+    document.addEventListener('click', (e)=>{
+      const a = e.target.closest('a[href^="#"]');
+      if(!a) return; const target = document.querySelector(a.getAttribute('href')); if(!target) return;
+      e.preventDefault(); target.scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+
+    // Custom JS slot
+    {% block custom_js %}{% endblock %}
+  </script>
 </body>
 </html>
