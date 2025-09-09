@@ -530,11 +530,8 @@
     </div>
 </div>
 {% endblock %}
-
-{% block custom_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Global variables
+// ข้อมูลจาก Backend
 let coursesData = [];
 let allTermsData = [];
 let gradeMapping = {};
@@ -550,7 +547,6 @@ let loadingModalInstance = null;
 document.addEventListener('DOMContentLoaded', async function() {
     console.log('Page loaded, starting initialization...');
     
-    // Initial setup - don't show loading immediately
     try {
         // Load configuration first
         const configLoaded = await loadConfigFromAPI();
@@ -656,7 +652,7 @@ async function initializeApp() {
     }
 }
 
-// Load AI models (no loading modal)
+// Load AI models
 async function loadModels() {
     try {
         console.log('Loading AI models...');
@@ -670,7 +666,7 @@ async function loadModels() {
             return;
         }
         
-        modelSelect.innerHTML = '<option value="">-- เลือกโมเดล AI --</option>';
+        modelSelect.innerHTML = '<option value="">-- เลือกโมเดล AI (บังคับ) --</option>';
         
         if (data.success && data.models && data.models.length > 0) {
             const subjectModels = data.models.filter(m => 
@@ -691,6 +687,7 @@ async function loadModels() {
                     modelSelect.appendChild(option);
                 });
                 
+                // Auto-select first model
                 if (subjectModels.length > 0) {
                     modelSelect.value = subjectModels[0].filename;
                 }
@@ -702,8 +699,6 @@ async function loadModels() {
             modelSelect.innerHTML += '<option value="">ไม่พบโมเดล (กรุณาฝึกโมเดลก่อน)</option>';
             console.log('No models found');
         }
-        
-        modelSelect.innerHTML += '<option value="">-- วิเคราะห์อย่างเดียว (ไม่ใช้ AI) --</option>';
         
     } catch (error) {
         console.error('Error loading models:', error);
@@ -1057,7 +1052,7 @@ function saveCurrentState() {
     showAlert('บันทึกสถานะเรียบร้อย', 'success');
 }
 
-// Analyze and predict
+// *** UPDATED FUNCTION *** Analyze and predict with AI
 async function analyzeAndPredict() {
     const studentName = document.getElementById('studentName').value || 'นักศึกษา';
     const modelFilename = document.getElementById('modelSelect').value;
@@ -1066,383 +1061,258 @@ async function analyzeAndPredict() {
         showAlert('กรุณากรอกเกรดอย่างน้อย 1 วิชา', 'warning');
         return;
     }
+    
+    // ตรวจสอบว่าเลือกโมเดลหรือไม่
+    if (!modelFilename || modelFilename === '') {
+        showAlert('⚠️ กรุณาเลือกโมเดล AI สำหรับการทำนาย', 'warning');
+        return;
+    }
 
-    showLoadingModal('กำลังวิเคราะห์และทำนาย...');
+    showLoadingModal('กำลังวิเคราะห์และทำนายด้วย AI...');
     
     try {
-        const analysis = performAnalysis();
+        // ส่งข้อมูลไปให้ backend วิเคราะห์และทำนายด้วย AI
+        const response = await fetch('/api/analyze_curriculum', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_name: studentName,
+                current_grades: courseGrades,
+                loaded_terms_count: loadedTermsCount,
+                model_filename: modelFilename, // ส่งชื่อโมเดลไปด้วยเสมอ
+                repeated_courses_in_this_term_ids: []
+            })
+        });
         
-        if (modelFilename) {
-            // Use AI model for prediction
-            const response = await fetch('/api/analyze_curriculum', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    student_name: studentName,
-                    current_grades: courseGrades,
-                    loaded_terms_count: loadedTermsCount,
-                    model_filename: modelFilename
-                })
-            });
+        const result = await response.json();
+        
+        if (result.success) {
+            // แสดงผลทั้งการวิเคราะห์และการทำนาย AI
+            displayAdvancedResults(result);
             
-            const result = await response.json();
-            
-            if (result.success && result.prediction_result) {
-                displayResults(analysis, result);
-                showAlert('วิเคราะห์และทำนายเสร็จสิ้น', 'success');
+            // เน้นผลจาก AI
+            if (result.prediction_result) {
+                const pred = result.prediction_result;
+                showAlert(`✅ AI ทำนายว่า: ${pred.prediction} (ความมั่นใจ ${(pred.confidence * 100).toFixed(1)}%)`, 'success');
             } else {
-                displayResults(analysis);
-                showAlert('วิเคราะห์เสร็จสิ้น (ไม่ใช้ AI)', 'info');
+                showAlert('⚠️ วิเคราะห์เสร็จสิ้น แต่ไม่สามารถใช้ AI ทำนายได้', 'warning');
             }
         } else {
-            // Analysis only (no AI)
-            displayResults(analysis);
-            showAlert('วิเคราะห์เสร็จสิ้น (ไม่ใช้ AI)', 'info');
+            showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
         }
     } catch (error) {
         console.error('Analysis error:', error);
-        showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+        showAlert('เกิดข้อผิดพลาดในการเชื่อมต่อ', 'danger');
     } finally {
         hideLoadingModal();
     }
 }
 
-// Perform analysis
-function performAnalysis() {
-    let totalPoints = 0;
-    let totalCredits = 0;
-    let passedCredits = 0;
-    const failedCourses = [];
-    const blockedCourses = [];
-    const categoryGrades = {};
-    
-    Object.entries(courseGrades).forEach(([courseId, grade]) => {
-        if (grade) {
-            const course = coursesData.find(c => c.id === courseId);
-            if (course) {
-                const gradePoint = gradeMapping[grade] || 0;
-                totalPoints += gradePoint * course.credit;
-                totalCredits += course.credit;
-                
-                if (gradePoint > 0) {
-                    passedCredits += course.credit;
-                } else {
-                    failedCourses.push(course);
-                }
-                
-                const category = categorizeSubject(course.thaiName);
-                if (!categoryGrades[category]) categoryGrades[category] = [];
-                categoryGrades[category].push(gradePoint);
-            }
-        }
-    });
-    
-    document.querySelectorAll('.course-card.locked').forEach(card => {
-        const courseId = card.dataset.courseId;
-        const course = coursesData.find(c => c.id === courseId);
-        if (course) blockedCourses.push(course);
-    });
-    
-    const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
-    const totalRequiredCredits = coursesData.reduce((sum, c) => sum + c.credit, 0);
-    const completionRate = (passedCredits / totalRequiredCredits) * 100;
-    
-    return {
-        gpa,
-        passedCredits,
-        totalCredits: totalRequiredCredits,
-        completionRate,
-        failedCourses,
-        blockedCourses,
-        categoryGrades
-    };
-}
-
-// Categorize subject
-function categorizeSubject(subjectName) {
-    const categories = {
-        'คณิตศาสตร์': ['คณิต', 'แคลคูลัส', 'สถิติ'],
-        'วิทยาศาสตร์': ['ฟิสิกส์', 'เคมี', 'ชีววิทยา'],
-        'การเขียนโปรแกรม': ['โปรแกรม', 'ซอฟต์แวร์', 'ข้อมูล', 'อัลกอริทึม'],
-        'วิศวกรรม': ['วิศวกรรม', 'วงจร', 'อิเล็กทรอนิกส์'],
-        'ภาษา': ['ภาษา', 'อังกฤษ', 'ไทย', 'การสื่อสาร'],
-        'ทั่วไป': ['สังคม', 'สิ่งแวดล้อม', 'ชีวิต', 'คุณค่า']
-    };
-    
-    for (const [category, keywords] of Object.entries(categories)) {
-        if (keywords.some(kw => subjectName.includes(kw))) {
-            return category;
-        }
-    }
-    return 'อื่นๆ';
-}
-
-// Display results
-function displayResults(analysis, predictionResult = null) {
+// *** NEW FUNCTION *** Display advanced results with AI prediction
+function displayAdvancedResults(data) {
     const resultsSection = document.getElementById('resultsSection');
     resultsSection.classList.remove('d-none');
+    resultsSection.scrollIntoView({ behavior: 'smooth' });
     
-    // Main prediction
-    const mainPrediction = document.getElementById('mainPrediction');
-    const isPassing = analysis.gpa >= 2.0 && analysis.failedCourses.length === 0 && analysis.completionRate >= 75;
+    // Update basic info
+    document.getElementById('resultsStudentName').textContent = data.student_name;
+    document.getElementById('resultsCurrentGPA').textContent = data.avg_gpa ? data.avg_gpa.toFixed(2) : '0.00';
     
-    mainPrediction.innerHTML = `
-        <h2 class="mb-3">ผลการวิเคราะห์</h2>
-        <span class="prediction-badge ${isPassing ? 'pass' : 'fail'}">
-            ${isPassing ? '✓ คาดว่าจะจบการศึกษาได้' : '✗ มีความเสี่ยงที่จะไม่จบ'}
-        </span>
-        <div class="mt-3">
-            <strong>GPA:</strong> ${analysis.gpa.toFixed(2)} | 
-            <strong>ความคืบหน้า:</strong> ${analysis.completionRate.toFixed(0)}%
-        </div>
-    `;
-    
-    // Study status
-    const studyStatus = document.getElementById('studyStatus');
-    studyStatus.innerHTML = `
-        <p><strong>หน่วยกิตที่ผ่าน:</strong> ${analysis.passedCredits}/${analysis.totalCredits}</p>
-        <p><strong>จำนวนวิชาที่ตก:</strong> ${analysis.failedCourses.length}</p>
-        <p><strong>จำนวนวิชาที่ถูกบล็อก:</strong> ${analysis.blockedCourses.length}</p>
-        <p><strong>สถานะ GPA:</strong> ${analysis.gpa >= 2.0 ? 
-            '<span class="text-success">ผ่านเกณฑ์</span>' : 
-            '<span class="text-danger">ต่ำกว่าเกณฑ์</span>'}</p>
-    `;
-
-    // Probability details (if AI prediction available)
-    const probabilityDetails = document.getElementById('probabilityDetails');
-    if (predictionResult && predictionResult.prediction_result) {
-        const pred = predictionResult.prediction_result;
-        probabilityDetails.innerHTML = `
-            <h5 class="mb-3">ผลจากโมเดล AI</h5>
-            <div class="mb-2">
-                <strong>การทำนาย:</strong> 
-                <span class="badge bg-${pred.prediction === 'จบ' ? 'success' : 'danger'} fs-6">
-                    ${pred.prediction}
-                </span>
-            </div>
-            <div class="mb-2">
-                <strong>ความน่าจะเป็นที่จะจบ:</strong> ${(pred.prob_pass * 100).toFixed(1)}%
-            </div>
-            <div class="mb-2">
-                <strong>ความน่าจะเป็นที่จะไม่จบ:</strong> ${(pred.prob_fail * 100).toFixed(1)}%
-            </div>
-            <div class="mb-2">
-                <strong>ความเชื่อมั่น:</strong> ${(pred.confidence * 100).toFixed(1)}%
-            </div>
-            <div>
-                <strong>ระดับความเสี่ยง:</strong> 
-                <span class="badge bg-${pred.risk_level === 'ต่ำ' ? 'success' : 
-                    pred.risk_level === 'ปานกลาง' ? 'warning' : 'danger'}">
-                    ${pred.risk_level}
-                </span>
+    // ตรวจสอบว่ามีผล AI หรือไม่
+    if (data.prediction_result && data.prediction_result.prediction) {
+        const pred = data.prediction_result;
+        const aiPrediction = pred.prediction;
+        const confidence = (pred.confidence * 100).toFixed(1);
+        const probPass = (pred.prob_pass * 100).toFixed(1);
+        const probFail = (pred.prob_fail * 100).toFixed(1);
+        
+        // แสดงผล AI เป็นหลัก
+        document.getElementById('resultsGraduationStatus').innerHTML = `
+            <div class="text-center">
+                <div class="mb-3">
+                    <span class="badge bg-primary fs-6">
+                        <i class="bi bi-cpu"></i> ผลทำนายจาก AI Model
+                    </span>
+                </div>
+                <h2 class="mb-3 text-${aiPrediction === 'จบ' ? 'success' : 'danger'}">
+                    <i class="bi bi-${aiPrediction === 'จบ' ? 'check-circle-fill' : 'x-circle-fill'}"></i>
+                    ${aiPrediction === 'จบ' ? 'คาดว่าจะจบการศึกษาได้' : 'คาดว่าจะไม่จบการศึกษา'}
+                </h2>
+                <div class="row justify-content-center mb-3">
+                    <div class="col-md-8">
+                        <div class="progress" style="height: 40px;">
+                            <div class="progress-bar bg-success" style="width: ${probPass}%">
+                                <span class="fs-6">จบ ${probPass}%</span>
+                            </div>
+                            <div class="progress-bar bg-danger" style="width: ${probFail}%">
+                                <span class="fs-6">ไม่จบ ${probFail}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="fs-5 mb-2">
+                    <strong>ความมั่นใจ:</strong> 
+                    <span class="badge bg-${confidence >= 80 ? 'success' : confidence >= 60 ? 'warning' : 'danger'} fs-6">
+                        ${confidence}%
+                    </span>
+                </p>
+                <hr class="my-3">
+                <div class="text-muted">
+                    <small><i class="bi bi-info-circle"></i> การวิเคราะห์ตามกฎหลักสูตร: ${data.graduation_status || 'ไม่ระบุ'}</small>
+                </div>
             </div>
         `;
+        
+        // Update prediction display
+        document.getElementById('resultsPrediction').innerHTML = `
+            <strong class="text-${aiPrediction === 'จบ' ? 'success' : 'danger'} fs-5">
+                ${aiPrediction} (${confidence}%)
+            </strong>
+        `;
+        
+        // Update risk level
+        const riskBadge = document.getElementById('resultsRiskLevel');
+        if (riskBadge && pred.risk_level) {
+            riskBadge.textContent = pred.risk_level;
+            riskBadge.className = 'badge bg-' + getRiskColor(pred.risk_level) + ' fs-6';
+        }
+        
     } else {
-        probabilityDetails.innerHTML = '<p class="text-muted">ไม่ได้ใช้โมเดล AI</p>';
-    }
-    
-    // Problem courses
-    const problemCourses = document.getElementById('problemCourses');
-    if (analysis.failedCourses.length > 0) {
-        problemCourses.innerHTML = '<ul>' + 
-            analysis.failedCourses.map(c => `<li>${c.thaiName} (${c.id})</li>`).join('') +
-            '</ul>';
-    } else {
-        problemCourses.innerHTML = '<p class="text-success">ไม่มีวิชาที่ตก</p>';
-    }
-    
-    // Blocked courses
-    const blockedCoursesDetail = document.getElementById('blockedCoursesDetail');
-    if (analysis.blockedCourses.length > 0) {
-        blockedCoursesDetail.innerHTML = '<ul>' + 
-            analysis.blockedCourses.slice(0, 5).map(c => `<li>${c.thaiName} (${c.id})</li>`).join('') +
-            (analysis.blockedCourses.length > 5 ? `<li>และอีก ${analysis.blockedCourses.length - 5} วิชา...</li>` : '') +
-            '</ul>';
-    } else {
-        blockedCoursesDetail.innerHTML = '<p class="text-success">ไม่มีวิชาที่ถูกบล็อก</p>';
-    }
-    
-    // Recommendations
-    const recommendations = generateRecommendations(analysis, predictionResult);
-    const personalRecommendations = document.getElementById('personalRecommendations');
-    personalRecommendations.innerHTML = recommendations.map(rec => 
-        `<div class="recommendation-card ${rec.type}">
-            <i class="bi bi-${rec.icon}"></i> ${rec.text}
-        </div>`
-    ).join('');
-    
-    // Draw charts
-    drawCharts(analysis);
-    
-    // Scroll to results
-    resultsSection.scrollIntoView({ behavior: 'smooth' });
-}
-
-// Generate recommendations
-function generateRecommendations(analysis, predictionResult) {
-    const recommendations = [];
-    
-    if (predictionResult && predictionResult.prediction_result) {
-        const pred = predictionResult.prediction_result;
-        if (pred.risk_level === 'สูง') {
-            recommendations.push({
-                type: 'urgent',
-                icon: 'exclamation-octagon',
-                text: 'AI ประเมินว่ามีความเสี่ยงสูง ควรปรึกษาอาจารย์ที่ปรึกษาโดยด่วน'
-            });
+        // ถ้าไม่มีผล AI ให้แสดงเฉพาะผลการวิเคราะห์ตามกฎ
+        document.getElementById('resultsGraduationStatus').innerHTML = `
+            <div class="text-center">
+                <div class="mb-3">
+                    <span class="badge bg-secondary fs-6">
+                        <i class="bi bi-calculator"></i> ผลการวิเคราะห์ตามกฎหลักสูตร
+                    </span>
+                </div>
+                <h3 class="mb-3">${data.graduation_status || 'ไม่สามารถวิเคราะห์ได้'}</h3>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    ไม่ได้ใช้โมเดล AI ในการทำนาย - กรุณาเลือกโมเดลเพื่อความแม่นยำมากขึ้น
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('resultsPrediction').innerHTML = '<span class="text-muted">ไม่ได้ใช้โมเดล AI</span>';
+        
+        const riskBadge = document.getElementById('resultsRiskLevel');
+        if (riskBadge) {
+            riskBadge.textContent = 'ไม่ระบุ';
+            riskBadge.className = 'badge bg-secondary';
         }
     }
     
-    if (analysis.gpa < 2.0) {
-        recommendations.push({
-            type: 'urgent',
-            icon: 'exclamation-triangle',
-            text: 'GPA ต่ำกว่าเกณฑ์ขั้นต่ำ (2.00) ต้องปรับปรุงโดยเร่งด่วน'
+    // Update progress ring
+    updateProgressRingForResults(data.completion_rate || 0);
+    
+    // Failed Courses
+    const failedCoursesContainer = document.getElementById('failedCourses');
+    if (data.failed_courses && data.failed_courses.length > 0) {
+        let failedHtml = '<ul class="list-unstyled mb-0">';
+        data.failed_courses.forEach(function(name) {
+            failedHtml += '<li class="mb-2"><i class="bi bi-x-circle-fill text-danger me-2"></i>' + name + '</li>';
         });
-    } else if (analysis.gpa < 2.5) {
-        recommendations.push({
-            type: 'warning',
-            icon: 'info-circle',
-            text: 'ควรพยายามเพิ่ม GPA ให้สูงขึ้นเพื่อโอกาสในการศึกษาต่อ'
-        });
+        failedHtml += '</ul>';
+        failedCoursesContainer.innerHTML = failedHtml;
     } else {
-        recommendations.push({
-            type: 'success',
-            icon: 'check-circle',
-            text: 'GPA อยู่ในเกณฑ์ดี ควรรักษาระดับให้คงที่'
-        });
+        failedCoursesContainer.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ตก</p>';
     }
     
-    if (analysis.failedCourses.length > 0) {
-        recommendations.push({
-            type: 'urgent',
-            icon: 'arrow-repeat',
-            text: `ต้องลงทะเบียนเรียนซ้ำ ${analysis.failedCourses.length} วิชาที่ตก`
+    // Blocked Courses
+    const blockedCoursesContainer = document.getElementById('blockedCourses');
+    if (data.blocked_courses_details && data.blocked_courses_details.length > 0) {
+        let blockedHtml = '<ul class="list-unstyled mb-0">';
+        data.blocked_courses_details.forEach(function(course) {
+            blockedHtml += '<li class="mb-2">' +
+                '<i class="bi bi-slash-circle-fill text-warning me-2"></i>' +
+                '<strong>' + course.name + '</strong>' +
+                '<br><small class="text-muted ms-4">ต้องผ่าน: ' + course.unmet_prereqs.join(', ') + '</small>' +
+                '</li>';
         });
+        blockedHtml += '</ul>';
+        blockedCoursesContainer.innerHTML = blockedHtml;
+    } else {
+        blockedCoursesContainer.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ถูกบล็อก</p>';
     }
     
-    if (analysis.blockedCourses.length > 0) {
-        recommendations.push({
-            type: 'warning',
-            icon: 'lock',
-            text: `มี ${analysis.blockedCourses.length} วิชาที่ยังไม่สามารถลงได้ ต้องผ่าน prerequisite ก่อน`
-        });
-    }
-    
-    if (analysis.completionRate < 50) {
-        recommendations.push({
-            type: 'warning',
-            icon: 'speedometer2',
-            text: 'ความคืบหน้าช้ากว่าแผน ควรเร่งลงทะเบียนเรียนให้ครบ'
-        });
-    }
-    
-    return recommendations;
-}
-
-// Draw charts
-function drawCharts(analysis) {
-    // GPA Chart
-    const gpaCtx = document.getElementById('gpaChart');
-    if (gpaCtx) {
-        if (charts.gpa) charts.gpa.destroy();
+    // Recommendations - ปรับให้เน้นคำแนะนำจาก AI
+    const recommendationsContainer = document.getElementById('recommendations');
+    if (recommendationsContainer) {
+        let recHtml = '';
         
-        const termGPAs = calculateTermGPAs();
-        
-        charts.gpa = new Chart(gpaCtx, {
-            type: 'line',
-            data: {
-                labels: termGPAs.map(t => t.label),
-                datasets: [{
-                    label: 'GPA รายเทอม',
-                    data: termGPAs.map(t => t.gpa),
-                    borderColor: 'rgb(102, 126, 234)',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    tension: 0.1
-                }, {
-                    label: 'เกณฑ์ขั้นต่ำ',
-                    data: Array(termGPAs.length).fill(2.0),
-                    borderColor: 'rgb(255, 99, 132)',
-                    borderDash: [5, 5]
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 4.0
-                    }
-                }
+        // ถ้ามีผล AI ให้แสดงคำแนะนำตามผล AI
+        if (data.prediction_result) {
+            const pred = data.prediction_result;
+            recHtml += '<div class="alert alert-info mb-3">';
+            recHtml += '<h6 class="alert-heading"><i class="bi bi-cpu"></i> คำแนะนำจาก AI Model</h6>';
+            recHtml += '<hr>';
+            
+            if (pred.prediction === 'จบ') {
+                recHtml += '<p class="mb-1"><i class="bi bi-check-circle text-success"></i> AI คาดว่าจะจบการศึกษาได้</p>';
+                recHtml += '<p class="mb-1"><i class="bi bi-star"></i> รักษาผลการเรียนให้คงที่</p>';
+                recHtml += '<p class="mb-0"><i class="bi bi-book"></i> วางแผนการเรียนในเทอมที่เหลือให้ดี</p>';
+            } else {
+                recHtml += '<p class="mb-1"><i class="bi bi-exclamation-triangle text-warning"></i> AI คาดว่ามีความเสี่ยงที่จะไม่จบ</p>';
+                recHtml += '<p class="mb-1"><i class="bi bi-chat-left-dots"></i> ควรปรึกษาอาจารย์ที่ปรึกษาโดยด่วน</p>';
+                recHtml += '<p class="mb-0"><i class="bi bi-graph-up"></i> ต้องปรับปรุงผลการเรียนอย่างเร่งด่วน</p>';
             }
-        });
-    }
-    
-    // Category Chart
-    const categoryCtx = document.getElementById('categoryChart');
-    if (categoryCtx) {
-        if (charts.category) charts.category.destroy();
-        
-        const categories = Object.keys(analysis.categoryGrades);
-        const avgGrades = categories.map(cat => {
-            const grades = analysis.categoryGrades[cat];
-            return grades.length > 0 ? grades.reduce((a, b) => a + b) / grades.length : 0;
-        });
-        
-        charts.category = new Chart(categoryCtx, {
-            type: 'radar',
-            data: {
-                labels: categories,
-                datasets: [{
-                    label: 'เกรดเฉลี่ยตามหมวดวิชา',
-                    data: avgGrades,
-                    backgroundColor: 'rgba(102, 126, 234, 0.2)',
-                    borderColor: 'rgb(102, 126, 234)',
-                    pointBackgroundColor: 'rgb(102, 126, 234)'
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    r: {
-                        beginAtZero: true,
-                        max: 4.0
-                    }
-                }
+            
+            if (pred.risk_level === 'สูง') {
+                recHtml += '<p class="mb-0 mt-2"><strong class="text-danger"><i class="bi bi-exclamation-octagon"></i> ระดับความเสี่ยงสูง - ต้องดำเนินการทันที</strong></p>';
             }
-        });
+            
+            recHtml += '</div>';
+        }
+        
+        // แสดงคำแนะนำทั่วไป
+        if (data.recommendations && data.recommendations.length > 0) {
+            recHtml += '<h6 class="mb-2"><i class="bi bi-lightbulb"></i> คำแนะนำทั่วไป</h6>';
+            recHtml += '<ul class="list-unstyled mb-0">';
+            data.recommendations.forEach(function(rec) {
+                recHtml += '<li class="mb-2"><i class="bi bi-arrow-right-circle text-primary me-2"></i>' + rec + '</li>';
+            });
+            recHtml += '</ul>';
+        }
+        
+        recommendationsContainer.innerHTML = recHtml || '<p class="text-muted mb-0">ไม่มีคำแนะนำเฉพาะ</p>';
     }
 }
 
-// Calculate term GPAs
-function calculateTermGPAs() {
-    const termGPAs = [];
+// Helper function - Get risk color
+function getRiskColor(riskLevel) {
+    const riskColors = {
+        'ต่ำ': 'success',
+        'ปานกลาง': 'warning', 
+        'สูง': 'danger'
+    };
+    return riskColors[riskLevel] || 'secondary';
+}
+
+// Helper function - Update progress ring
+function updateProgressRingForResults(percentage) {
+    const circle = document.getElementById('resultsCompletionRing');
+    const percentageText = document.getElementById('resultsCompletionRate');
     
-    for (let i = 0; i < loadedTermsCount; i++) {
-        const termData = allTermsData[i];
-        let totalPoints = 0;
-        let totalCredits = 0;
+    if (circle) {
+        const circumference = 2 * Math.PI * 50;
+        const offset = circumference - (percentage / 100) * circumference;
         
-        termData.ids.forEach(courseId => {
-            const grade = courseGrades[courseId];
-            if (grade) {
-                const course = coursesData.find(c => c.id === courseId);
-                if (course) {
-                    const gradePoint = gradeMapping[grade] || 0;
-                    totalPoints += gradePoint * course.credit;
-                    totalCredits += course.credit;
-                }
-            }
-        });
+        circle.style.strokeDasharray = circumference;
+        circle.style.strokeDashoffset = offset;
         
-        const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
-        termGPAs.push({
-            label: `ปี ${termData.year} เทอม ${termData.term}`,
-            gpa: gpa
-        });
+        if (percentage >= 80) {
+            circle.style.stroke = '#28a745';
+        } else if (percentage >= 50) {
+            circle.style.stroke = '#ffc107';
+        } else {
+            circle.style.stroke = '#dc3545';
+        }
     }
     
-    return termGPAs;
+    if (percentageText) {
+        percentageText.textContent = Math.round(percentage) + '%';
+    }
 }
 
 // Modal functions
@@ -1801,4 +1671,3 @@ window.appState = {
 console.log('Curriculum prediction form loaded successfully');
 console.log('Type window.debugInfo() in console for debug information');
 </script>
-{% endblock %}
