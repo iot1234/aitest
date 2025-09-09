@@ -466,6 +466,7 @@
     </div>
 </div>
 
+<!-- Modals -->
 <div class="modal fade" id="futureCoursesModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -867,7 +868,7 @@ function createCourseCardHtml(course, isFuture = false, isRepeated = false) {
     `;
 }
 
-// Update live statistics
+// *** FIXED *** Update live statistics
 function updateLiveStats() {
     let totalPoints = 0;
     let totalCredits = 0;
@@ -875,54 +876,74 @@ function updateLiveStats() {
     let passedCount = 0;
     let failedCount = 0;
     
+    // นับเฉพาะวิชาที่มีเกรดแล้ว
     Object.entries(courseGrades).forEach(([courseId, grade]) => {
-        if (grade) {
+        if (grade && grade !== '') {
             const course = coursesData.find(c => c.id === courseId);
             if (course) {
                 const gradePoint = gradeMapping[grade] || 0;
-                totalPoints += gradePoint * course.credit;
-                totalCredits += course.credit;
                 
+                // คำนวณ GPA (ไม่นับ W และ I)
+                if (grade !== 'W' && grade !== 'I') {
+                    totalPoints += gradePoint * course.credit;
+                    totalCredits += course.credit;
+                }
+                
+                // นับวิชาที่ผ่าน
                 if (gradePoint > 0) {
                     passedCredits += course.credit;
                     passedCount++;
-                } else {
+                } else if (grade === 'F') {
                     failedCount++;
                 }
             }
         }
     });
     
-    const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
+    const gpa = totalCredits > 0 ? (totalPoints / totalCredits) : 0;
+    
+    // คำนวณ total required credits จากทุกวิชาในหลักสูตร
     const totalRequiredCredits = coursesData.reduce((sum, c) => sum + c.credit, 0);
-    const progress = (passedCredits / totalRequiredCredits) * 100;
+    
+    // คำนวณ progress ที่แท้จริง
+    const progress = totalRequiredCredits > 0 ? (passedCredits / totalRequiredCredits) * 100 : 0;
     
     // Update UI
     document.getElementById('statGPA').textContent = gpa.toFixed(2);
     document.getElementById('statCredits').textContent = passedCredits;
     document.getElementById('statPassed').textContent = passedCount;
     document.getElementById('statFailed').textContent = failedCount;
-    document.getElementById('statProgress').textContent = progress.toFixed(0) + '%';
+    document.getElementById('statProgress').textContent = Math.round(progress) + '%';
     
+    // Update progress bar
     const progressBar = document.getElementById('mainProgressBar');
-    progressBar.style.width = progress + '%';
-    progressBar.textContent = `${progress.toFixed(0)}% ของหลักสูตร`;
-    
-    // Update progress bar color
-    if (progress < 50) {
-        progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #e83e8c 100%)';
-    } else if (progress < 75) {
-        progressBar.style.background = 'linear-gradient(90deg, #ffc107 0%, #fd7e14 100%)';
-    } else {
-        progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
+    if (progressBar) {
+        progressBar.style.width = Math.min(100, progress) + '%';
+        progressBar.textContent = `${Math.round(progress)}% ของหลักสูตร`;
+        
+        // Update progress bar color based on percentage
+        if (progress < 25) {
+            progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #e83e8c 100%)';
+        } else if (progress < 50) {
+            progressBar.style.background = 'linear-gradient(90deg, #fd7e14 0%, #ffc107 100%)';
+        } else if (progress < 75) {
+            progressBar.style.background = 'linear-gradient(90deg, #ffc107 0%, #28a745 100%)';
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
+        }
     }
     
     // Count blocked courses
     let blockedCount = 0;
-    document.querySelectorAll('.course-card').forEach(card => {
-        if (card.classList.contains('locked')) blockedCount++;
-    });
+    document.querySelectorAll('.course-card.locked').forEach(() => blockedCount++);
     document.getElementById('statBlocked').textContent = blockedCount;
+    
+    console.log('Stats updated:', {
+        gpa: gpa.toFixed(2),
+        passedCredits,
+        totalRequiredCredits,
+        progress: Math.round(progress) + '%'
+    });
 }
 
 // Update prerequisites
@@ -1058,7 +1079,7 @@ function saveCurrentState() {
     showAlert('บันทึกสถานะเรียบร้อย', 'success');
 }
 
-// *** UPDATED FUNCTION *** Analyze and predict with AI
+// *** FIXED *** Analyze and predict with AI
 async function analyzeAndPredict() {
     const studentName = document.getElementById('studentName').value || 'นักศึกษา';
     const modelSelect = document.getElementById('modelSelect');
@@ -1074,13 +1095,11 @@ async function analyzeAndPredict() {
     
     // ถ้าไม่มี modelSelect หรือไม่ได้เลือก ให้ใช้ default
     if (!modelFilename || modelFilename === '') {
-        // พยายามหา model อัตโนมัติ
         try {
             const modelsResponse = await fetch('/api/models');
             const modelsData = await modelsResponse.json();
             
             if (modelsData.success && modelsData.models && modelsData.models.length > 0) {
-                // เลือก model แรก (ล่าสุด)
                 modelFilename = modelsData.models[0].filename;
                 console.log('Auto-selected model:', modelFilename);
             } else {
@@ -1097,15 +1116,13 @@ async function analyzeAndPredict() {
     // แสดง loading modal
     showLoadingModal('กำลังวิเคราะห์และทำนายด้วย AI...');
     
+    // เพิ่ม timeout เพื่อป้องกันค้าง
+    const timeoutId = setTimeout(() => {
+        hideLoadingModal();
+        showAlert('⏱️ การประมวลผลใช้เวลานานเกินไป กรุณาลองใหม่', 'warning');
+    }, 30000); // 30 seconds timeout
+    
     try {
-        console.log('Sending prediction request with:', {
-            student_name: studentName,
-            grades_count: Object.keys(courseGrades).length,
-            model: modelFilename,
-            loaded_terms: loadedTermsCount
-        });
-
-        // ส่งข้อมูลไปให้ backend
         const response = await fetch('/api/analyze_curriculum', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1113,12 +1130,13 @@ async function analyzeAndPredict() {
                 student_name: studentName,
                 current_grades: courseGrades,
                 loaded_terms_count: loadedTermsCount,
-                model_filename: modelFilename, // ต้องส่งไปด้วยเสมอ
+                model_filename: modelFilename,
                 repeated_courses_in_this_term_ids: []
             })
         });
         
-        // ตรวจสอบ response status
+        clearTimeout(timeoutId); // Clear timeout ถ้าได้ response แล้ว
+        
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1148,134 +1166,149 @@ async function analyzeAndPredict() {
             console.error('Prediction failed:', result);
         }
     } catch (error) {
+        clearTimeout(timeoutId);
         console.error('Analysis error:', error);
         showAlert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + error.message, 'danger');
     } finally {
         // ซ่อน loading modal
         hideLoadingModal();
+        
+        // Re-enable buttons
+        const analyzeBtn = document.getElementById('analyzeAndPredictBtn');
+        if (analyzeBtn) {
+            analyzeBtn.disabled = false;
+        }
     }
 }
 
-// *** NEW FUNCTION *** Display advanced results with AI prediction
+// *** FIXED *** Display advanced results with AI prediction
 function displayAdvancedResults(data) {
-    console.log('Displaying results:', data);
-    
-    // ตรวจสอบว่ามี element หรือไม่
-    const resultsSection = document.getElementById('resultsSection');
-    if (!resultsSection) {
-        console.error('Results section not found');
-        return;
-    }
-    
-    // แสดง results section
-    resultsSection.classList.remove('d-none');
-    
-    // Main Prediction
-    const mainPrediction = document.getElementById('mainPrediction');
-    if (mainPrediction) {
-        if (data.prediction_result && data.prediction_result.prediction) {
-            const pred = data.prediction_result;
-            const aiPrediction = pred.prediction;
-            const confidence = (pred.confidence * 100).toFixed(1);
-            const probPass = (pred.prob_pass * 100).toFixed(1);
-            const probFail = (pred.prob_fail * 100).toFixed(1);
+    try {
+        console.log('Displaying results:', data);
+        
+        // ตรวจสอบว่ามี element หรือไม่
+        const resultsSection = document.getElementById('resultsSection');
+        if (!resultsSection) {
+            console.error('Results section not found');
+            return;
+        }
+        
+        // แสดง results section
+        resultsSection.classList.remove('d-none');
+        
+        // Update completion rate ด้วยค่าที่ถูกต้อง
+        const completionRate = data.completion_rate || 0;
+        
+        // Main Prediction - ป้องกัน infinite loop
+        const mainPrediction = document.getElementById('mainPrediction');
+        if (mainPrediction) {
+            let predictionHtml = '';
             
-            mainPrediction.innerHTML = `
-                <div class="alert alert-${aiPrediction === 'จบ' ? 'success' : 'danger'} p-4">
-                    <h2 class="mb-3">
-                        <i class="bi bi-${aiPrediction === 'จบ' ? 'check-circle-fill' : 'x-circle-fill'}"></i>
-                        ${aiPrediction === 'จบ' ? 'คาดว่าจะจบการศึกษาได้' : 'คาดว่าจะไม่จบการศึกษา'}
-                    </h2>
-                    <div class="row">
-                        <div class="col-md-8 mx-auto">
-                            <div class="progress mb-3" style="height: 30px;">
-                                <div class="progress-bar bg-success" style="width: ${probPass}%">
-                                    จบ ${probPass}%
-                                </div>
-                                <div class="progress-bar bg-danger" style="width: ${probFail}%">
-                                    ไม่จบ ${probFail}%
+            if (data.prediction_result && data.prediction_result.prediction) {
+                const pred = data.prediction_result;
+                const aiPrediction = pred.prediction;
+                const confidence = Math.min(100, (pred.confidence * 100)).toFixed(1);
+                const probPass = Math.min(100, ((pred.prob_pass || 0) * 100)).toFixed(1);
+                const probFail = Math.min(100, ((pred.prob_fail || 0) * 100)).toFixed(1);
+                
+                predictionHtml = `
+                    <div class="alert alert-${aiPrediction === 'จบ' ? 'success' : 'danger'} p-4">
+                        <h2 class="mb-3">
+                            <i class="bi bi-${aiPrediction === 'จบ' ? 'check-circle-fill' : 'x-circle-fill'}"></i>
+                            ${aiPrediction === 'จบ' ? 'คาดว่าจะจบการศึกษาได้' : 'คาดว่าจะไม่จบการศึกษา'}
+                        </h2>
+                        <div class="row">
+                            <div class="col-md-8 mx-auto">
+                                <div class="progress mb-3" style="height: 30px;">
+                                    <div class="progress-bar bg-success" style="width: ${probPass}%">
+                                        จบ ${probPass}%
+                                    </div>
+                                    <div class="progress-bar bg-danger" style="width: ${probFail}%">
+                                        ไม่จบ ${probFail}%
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                        <p class="mb-0">
+                            <strong>ความมั่นใจ:</strong> 
+                            <span class="badge bg-${confidence >= 80 ? 'success' : confidence >= 60 ? 'warning' : 'danger'} fs-6">
+                                ${confidence}%
+                            </span>
+                        </p>
                     </div>
-                    <p class="mb-0">
-                        <strong>ความมั่นใจ:</strong> 
-                        <span class="badge bg-${confidence >= 80 ? 'success' : confidence >= 60 ? 'warning' : 'danger'} fs-6">
-                            ${confidence}%
-                        </span>
-                    </p>
-                </div>
-            `;
-        } else {
-            mainPrediction.innerHTML = `
-                <div class="alert alert-info p-4">
-                    <h3><i class="bi bi-info-circle"></i> ${data.graduation_status || 'กำลังวิเคราะห์...'}</h3>
-                </div>
-            `;
+                `;
+            } else {
+                predictionHtml = `
+                    <div class="alert alert-info p-4">
+                        <h3><i class="bi bi-info-circle"></i> ${data.graduation_status || 'กำลังวิเคราะห์...'}</h3>
+                        <p>ความคืบหน้าหลักสูตร: ${completionRate.toFixed(1)}%</p>
+                    </div>
+                `;
+            }
+            
+            mainPrediction.innerHTML = predictionHtml;
         }
-    }
-    
-    // Study Status
-    const studyStatus = document.getElementById('studyStatus');
-    if (studyStatus) {
-        studyStatus.innerHTML = `
+        
+        // Update other sections with safe checks
+        const safeUpdate = (elementId, content) => {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = content;
+            }
+        };
+        
+        // Study Status
+        safeUpdate('studyStatus', `
             <p><strong>นักศึกษา:</strong> ${data.student_name || 'ไม่ระบุ'}</p>
             <p><strong>GPA ปัจจุบัน:</strong> ${data.avg_gpa ? data.avg_gpa.toFixed(2) : '0.00'}</p>
             <p><strong>หน่วยกิตที่ผ่าน:</strong> ${data.completed_credits || 0} / ${data.total_required_credits || 0}</p>
-            <p><strong>ความคืบหน้า:</strong> ${data.completion_rate ? data.completion_rate.toFixed(1) : '0'}%</p>
-        `;
-    }
-    
-    // Probability Details
-    const probabilityDetails = document.getElementById('probabilityDetails');
-    if (probabilityDetails && data.prediction_result) {
-        const pred = data.prediction_result;
-        probabilityDetails.innerHTML = `
-            <div class="text-center">
-                <canvas id="probabilityChart" width="200" height="200"></canvas>
-            </div>
-        `;
+            <p><strong>ความคืบหน้า:</strong> ${completionRate.toFixed(1)}%</p>
+        `);
         
-        // Create pie chart
-        setTimeout(() => {
-            const ctx = document.getElementById('probabilityChart');
-            if (ctx) {
-                new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['จบ', 'ไม่จบ'],
-                        datasets: [{
-                            data: [pred.prob_pass * 100, pred.prob_fail * 100],
-                            backgroundColor: ['#28a745', '#dc3545']
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false
-                    }
-                });
-            }
-        }, 100);
-    }
-    
-    // Problem Courses
-    const problemCourses = document.getElementById('problemCourses');
-    if (problemCourses) {
+        // Probability Details (Chart)
+        if (data.prediction_result) {
+            const pred = data.prediction_result;
+            safeUpdate('probabilityDetails', `
+                <div class="text-center">
+                    <canvas id="probabilityChart" width="200" height="200"></canvas>
+                </div>
+            `);
+            
+            // Create pie chart
+            setTimeout(() => {
+                const ctx = document.getElementById('probabilityChart');
+                if (ctx) {
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['จบ', 'ไม่จบ'],
+                            datasets: [{
+                                data: [(pred.prob_pass || 0) * 100, (pred.prob_fail || 0) * 100],
+                                backgroundColor: ['#28a745', '#dc3545']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                }
+            }, 100);
+        }
+        
+        // Problem Courses
         if (data.failed_courses && data.failed_courses.length > 0) {
             let html = '<ul class="list-unstyled">';
             data.failed_courses.forEach(course => {
                 html += `<li><i class="bi bi-x-circle text-danger me-2"></i>${course}</li>`;
             });
             html += '</ul>';
-            problemCourses.innerHTML = html;
+            safeUpdate('problemCourses', html);
         } else {
-            problemCourses.innerHTML = '<p class="text-success"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ตก</p>';
+            safeUpdate('problemCourses', '<p class="text-success"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ตก</p>');
         }
-    }
-    
-    // Blocked Courses
-    const blockedCoursesDetail = document.getElementById('blockedCoursesDetail');
-    if (blockedCoursesDetail) {
+        
+        // Blocked Courses
         if (data.blocked_courses_details && data.blocked_courses_details.length > 0) {
             let html = '<ul class="list-unstyled">';
             data.blocked_courses_details.forEach(course => {
@@ -1286,15 +1319,12 @@ function displayAdvancedResults(data) {
                 </li>`;
             });
             html += '</ul>';
-            blockedCoursesDetail.innerHTML = html;
+            safeUpdate('blockedCoursesDetail', html);
         } else {
-            blockedCoursesDetail.innerHTML = '<p class="text-success"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ถูกบล็อก</p>';
+            safeUpdate('blockedCoursesDetail', '<p class="text-success"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ถูกบล็อก</p>');
         }
-    }
-    
-    // Personal Recommendations
-    const personalRecommendations = document.getElementById('personalRecommendations');
-    if (personalRecommendations) {
+        
+        // Recommendations
         if (data.recommendations && data.recommendations.length > 0) {
             let html = '<ul class="list-unstyled">';
             data.recommendations.forEach(rec => {
@@ -1305,50 +1335,23 @@ function displayAdvancedResults(data) {
                 </li>`;
             });
             html += '</ul>';
-            personalRecommendations.innerHTML = html;
+            safeUpdate('personalRecommendations', html);
         } else {
-            personalRecommendations.innerHTML = '<p class="text-muted">ไม่มีคำแนะนำเฉพาะ</p>';
+            safeUpdate('personalRecommendations', '<p class="text-muted">ไม่มีคำแนะนำเฉพาะ</p>');
         }
-    }
-}
-
-// Helper function - Get risk color
-function getRiskColor(riskLevel) {
-    const riskColors = {
-        'ต่ำ': 'success',
-        'ปานกลาง': 'warning', 
-        'สูง': 'danger'
-    };
-    return riskColors[riskLevel] || 'secondary';
-}
-
-// Helper function - Update progress ring
-function updateProgressRingForResults(percentage) {
-    const circle = document.getElementById('resultsCompletionRing');
-    const percentageText = document.getElementById('resultsCompletionRate');
-    
-    if (circle) {
-        const circumference = 2 * Math.PI * 50;
-        const offset = circumference - (percentage / 100) * circumference;
         
-        circle.style.strokeDasharray = circumference;
-        circle.style.strokeDashoffset = offset;
+        // Scroll to results smoothly
+        setTimeout(() => {
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
         
-        if (percentage >= 80) {
-            circle.style.stroke = '#28a745';
-        } else if (percentage >= 50) {
-            circle.style.stroke = '#ffc107';
-        } else {
-            circle.style.stroke = '#dc3545';
-        }
-    }
-    
-    if (percentageText) {
-        percentageText.textContent = Math.round(percentage) + '%';
+    } catch (error) {
+        console.error('Error displaying results:', error);
+        showAlert('เกิดข้อผิดพลาดในการแสดงผล', 'danger');
     }
 }
 
-// Modal functions
+// Modal functions (ต่อ)
 function openFutureCoursesModal() {
     const modal = new bootstrap.Modal(document.getElementById('futureCoursesModal'));
     renderCoursesInModal('future');
