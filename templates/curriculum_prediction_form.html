@@ -531,6 +531,8 @@
 </div>
 {% endblock %}
 
+
+{% block custom_js %}
 <script>
 // ข้อมูลจาก Backend
 let coursesData = {{ coursesData | safe }};
@@ -1661,3 +1663,4 @@ window.debugInfo = function() {
 console.log('Curriculum prediction form loaded successfully');
 console.log('Type window.debugInfo() for debug information');
 </script>
+{% endblock %}
