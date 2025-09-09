@@ -107,6 +107,9 @@ class AdvancedFeatureEngineer:
         # Standardize column names
         df.columns = [col.strip().lower() for col in df.columns]
         
+        # Handle special characters in column names
+        df.columns = [col.replace(' ', '_').replace('-', '_') for col in df.columns]
+        
         return df
     
     def _create_course_dna_profiles(self, df: pd.DataFrame) -> Dict[str, Dict]:
@@ -190,47 +193,60 @@ class AdvancedFeatureEngineer:
         student_records = {}
         
         # หาคอลัมน์ Student ID
-        student_col = self._find_column(df, ['dummy studentno', 'student_id', 'student', 'รหัสนักศึกษา', 'id'])
+        student_col = self._find_column(df, ['dummy_studentno', 'student_id', 'student', 'รหัสนักศึกษา', 'id', 'name', 'ชื่อ'])
         
         if not student_col:
-            raise ValueError("Cannot find Student ID column")
+            # ถ้าไม่มี student ID ให้สร้างจากชื่อหรือ index
+            logger.warning("Cannot find Student ID column, creating dummy IDs")
+            df['dummy_student_id'] = [f"student_{i}" for i in range(len(df))]
+            student_col = 'dummy_student_id'
         
-        # Group by student
-        unique_students = df[student_col].dropna().unique()
+        # Group by student - แก้ไขการจัดการ NaN
+        df[student_col] = df[student_col].fillna('unknown')
+        df[student_col] = df[student_col].astype(str)
+        unique_students = df[student_col].unique()
         
         logger.info(f"📊 Processing {len(unique_students)} students...")
         
         graduation_stats = {'graduated': 0, 'not_graduated': 0}
         
         for i, student_id in enumerate(unique_students):
-            student_data = df[df[student_col] == student_id].copy()
-            
-            # คำนวณจำนวนปีที่เรียนจากข้อมูล
-            years_studied = self._calculate_years_studied(student_data)
-            
-            # 🔴 คำนวณสถานะการจบอัตโนมัติ
-            # จบตามเกณฑ์ = เรียน ≤ 4 ปี
-            # ไม่จบตามเกณฑ์ = เรียน > 4 ปี
-            graduated_status = 1 if years_studied <= 4 else 0
-            
-            # นับสถิติ
-            if graduated_status == 1:
-                graduation_stats['graduated'] += 1
-            else:
-                graduation_stats['not_graduated'] += 1
-            
-            # Log progress
-            if (i + 1) % 50 == 0 or (i + 1) == len(unique_students):
-                logger.info(f"  Processed {i+1}/{len(unique_students)} students...")
-            
-            # เรียงตามเวลา
-            student_data = self._sort_by_time(student_data)
-            
-            student_records[str(student_id)] = {
-                'data': student_data,
-                'graduated': graduated_status,
-                'years_studied': years_studied
-            }
+            try:
+                student_data = df[df[student_col] == student_id].copy()
+                
+                if student_data.empty:
+                    continue
+                
+                # คำนวณจำนวนปีที่เรียนจากข้อมูล
+                years_studied = self._calculate_years_studied(student_data)
+                
+                # 🔴 คำนวณสถานะการจบอัตโนมัติ
+                # จบตามเกณฑ์ = เรียน ≤ 4 ปี
+                # ไม่จบตามเกณฑ์ = เรียน > 4 ปี
+                graduated_status = 1 if years_studied <= 4 else 0
+                
+                # นับสถิติ
+                if graduated_status == 1:
+                    graduation_stats['graduated'] += 1
+                else:
+                    graduation_stats['not_graduated'] += 1
+                
+                # Log progress ทุก 10 students เพื่อไม่ให้ช้า
+                if (i + 1) % 10 == 0:
+                    logger.info(f"  Processed {i+1}/{len(unique_students)} students...")
+                
+                # เรียงตามเวลา
+                student_data = self._sort_by_time(student_data)
+                
+                student_records[str(student_id)] = {
+                    'data': student_data,
+                    'graduated': graduated_status,
+                    'years_studied': years_studied
+                }
+                
+            except Exception as e:
+                logger.warning(f"Error processing student {student_id}: {e}")
+                continue
         
         # สรุปผล
         logger.info(f"✅ Classification results:")
@@ -249,8 +265,19 @@ class AdvancedFeatureEngineer:
             years = student_data[year_col].dropna().unique()
             if len(years) > 0:
                 try:
-                    year_values = [int(str(y).replace('25', '').replace('20', '')) for y in years]
-                    return max(year_values) - min(year_values) + 1
+                    year_values = []
+                    for y in years:
+                        y_str = str(y)
+                        # Extract year from various formats
+                        if len(y_str) == 4:  # e.g., 2565
+                            year_values.append(int(y_str))
+                        elif '25' in y_str:  # Thai year
+                            year_values.append(int(y_str.replace('25', '').replace('/', '')))
+                        elif '20' in y_str:  # Western year
+                            year_values.append(int(y_str.replace('20', '').replace('/', '')))
+                    
+                    if year_values:
+                        return max(year_values) - min(year_values) + 1
                 except:
                     pass
         
@@ -345,7 +372,7 @@ class AdvancedFeatureEngineer:
                     snapshots.append(snapshot)
             
             # เพิ่ม final snapshot ด้วยข้อมูลทั้งหมด
-            if total_courses % courses_per_term != 0:
+            if total_courses % courses_per_term != 0 or len(snapshots) == 0:
                 final_snapshot = self._create_snapshot_features(
                     student_id=student_id,
                     snapshot_id=f"{student_id}_final",
@@ -452,7 +479,7 @@ class AdvancedFeatureEngineer:
             'Total_W_Count_so_far': 0,  # จะต้องดูจาก grade letter
             
             # === Trend & Recent Features (แนวโน้มและล่าสุด) ===
-            'GPA_last_window': np.mean(recent_grades),
+            'GPA_last_window': np.mean(recent_grades) if recent_grades else 0,
             'GPA_trend': self._calculate_gpa_trend(grades),
             'Credits_last_window': sum(credits[-recent_window:]) if credits else recent_window * 3,
             'Improvement_potential': self._calculate_improvement_potential(grades),
@@ -460,8 +487,8 @@ class AdvancedFeatureEngineer:
             # === Insightful Features (คุณลักษณะเชิงลึก) ===
             'Core_Courses_Below_C_recent': sum(1 for g in recent_grades if g < 2.0),
             'Failed_Core_Course_Count': sum(1 for g in grades if g == 0),
-            'High_Grade_Rate': sum(1 for g in grades if g >= 3.5) / len(grades),
-            'Low_Grade_Rate': sum(1 for g in grades if 0 < g < 2.0) / len(grades),
+            'High_Grade_Rate': sum(1 for g in grades if g >= 3.5) / len(grades) if grades else 0,
+            'Low_Grade_Rate': sum(1 for g in grades if 0 < g < 2.0) / len(grades) if grades else 0,
             
             # === Statistical Features ===
             'Grade_Mean': np.mean(grades),
@@ -484,8 +511,8 @@ class AdvancedFeatureEngineer:
             'Consistency_Score': 1 / (1 + np.std(grades)) if len(grades) > 1 else 1,
             
             # === Performance Rates ===
-            'Pass_Rate': sum(1 for g in grades if g > 0) / len(grades),
-            'Fail_Rate': sum(1 for g in grades if g == 0) / len(grades),
+            'Pass_Rate': sum(1 for g in grades if g > 0) / len(grades) if grades else 0,
+            'Fail_Rate': sum(1 for g in grades if g == 0) / len(grades) if grades else 0,
             
             # === Target Variable ===
             'graduated': graduated  # ใช้ค่าที่คำนวณจาก years_studied
@@ -500,7 +527,11 @@ class AdvancedFeatureEngineer:
         # Interaction features
         if 'GPAX_so_far' in df.columns and 'Total_F_Count_so_far' in df.columns:
             df['GPA_Fail_Interaction'] = df['GPAX_so_far'] * (1 + df['Total_F_Count_so_far'])
-            df['Risk_Score'] = (4 - df['GPAX_so_far']) * df['Fail_Rate'] if 'Fail_Rate' in df.columns else 0
+            
+            if 'Fail_Rate' in df.columns:
+                df['Risk_Score'] = (4 - df['GPAX_so_far']) * df['Fail_Rate']
+            else:
+                df['Risk_Score'] = (4 - df['GPAX_so_far']) * 0.1
         
         # Performance consistency
         if 'Passed_Killer_Courses' in df.columns and 'Struggled_Easy_Courses' in df.columns:
@@ -552,9 +583,13 @@ class AdvancedFeatureEngineer:
         # Remove features with very low variance
         from sklearn.feature_selection import VarianceThreshold
         selector = VarianceThreshold(threshold=0.01)
-        X_selected = selector.fit_transform(X)
-        selected_features = X.columns[selector.get_support()]
-        X = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
+        
+        try:
+            X_selected = selector.fit_transform(X)
+            selected_features = X.columns[selector.get_support()]
+            X = pd.DataFrame(X_selected, columns=selected_features, index=X.index)
+        except:
+            logger.warning("Could not apply variance threshold")
         
         return X
     
@@ -729,7 +764,11 @@ def train_ensemble_model(X, y):
             min_samples = min(Counter(y_train).values())
             if min_samples >= 2:
                 k_neighbors = min(5, min_samples - 1)
-                smote = SMOTE(random_state=42, k_neighbors=k_neighbors)
+                k_neighbors = max(1, k_neighbors)
+                smote = SMOTE(
+                    random_state=42,
+                    k_neighbors=k_neighbors
+                )
                 X_train, y_train = smote.fit_resample(X_train, y_train)
                 logger.info(f"✅ Applied SMOTE. New distribution: {Counter(y_train)}")
         except Exception as e:
