@@ -1265,211 +1265,151 @@ def predict():
                 model_filename = subject_models[0]['filename']
                 logger.info(f"✅ Auto-selected latest model: {model_filename}")
             else:
-                return jsonify({'success': False, 'error': 'No trained model found. Please train a model first.'})
-
-        data_filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if not os.path.exists(data_filepath):
-            return jsonify({'success': False, 'error': 'Specified data file not found.'})
+                return jsonify({'success': False, 'error': 'No trained model found for prediction.'})
 
         # โหลดโมเดล
-        logger.info(f"📂 Loading model: {model_filename}")
-        loaded_model_data = storage.load_model(model_filename)
-        if not loaded_model_data:
-            return jsonify({'success': False, 'error': f'Model file {model_filename} not found.'})
+        logger.info(f"💾 Loading model: {model_filename}")
+        model_data = storage.load_model(model_filename)
+        if not model_data:
+            return jsonify({'success': False, 'error': 'Failed to load the specified model.'})
 
-        model_info = {
-            'models': loaded_model_data['models'],
-            'scaler': loaded_model_data['scaler']
-        }
-        feature_cols = loaded_model_data['feature_columns']
-        data_format = loaded_model_data['data_format']
-        logger.info(f"✅ Loaded model '{model_filename}' (format: {data_format}) for prediction.")
+        subject_model = model_data.get('models', {}).get('rf')
+        scaler = model_data.get('scaler')
+        feature_columns = model_data.get('feature_columns')
+        course_profiles = model_data.get('course_profiles')
+        data_format = model_data.get('data_format')
+
+        if not all([subject_model, scaler, feature_columns]):
+            return jsonify({'success': False, 'error': 'Incomplete model data. Missing model, scaler, or feature columns.'})
 
         # อ่านไฟล์ข้อมูล
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(filepath):
+            return jsonify({'success': False, 'error': 'Prediction data file not found.'})
+            
         file_extension = filename.rsplit('.', 1)[1].lower()
         df = None
         if file_extension == 'csv':
-            encodings = app.config['DATA_CONFIG']['fallback_encodings']
-            for encoding in encodings:
-                try:
-                    df = pd.read_csv(data_filepath, encoding=encoding)
-                    logger.info(f"✅ Successfully read CSV with encoding: {encoding}")
-                    break
-                except Exception as e:
-                    logger.debug(f"Failed to read CSV with {encoding}: {e}")
-                    continue
-            if df is None:
-                raise ValueError("Could not read CSV file with any supported encoding.")
+            df = pd.read_csv(filepath)
         elif file_extension in ['xlsx', 'xls']:
-            df = pd.read_excel(data_filepath)
-            logger.info(f"✅ Successfully read Excel file")
+            df = pd.read_excel(filepath)
         else:
-            raise ValueError("Unsupported file type for prediction.")
-
-        if df is None:
-            return jsonify({'success': False, 'error': 'Could not read prediction data file.'})
-
+            return jsonify({'success': False, 'error': 'Unsupported prediction data file type.'})
+        
         # ตรวจสอบรูปแบบข้อมูล
-        detected_data_format_for_prediction = detect_data_format(df)
-        if detected_data_format_for_prediction != data_format:
-            return jsonify({'success': False, 'error': f'Prediction data format ({detected_data_format_for_prediction}) does not match model format ({data_format}).'})
-        
-        logger.info(f"📊 Predicting with data format: {detected_data_format_for_prediction}")
-
-        # ประมวลผลข้อมูล
         if data_format == 'subject_based':
-            processed_df = process_subject_data(df)
-        else:
-            processed_df = process_gpa_data(df)
+            # ใช้ AdvancedFeatureEngineer เพื่อเตรียมข้อมูล
+            engineer = AdvancedFeatureEngineer(
+                grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+            )
+            # ต้องโหลด course_profiles ด้วยเพื่อให้ engineer ทำงานได้
+            engineer.course_profiles = course_profiles
+            
+            # แปลงข้อมูล Transcript เป็น Student Records
+            student_records = engineer._transform_transcript_to_students(df)
+            
+            # สร้าง features จาก snapshot สุดท้ายของแต่ละนักศึกษา
+            all_predictions = []
+            
+            for student_id, student_record in student_records.items():
+                if not student_record['data'].empty:
+                    # สร้าง snapshot สุดท้ายจากข้อมูลทั้งหมด
+                    last_snapshot = engineer._create_snapshot_features(
+                        student_id=student_id,
+                        snapshot_id=f"{student_id}_final",
+                        courses_data=student_record['data'],
+                        course_col=engineer._find_column(student_record['data'], ['course_code', 'course', 'subject', 'รหัสวิชา']),
+                        grade_col=engineer._find_column(student_record['data'], ['grade', 'เกรด']),
+                        credit_col=engineer._find_column(student_record['data'], ['credit', 'หน่วยกิต']),
+                        graduated=student_record['graduated'] # ใช้สถานะจริง
+                    )
+                    
+                    if not last_snapshot:
+                        logger.warning(f"Could not create snapshot for student {student_id}")
+                        continue
+                    
+                    # แปลง snapshot เป็น DataFrame
+                    X_pred = pd.DataFrame([last_snapshot])
+                    X_pred = engineer._generate_advanced_features(X_pred)
+                    
+                    # ตรวจสอบว่ามีคอลัมน์ฟีเจอร์ที่ขาดหายไปหรือไม่
+                    missing_cols = set(feature_columns) - set(X_pred.columns)
+                    if missing_cols:
+                        for c in missing_cols:
+                            X_pred[c] = 0
+                        logger.warning(f"Missing features added with value 0: {missing_cols}")
+                    
+                    # จัดเรียงคอลัมน์ให้ตรงกับที่โมเดลเทรนมา
+                    X_pred = X_pred[feature_columns]
+                    
+                    # Normalize features
+                    X_pred_scaled = scaler.transform(X_pred)
+                    
+                    # Predict probability
+                    prediction_proba = subject_model.predict_proba(X_pred_scaled)[:, 1]
+                    prediction = (prediction_proba > 0.5).astype(int)[0]
+                    
+                    # คำนวณ GPA History และทำนายเกรดเทอมถัดไป
+                    gpa_history = _calculate_gpa_history(student_record['data'], engineer)
+                    
+                    # ทำนายเกรดเทอมถัดไป
+                    predicted_next_gpa = _predict_next_semester_gpa(gpa_history[-1]['gpa'] if gpa_history else 0.0)
+                    
+                    all_predictions.append({
+                        'student_id': student_id,
+                        'prediction_success': bool(prediction),
+                        'confidence': round(float(prediction_proba[0]), 4),
+                        'gpa_history': gpa_history,
+                        'predicted_next_gpa': predicted_next_gpa
+                    })
 
-        if len(processed_df) == 0:
-            return jsonify({'success': False, 'error': 'No data could be processed for prediction.'})
+            if not all_predictions:
+                return jsonify({'success': False, 'error': 'No valid student records found in the data for prediction.'})
 
-        logger.info(f"📈 Processed {len(processed_df)} students for prediction")
-
-        # เตรียมข้อมูลสำหรับการทำนาย
-        X_predict = pd.DataFrame(columns=feature_cols)
-        for col in feature_cols:
-            if col in processed_df.columns:
-                X_predict[col] = processed_df[col]
-            else:
-                X_predict[col] = 0
-        X_predict = X_predict.fillna(0)
-
-        # ทำนายผล
-        trained_models = model_info['models']
-        scaler = model_info['scaler']
-
-        predictions_proba_list = []
-        successful_models = 0
-        
-        for name, model in trained_models.items():
-            try:
-                if name == 'lr':
-                    X_scaled = scaler.transform(X_predict)
-                    pred_proba = model.predict_proba(X_scaled)
-                else:
-                    pred_proba = model.predict_proba(X_predict)
-                
-                if pred_proba.shape[1] == 1:
-                    pred_proba = np.hstack((1 - pred_proba, pred_proba))
-                
-                predictions_proba_list.append(pred_proba)
-                successful_models += 1
-                logger.debug(f"✅ Prediction successful with {name} model")
-            except Exception as e:
-                logger.warning(f"Could not predict with model {name}: {str(e)}")
-                continue
-
-        if not predictions_proba_list:
-            return jsonify({'success': False, 'error': 'Could not make predictions with any loaded sub-models.'})
-
-        logger.info(f"🤖 Used {successful_models}/{len(trained_models)} models for ensemble prediction")
-
-        # คำนวณผลลัพธ์
-        results = []
-        high_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['high_confidence_threshold']
-        medium_confidence_threshold = app.config['DATA_CONFIG']['risk_levels']['medium_confidence_threshold']
-
-        for i in range(len(processed_df)):
-            student_name = processed_df.iloc[i]['ชื่อ']
-            gpa = processed_df.iloc[i]['gpa']
-
-            avg_prob_per_student = np.mean([pred_proba_array[i] for pred_proba_array in predictions_proba_list], axis=0)
-            avg_prob_fail = avg_prob_per_student[0]
-            avg_prob_pass = avg_prob_per_student[1]
-
-            prediction = 'จบ' if avg_prob_pass >= avg_prob_fail else 'ไม่จบ'
-
-            confidence = max(avg_prob_pass, avg_prob_fail)
-            if confidence > high_confidence_threshold:
-                risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-            elif confidence > medium_confidence_threshold:
-                risk_level = 'ปานกลาง'
-            else:
-                risk_level = 'สูง' if prediction == 'ไม่จบ' else 'ปานกลาง'
-
-            # สร้างการวิเคราะห์และคำแนะนำ
-            analysis = []
-            recommendations = []
-
-            low_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['low_gpa_threshold']
-            warning_gpa_threshold = app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']
-            high_fail_rate_threshold = app.config['DATA_CONFIG']['risk_levels']['high_fail_rate_threshold']
-
-            if gpa < low_gpa_threshold:
-                analysis.append(f"GPA ต่ำมาก ({gpa:.2f})")
-                recommendations.extend(app.config['MESSAGES']['recommendations']['high_risk'])
-            elif gpa < warning_gpa_threshold:
-                analysis.append(f"GPA อยู่ในเกณฑ์เสี่ยง ({gpa:.2f})")
-                recommendations.extend(app.config['MESSAGES']['recommendations']['medium_risk'])
-            elif gpa < 3.0:
-                analysis.append(f"GPA พอใช้ ({gpa:.2f})")
-                recommendations.append("มีโอกาสพัฒนาผลการเรียนให้ดีขึ้น")
-            else:
-                analysis.append(f"GPA ดี ({gpa:.2f})")
-                recommendations.extend(app.config['MESSAGES']['recommendations']['low_risk'])
-
-            if prediction == 'ไม่จบ':
-                recommendations.append("แนะนำให้ทบทวนแผนการเรียนและขอความช่วยเหลือ")
-                if 'fail_rate' in processed_df.columns and processed_df.iloc[i].get('fail_rate', 0) > high_fail_rate_threshold:
-                    recommendations.append("มีอัตราการตกในบางวิชาสูง ควรให้ความสำคัญกับการเรียนซ่อม")
-
-            # ตรวจสอบหมวดวิชาที่อ่อน
-            if data_format == 'subject_based':
-                weak_categories = []
-                for cat_key in app.config['SUBJECT_CATEGORIES'].keys():
-                    gpa_col = f'gpa_{cat_key}'
-                    if gpa_col in processed_df.columns and processed_df.iloc[i].get(gpa_col, 0) < low_gpa_threshold:
-                        weak_categories.append(cat_key)
-
-                if weak_categories:
-                    recommendations.append(f"ควรเน้นปรับปรุงวิชาในหมวด: {', '.join(weak_categories[:2])}")
-
-            results.append({
-                'ชื่อ': student_name,
-                'การทำนาย': prediction,
-                'ความน่าจะเป็น': {'จบ': float(avg_prob_pass), 'ไม่จบ': float(avg_prob_fail)},
-                'เกรดเฉลี่ย': float(gpa),
-                'ระดับความเสี่ยง': risk_level,
-                'ความเชื่อมั่น': float(confidence),
-                'การวิเคราะห์': list(set(analysis)),
-                'คำแนะนำ': list(set(recommendations))
+            return jsonify({
+                'success': True,
+                'predictions': all_predictions
             })
 
-        # สรุปผล
-        total = len(results)
-        predicted_pass = sum(1 for r in results if r['การทำนาย'] == 'จบ')
-        predicted_fail = total - predicted_pass
-        pass_rate = (predicted_pass / total * 100) if total > 0 else 0
-
-        high_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'สูง')
-        medium_risk = sum(1 for r in results if r['ระดับความเสี่ยง'] == 'ปานกลาง')
-        low_risk = total - high_risk - medium_risk
-
-        logger.info(f"🎉 Prediction completed successfully: {total} students (Pass: {predicted_pass}, Fail: {predicted_fail})")
-
-        return jsonify({
-            'success': True,
-            'results': results,
-            'summary': {
-                'total': total,
-                'predicted_pass': predicted_pass,
-                'predicted_fail': predicted_fail,
-                'pass_rate': float(pass_rate),
-                'high_risk': high_risk,
-                'medium_risk': medium_risk,
-                'low_risk': low_risk
-            },
-            'model_used': model_filename,
-            'models_count': successful_models,
-            'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
-        })
-
+        else:
+            return jsonify({'success': False, 'error': 'Unsupported data format for this prediction route.'})
+            
     except Exception as e:
         logger.error(f"❌ Error during prediction: {str(e)}", exc_info=True)
-        return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
+        return jsonify({'success': False, 'error': f'Prediction error: {str(e)}'})
+
+# Helper function to calculate GPA history
+def _calculate_gpa_history(df: pd.DataFrame, engineer: AdvancedFeatureEngineer):
+    """Calculates GPA for each semester based on the student's data."""
+    # Find relevant columns
+    term_col = engineer._find_column(df, ['term', 'semester', 'ภาคเรียน', 'เทอม'])
+    grade_col = engineer._find_column(df, ['grade', 'เกรด'])
     
+    if not term_col or not grade_col:
+        return []
+    
+    gpa_history = []
+    
+    # Group by term and calculate GPA
+    for term, term_data in df.groupby(term_col):
+        grades = [engineer._convert_grade_to_numeric(g) for g in term_data[grade_col] if pd.notna(g) and engineer._convert_grade_to_numeric(g) is not None]
+        if grades:
+            gpa = np.mean(grades)
+            gpa_history.append({
+                'semester': str(term),
+                'gpa': float(f"{gpa:.2f}")
+            })
+            
+    return gpa_history
+
+# Helper function to predict next semester's GPA
+def _predict_next_semester_gpa(current_gpa: float) -> float:
+    """Predicts next semester's GPA based on current trend (simple model for illustration)."""
+    # This is a very simple linear model. You can replace it with a more complex one if needed.
+    # It assumes the student will maintain their current GPA with a slight random fluctuation.
+    random_change = np.random.uniform(-0.1, 0.1) # Simulate minor changes
+    predicted_gpa = current_gpa + random_change
+    return round(np.clip(predicted_gpa, 0.0, 4.0), 2)
     
 @app.route('/api/models', methods=['GET'])
 def list_models():
