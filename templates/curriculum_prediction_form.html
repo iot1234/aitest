@@ -530,11 +530,12 @@
     </div>
 </div>
 {% endblock %}
+
 <script>
 // ข้อมูลจาก Backend
-let coursesData = [];
-let allTermsData = [];
-let gradeMapping = {};
+let coursesData = {{ coursesData | safe }};
+let allTermsData = {{ allTermsData | safe }};
+let gradeMapping = {{ gradeMapping | safe }};
 
 // State Management
 let loadedTermsCount = 0;
@@ -544,57 +545,33 @@ let isInitialized = false;
 let loadingModalInstance = null;
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
     console.log('Page loaded, starting initialization...');
     
     try {
-        // Load configuration first
-        const configLoaded = await loadConfigFromAPI();
+        // Parse data if needed
+        if (typeof coursesData === 'string') {
+            coursesData = JSON.parse(coursesData);
+        }
+        if (typeof allTermsData === 'string') {
+            allTermsData = JSON.parse(allTermsData);
+        }
+        if (typeof gradeMapping === 'string') {
+            gradeMapping = JSON.parse(gradeMapping);
+        }
         
-        if (configLoaded && validateData()) {
-            // Initialize app after data is loaded
-            await initializeApp();
+        // Validate and initialize
+        if (validateData()) {
+            initializeApp();
         } else {
-            throw new Error('ข้อมูลหลักสูตรไม่ครบถ้วน');
+            console.error('Data validation failed');
+            showAlert('ข้อมูลหลักสูตรไม่ครบถ้วน', 'danger');
         }
     } catch (error) {
-        console.error('Initialization failed:', error);
+        console.error('Initialization error:', error);
         showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
     }
 });
-
-// Load configuration from API
-async function loadConfigFromAPI() {
-    try {
-        console.log('Loading configuration from API...');
-        
-        const response = await fetch('/api/config');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            coursesData = data.COURSES_DATA || [];
-            allTermsData = data.ALL_TERMS_DATA || [];
-            gradeMapping = data.GRADE_MAPPING || data.gradeMapping || {};
-            
-            console.log('Configuration loaded:', {
-                courses: coursesData.length,
-                terms: allTermsData.length,
-                grades: Object.keys(gradeMapping).length
-            });
-            
-            return true;
-        } else {
-            throw new Error(data.error || 'Failed to load configuration');
-        }
-    } catch (error) {
-        console.error('Error loading configuration:', error);
-        throw error;
-    }
-}
 
 // Validate loaded data
 function validateData() {
@@ -613,43 +590,137 @@ function validateData() {
         return false;
     }
     
+    console.log('Data validation passed:', {
+        courses: coursesData.length,
+        terms: allTermsData.length,
+        grades: Object.keys(gradeMapping).length
+    });
+    
     return true;
 }
 
 // Initialize application
-async function initializeApp() {
+function initializeApp() {
     if (isInitialized) {
         console.log('App already initialized');
         return;
     }
     
-    try {
-        console.log('Initializing application...');
-        
-        // Setup event listeners first
-        setupEventListeners();
-        
-        // Load models in background (don't block UI)
-        loadModels().then(() => {
-            console.log('Models loaded in background');
-        }).catch(error => {
-            console.error('Error loading models:', error);
+    console.log('Initializing application...');
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Load models
+    loadModels();
+    
+    // Update initial stats
+    updateLiveStats();
+    
+    // Mark as initialized
+    isInitialized = true;
+    console.log('Application initialized successfully');
+    
+    // Show success message
+    showAlert('ระบบพร้อมใช้งาน!', 'success');
+}
+
+// Setup event listeners
+function setupEventListeners() {
+    console.log('Setting up event listeners...');
+    
+    // Setup button click events directly
+    const loadNextTermBtn = document.getElementById('loadNextTermBtn');
+    if (loadNextTermBtn) {
+        loadNextTermBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadNextTerm();
         });
-        
-        // Update initial stats
-        updateLiveStats();
-        
-        // Mark as initialized
-        isInitialized = true;
-        console.log('Application initialized successfully');
-        
-        // Show success message
-        showAlert('ระบบพร้อมใช้งาน!', 'success');
-        
-    } catch (error) {
-        console.error('Initialization error:', error);
-        showAlert('เกิดข้อผิดพลาดในการเริ่มต้นระบบ: ' + error.message, 'danger');
     }
+    
+    const loadAllTermsBtn = document.getElementById('loadAllTermsBtn');
+    if (loadAllTermsBtn) {
+        loadAllTermsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadAllTerms();
+        });
+    }
+    
+    const fillSampleGradesBtn = document.getElementById('fillSampleGradesBtn');
+    if (fillSampleGradesBtn) {
+        fillSampleGradesBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            fillSampleGrades();
+        });
+    }
+    
+    const clearAllGradesBtn = document.getElementById('clearAllGradesBtn');
+    if (clearAllGradesBtn) {
+        clearAllGradesBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearAllGrades();
+        });
+    }
+    
+    const saveCurrentStateBtn = document.getElementById('saveCurrentStateBtn');
+    if (saveCurrentStateBtn) {
+        saveCurrentStateBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            saveCurrentState();
+        });
+    }
+    
+    const analyzeAndPredictBtn = document.getElementById('analyzeAndPredictBtn');
+    if (analyzeAndPredictBtn) {
+        analyzeAndPredictBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            analyzeAndPredict();
+        });
+    }
+    
+    const openFutureCoursesModalBtn = document.getElementById('openFutureCoursesModalBtn');
+    if (openFutureCoursesModalBtn) {
+        openFutureCoursesModalBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openFutureCoursesModal();
+        });
+    }
+    
+    const openFailedCoursesModalBtn = document.getElementById('openFailedCoursesModalBtn');
+    if (openFailedCoursesModalBtn) {
+        openFailedCoursesModalBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openFailedCoursesModal();
+        });
+    }
+    
+    const addFutureCoursesBtn = document.getElementById('addFutureCoursesBtn');
+    if (addFutureCoursesBtn) {
+        addFutureCoursesBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            addSelectedFutureCourses();
+        });
+    }
+    
+    const addFailedCoursesBtn = document.getElementById('addFailedCoursesBtn');
+    if (addFailedCoursesBtn) {
+        addFailedCoursesBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            addSelectedFailedCourses();
+        });
+    }
+    
+    // Grade select change event
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.classList.contains('grade-select')) {
+            const courseId = e.target.dataset.courseId;
+            courseGrades[courseId] = e.target.value;
+            updateLiveStats();
+            updatePrerequisites();
+        }
+    });
+    
+    console.log('Event listeners setup completed');
 }
 
 // Load AI models
@@ -709,53 +780,10 @@ async function loadModels() {
     }
 }
 
-// Setup event listeners
-function setupEventListeners() {
-    console.log('Setting up event listeners...');
-    
-    // Button events
-    const btnMappings = {
-        'loadNextTermBtn': loadNextTerm,
-        'loadAllTermsBtn': loadAllTerms,
-        'fillSampleGradesBtn': fillSampleGrades,
-        'clearAllGradesBtn': clearAllGrades,
-        'saveCurrentStateBtn': saveCurrentState,
-        'analyzeAndPredictBtn': analyzeAndPredict,
-        'openFutureCoursesModalBtn': openFutureCoursesModal,
-        'openFailedCoursesModalBtn': openFailedCoursesModal,
-        'addFutureCoursesBtn': addSelectedFutureCourses,
-        'addFailedCoursesBtn': addSelectedFailedCourses,
-        'exportPdfBtn': () => exportResults('pdf'),
-        'exportExcelBtn': () => exportResults('excel'),
-        'printResultsBtn': printResults
-    };
-    
-    for (const [btnId, handler] of Object.entries(btnMappings)) {
-        const btn = document.getElementById(btnId);
-        if (btn) {
-            // Remove any existing listeners
-            btn.replaceWith(btn.cloneNode(true));
-            // Get the fresh element
-            const freshBtn = document.getElementById(btnId);
-            if (freshBtn) {
-                freshBtn.addEventListener('click', handler);
-            }
-        }
-    }
-    
-    // Grade select change event
-    document.addEventListener('change', function(e) {
-        if (e.target.classList.contains('grade-select')) {
-            const courseId = e.target.dataset.courseId;
-            courseGrades[courseId] = e.target.value;
-            updateLiveStats();
-            updatePrerequisites();
-        }
-    });
-}
-
 // Load next term
 function loadNextTerm() {
+    console.log('Loading next term...');
+    
     if (!validateData()) {
         showAlert('ข้อมูลหลักสูตรไม่พร้อม กรุณารีเฟรชหน้า', 'danger');
         return;
@@ -778,6 +806,8 @@ function loadNextTerm() {
 
 // Load all terms
 function loadAllTerms() {
+    console.log('Loading all terms...');
+    
     if (!validateData()) {
         showAlert('ข้อมูลหลักสูตรไม่พร้อม กรุณารีเฟรชหน้า', 'danger');
         return;
@@ -892,23 +922,34 @@ function updateLiveStats() {
     const progress = (passedCredits / totalRequiredCredits) * 100;
     
     // Update UI
-    document.getElementById('statGPA').textContent = gpa.toFixed(2);
-    document.getElementById('statCredits').textContent = passedCredits;
-    document.getElementById('statPassed').textContent = passedCount;
-    document.getElementById('statFailed').textContent = failedCount;
-    document.getElementById('statProgress').textContent = progress.toFixed(0) + '%';
+    const statGPA = document.getElementById('statGPA');
+    if (statGPA) statGPA.textContent = gpa.toFixed(2);
+    
+    const statCredits = document.getElementById('statCredits');
+    if (statCredits) statCredits.textContent = passedCredits;
+    
+    const statPassed = document.getElementById('statPassed');
+    if (statPassed) statPassed.textContent = passedCount;
+    
+    const statFailed = document.getElementById('statFailed');
+    if (statFailed) statFailed.textContent = failedCount;
+    
+    const statProgress = document.getElementById('statProgress');
+    if (statProgress) statProgress.textContent = progress.toFixed(0) + '%';
     
     const progressBar = document.getElementById('mainProgressBar');
-    progressBar.style.width = progress + '%';
-    progressBar.textContent = `${progress.toFixed(0)}% ของหลักสูตร`;
-    
-    // Update progress bar color
-    if (progress < 50) {
-        progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #e83e8c 100%)';
-    } else if (progress < 75) {
-        progressBar.style.background = 'linear-gradient(90deg, #ffc107 0%, #fd7e14 100%)';
-    } else {
-        progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
+    if (progressBar) {
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = `${progress.toFixed(0)}% ของหลักสูตร`;
+        
+        // Update progress bar color
+        if (progress < 50) {
+            progressBar.style.background = 'linear-gradient(90deg, #dc3545 0%, #e83e8c 100%)';
+        } else if (progress < 75) {
+            progressBar.style.background = 'linear-gradient(90deg, #ffc107 0%, #fd7e14 100%)';
+        } else {
+            progressBar.style.background = 'linear-gradient(90deg, #28a745 0%, #20c997 100%)';
+        }
     }
     
     // Count blocked courses
@@ -916,7 +957,9 @@ function updateLiveStats() {
     document.querySelectorAll('.course-card').forEach(card => {
         if (card.classList.contains('locked')) blockedCount++;
     });
-    document.getElementById('statBlocked').textContent = blockedCount;
+    
+    const statBlocked = document.getElementById('statBlocked');
+    if (statBlocked) statBlocked.textContent = blockedCount;
 }
 
 // Update prerequisites
@@ -1001,6 +1044,7 @@ function lockPreviousTerms() {
 
 // Fill sample grades
 function fillSampleGrades() {
+    console.log('Filling sample grades...');
     const grades = ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D'];
     document.querySelectorAll('.grade-select').forEach((select) => {
         if (!select.disabled && !select.value) {
@@ -1016,6 +1060,7 @@ function fillSampleGrades() {
 
 // Clear all grades
 function clearAllGrades() {
+    console.log('Clearing all grades...');
     if (!confirm('คุณแน่ใจหรือไม่ที่จะล้างเกรดทั้งหมด?')) return;
     
     document.querySelectorAll('.grade-select').forEach(select => {
@@ -1041,6 +1086,7 @@ function clearAllGrades() {
 
 // Save current state
 function saveCurrentState() {
+    console.log('Saving state...');
     const state = {
         studentName: document.getElementById('studentName').value,
         studentId: document.getElementById('studentId').value,
@@ -1052,8 +1098,10 @@ function saveCurrentState() {
     showAlert('บันทึกสถานะเรียบร้อย', 'success');
 }
 
-// *** UPDATED FUNCTION *** Analyze and predict with AI
+// Analyze and predict with AI
 async function analyzeAndPredict() {
+    console.log('Starting analysis and prediction...');
+    
     const studentName = document.getElementById('studentName').value || 'นักศึกษา';
     const modelFilename = document.getElementById('modelSelect').value;
     
@@ -1062,7 +1110,6 @@ async function analyzeAndPredict() {
         return;
     }
     
-    // ตรวจสอบว่าเลือกโมเดลหรือไม่
     if (!modelFilename || modelFilename === '') {
         showAlert('⚠️ กรุณาเลือกโมเดล AI สำหรับการทำนาย', 'warning');
         return;
@@ -1071,7 +1118,6 @@ async function analyzeAndPredict() {
     showLoadingModal('กำลังวิเคราะห์และทำนายด้วย AI...');
     
     try {
-        // ส่งข้อมูลไปให้ backend วิเคราะห์และทำนายด้วย AI
         const response = await fetch('/api/analyze_curriculum', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1079,7 +1125,7 @@ async function analyzeAndPredict() {
                 student_name: studentName,
                 current_grades: courseGrades,
                 loaded_terms_count: loadedTermsCount,
-                model_filename: modelFilename, // ส่งชื่อโมเดลไปด้วยเสมอ
+                model_filename: modelFilename,
                 repeated_courses_in_this_term_ids: []
             })
         });
@@ -1087,10 +1133,8 @@ async function analyzeAndPredict() {
         const result = await response.json();
         
         if (result.success) {
-            // แสดงผลทั้งการวิเคราะห์และการทำนาย AI
             displayAdvancedResults(result);
             
-            // เน้นผลจาก AI
             if (result.prediction_result) {
                 const pred = result.prediction_result;
                 showAlert(`✅ AI ทำนายว่า: ${pred.prediction} (ความมั่นใจ ${(pred.confidence * 100).toFixed(1)}%)`, 'success');
@@ -1108,7 +1152,7 @@ async function analyzeAndPredict() {
     }
 }
 
-// *** NEW FUNCTION *** Display advanced results with AI prediction
+// Display advanced results with AI prediction
 function displayAdvancedResults(data) {
     const resultsSection = document.getElementById('resultsSection');
     resultsSection.classList.remove('d-none');
@@ -1118,7 +1162,7 @@ function displayAdvancedResults(data) {
     document.getElementById('resultsStudentName').textContent = data.student_name;
     document.getElementById('resultsCurrentGPA').textContent = data.avg_gpa ? data.avg_gpa.toFixed(2) : '0.00';
     
-    // ตรวจสอบว่ามีผล AI หรือไม่
+    // Check if AI prediction exists
     if (data.prediction_result && data.prediction_result.prediction) {
         const pred = data.prediction_result;
         const aiPrediction = pred.prediction;
@@ -1126,7 +1170,7 @@ function displayAdvancedResults(data) {
         const probPass = (pred.prob_pass * 100).toFixed(1);
         const probFail = (pred.prob_fail * 100).toFixed(1);
         
-        // แสดงผล AI เป็นหลัก
+        // Display AI prediction prominently
         document.getElementById('resultsGraduationStatus').innerHTML = `
             <div class="text-center">
                 <div class="mb-3">
@@ -1163,14 +1207,12 @@ function displayAdvancedResults(data) {
             </div>
         `;
         
-        // Update prediction display
         document.getElementById('resultsPrediction').innerHTML = `
             <strong class="text-${aiPrediction === 'จบ' ? 'success' : 'danger'} fs-5">
                 ${aiPrediction} (${confidence}%)
             </strong>
         `;
         
-        // Update risk level
         const riskBadge = document.getElementById('resultsRiskLevel');
         if (riskBadge && pred.risk_level) {
             riskBadge.textContent = pred.risk_level;
@@ -1178,7 +1220,6 @@ function displayAdvancedResults(data) {
         }
         
     } else {
-        // ถ้าไม่มีผล AI ให้แสดงเฉพาะผลการวิเคราะห์ตามกฎ
         document.getElementById('resultsGraduationStatus').innerHTML = `
             <div class="text-center">
                 <div class="mb-3">
@@ -1206,80 +1247,93 @@ function displayAdvancedResults(data) {
     // Update progress ring
     updateProgressRingForResults(data.completion_rate || 0);
     
-    // Failed Courses
-    const failedCoursesContainer = document.getElementById('failedCourses');
-    if (data.failed_courses && data.failed_courses.length > 0) {
-        let failedHtml = '<ul class="list-unstyled mb-0">';
-        data.failed_courses.forEach(function(name) {
-            failedHtml += '<li class="mb-2"><i class="bi bi-x-circle-fill text-danger me-2"></i>' + name + '</li>';
-        });
-        failedHtml += '</ul>';
-        failedCoursesContainer.innerHTML = failedHtml;
-    } else {
-        failedCoursesContainer.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ตก</p>';
-    }
+    // Update other sections
+    updateFailedCourses(data.failed_courses);
+    updateBlockedCourses(data.blocked_courses_details);
+    updateRecommendations(data);
+}
+
+// Update failed courses display
+function updateFailedCourses(failedCourses) {
+    const container = document.getElementById('failedCourses');
+    if (!container) return;
     
-    // Blocked Courses
-    const blockedCoursesContainer = document.getElementById('blockedCourses');
-    if (data.blocked_courses_details && data.blocked_courses_details.length > 0) {
-        let blockedHtml = '<ul class="list-unstyled mb-0">';
-        data.blocked_courses_details.forEach(function(course) {
-            blockedHtml += '<li class="mb-2">' +
-                '<i class="bi bi-slash-circle-fill text-warning me-2"></i>' +
-                '<strong>' + course.name + '</strong>' +
-                '<br><small class="text-muted ms-4">ต้องผ่าน: ' + course.unmet_prereqs.join(', ') + '</small>' +
-                '</li>';
+    if (failedCourses && failedCourses.length > 0) {
+        let html = '<ul class="list-unstyled mb-0">';
+        failedCourses.forEach(name => {
+            html += `<li class="mb-2"><i class="bi bi-x-circle-fill text-danger me-2"></i>${name}</li>`;
         });
-        blockedHtml += '</ul>';
-        blockedCoursesContainer.innerHTML = blockedHtml;
+        html += '</ul>';
+        container.innerHTML = html;
     } else {
-        blockedCoursesContainer.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ถูกบล็อก</p>';
-    }
-    
-    // Recommendations - ปรับให้เน้นคำแนะนำจาก AI
-    const recommendationsContainer = document.getElementById('recommendations');
-    if (recommendationsContainer) {
-        let recHtml = '';
-        
-        // ถ้ามีผล AI ให้แสดงคำแนะนำตามผล AI
-        if (data.prediction_result) {
-            const pred = data.prediction_result;
-            recHtml += '<div class="alert alert-info mb-3">';
-            recHtml += '<h6 class="alert-heading"><i class="bi bi-cpu"></i> คำแนะนำจาก AI Model</h6>';
-            recHtml += '<hr>';
-            
-            if (pred.prediction === 'จบ') {
-                recHtml += '<p class="mb-1"><i class="bi bi-check-circle text-success"></i> AI คาดว่าจะจบการศึกษาได้</p>';
-                recHtml += '<p class="mb-1"><i class="bi bi-star"></i> รักษาผลการเรียนให้คงที่</p>';
-                recHtml += '<p class="mb-0"><i class="bi bi-book"></i> วางแผนการเรียนในเทอมที่เหลือให้ดี</p>';
-            } else {
-                recHtml += '<p class="mb-1"><i class="bi bi-exclamation-triangle text-warning"></i> AI คาดว่ามีความเสี่ยงที่จะไม่จบ</p>';
-                recHtml += '<p class="mb-1"><i class="bi bi-chat-left-dots"></i> ควรปรึกษาอาจารย์ที่ปรึกษาโดยด่วน</p>';
-                recHtml += '<p class="mb-0"><i class="bi bi-graph-up"></i> ต้องปรับปรุงผลการเรียนอย่างเร่งด่วน</p>';
-            }
-            
-            if (pred.risk_level === 'สูง') {
-                recHtml += '<p class="mb-0 mt-2"><strong class="text-danger"><i class="bi bi-exclamation-octagon"></i> ระดับความเสี่ยงสูง - ต้องดำเนินการทันที</strong></p>';
-            }
-            
-            recHtml += '</div>';
-        }
-        
-        // แสดงคำแนะนำทั่วไป
-        if (data.recommendations && data.recommendations.length > 0) {
-            recHtml += '<h6 class="mb-2"><i class="bi bi-lightbulb"></i> คำแนะนำทั่วไป</h6>';
-            recHtml += '<ul class="list-unstyled mb-0">';
-            data.recommendations.forEach(function(rec) {
-                recHtml += '<li class="mb-2"><i class="bi bi-arrow-right-circle text-primary me-2"></i>' + rec + '</li>';
-            });
-            recHtml += '</ul>';
-        }
-        
-        recommendationsContainer.innerHTML = recHtml || '<p class="text-muted mb-0">ไม่มีคำแนะนำเฉพาะ</p>';
+        container.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ตก</p>';
     }
 }
 
-// Helper function - Get risk color
+// Update blocked courses display
+function updateBlockedCourses(blockedCourses) {
+    const container = document.getElementById('blockedCourses');
+    if (!container) return;
+    
+    if (blockedCourses && blockedCourses.length > 0) {
+        let html = '<ul class="list-unstyled mb-0">';
+        blockedCourses.forEach(course => {
+            html += `<li class="mb-2">
+                <i class="bi bi-slash-circle-fill text-warning me-2"></i>
+                <strong>${course.name}</strong>
+                <br><small class="text-muted ms-4">ต้องผ่าน: ${course.unmet_prereqs.join(', ')}</small>
+            </li>`;
+        });
+        html += '</ul>';
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ถูกบล็อก</p>';
+    }
+}
+
+// Update recommendations
+function updateRecommendations(data) {
+    const container = document.getElementById('recommendations');
+    if (!container) return;
+    
+    let html = '';
+    
+    if (data.prediction_result) {
+        const pred = data.prediction_result;
+        html += '<div class="alert alert-info mb-3">';
+        html += '<h6 class="alert-heading"><i class="bi bi-cpu"></i> คำแนะนำจาก AI Model</h6>';
+        html += '<hr>';
+        
+        if (pred.prediction === 'จบ') {
+            html += '<p class="mb-1"><i class="bi bi-check-circle text-success"></i> AI คาดว่าจะจบการศึกษาได้</p>';
+            html += '<p class="mb-1"><i class="bi bi-star"></i> รักษาผลการเรียนให้คงที่</p>';
+            html += '<p class="mb-0"><i class="bi bi-book"></i> วางแผนการเรียนในเทอมที่เหลือให้ดี</p>';
+        } else {
+            html += '<p class="mb-1"><i class="bi bi-exclamation-triangle text-warning"></i> AI คาดว่ามีความเสี่ยงที่จะไม่จบ</p>';
+            html += '<p class="mb-1"><i class="bi bi-chat-left-dots"></i> ควรปรึกษาอาจารย์ที่ปรึกษาโดยด่วน</p>';
+            html += '<p class="mb-0"><i class="bi bi-graph-up"></i> ต้องปรับปรุงผลการเรียนอย่างเร่งด่วน</p>';
+        }
+        
+        if (pred.risk_level === 'สูง') {
+            html += '<p class="mb-0 mt-2"><strong class="text-danger"><i class="bi bi-exclamation-octagon"></i> ระดับความเสี่ยงสูง - ต้องดำเนินการทันที</strong></p>';
+        }
+        
+        html += '</div>';
+    }
+    
+    if (data.recommendations && data.recommendations.length > 0) {
+        html += '<h6 class="mb-2"><i class="bi bi-lightbulb"></i> คำแนะนำทั่วไป</h6>';
+        html += '<ul class="list-unstyled mb-0">';
+        data.recommendations.forEach(rec => {
+            html += `<li class="mb-2"><i class="bi bi-arrow-right-circle text-primary me-2"></i>${rec}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    container.innerHTML = html || '<p class="text-muted mb-0">ไม่มีคำแนะนำเฉพาะ</p>';
+}
+
+// Helper functions
 function getRiskColor(riskLevel) {
     const riskColors = {
         'ต่ำ': 'success',
@@ -1289,7 +1343,6 @@ function getRiskColor(riskLevel) {
     return riskColors[riskLevel] || 'secondary';
 }
 
-// Helper function - Update progress ring
 function updateProgressRingForResults(percentage) {
     const circle = document.getElementById('resultsCompletionRing');
     const percentageText = document.getElementById('resultsCompletionRate');
@@ -1317,12 +1370,14 @@ function updateProgressRingForResults(percentage) {
 
 // Modal functions
 function openFutureCoursesModal() {
+    console.log('Opening future courses modal...');
     const modal = new bootstrap.Modal(document.getElementById('futureCoursesModal'));
     renderCoursesInModal('future');
     modal.show();
 }
 
 function openFailedCoursesModal() {
+    console.log('Opening failed courses modal...');
     const modal = new bootstrap.Modal(document.getElementById('failedCoursesModal'));
     renderCoursesInModal('failed');
     modal.show();
@@ -1488,16 +1543,12 @@ function printResults() {
     window.print();
 }
 
-// Helper functions
+// Alert function
 function showAlert(message, type) {
     const alertContainer = document.getElementById('alertContainer');
     if (!alertContainer) {
         console.error('Alert container not found');
-        if (type === 'danger' || type === 'warning') {
-            console.error(message);
-        } else {
-            console.log(message);
-        }
+        console.log(message);
         return;
     }
     
@@ -1525,7 +1576,7 @@ function showAlert(message, type) {
     }, 5000);
 }
 
-// Fixed showLoadingModal function
+// Loading modal functions
 function showLoadingModal(text) {
     try {
         const modalEl = document.getElementById('loadingModal');
@@ -1547,107 +1598,56 @@ function showLoadingModal(text) {
                 });
             }
             loadingModalInstance.show();
-        } else {
-            modalEl.classList.remove('d-none');
-            modalEl.style.display = 'block';
         }
     } catch (error) {
         console.error('Error showing loading modal:', error);
     }
 }
 
-// Fixed hideLoadingModal function
 function hideLoadingModal() {
     try {
         const modalEl = document.getElementById('loadingModal');
-        if (!modalEl) {
-            console.warn('Loading modal element not found');
-            return;
-        }
+        if (!modalEl) return;
         
         if (loadingModalInstance) {
             loadingModalInstance.hide();
-            setTimeout(() => {
-                modalEl.classList.add('d-none');
-            }, 200);
-        } else if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            const instance = bootstrap.Modal.getInstance(modalEl);
-            if (instance) {
-                instance.hide();
-            }
-            modalEl.classList.add('d-none');
-        } else {
+        }
+        
+        // Force hide
+        setTimeout(() => {
             modalEl.classList.add('d-none');
             modalEl.style.display = 'none';
-        }
+        }, 200);
     } catch (error) {
         console.error('Error hiding loading modal:', error);
-        const modalEl = document.getElementById('loadingModal');
-        if (modalEl) {
-            modalEl.classList.add('d-none');
-            modalEl.style.display = 'none';
-        }
     }
 }
 
-// Force hide any loading modals after page fully loads
+// Clean up modals on page load
 window.addEventListener('load', function() {
     setTimeout(() => {
-        // Force hide all modals
         const modals = document.querySelectorAll('.modal.show');
         modals.forEach(modal => {
             modal.classList.remove('show');
             modal.style.display = 'none';
         });
         
-        // Force hide loading modal specifically
-        const loadingModal = document.getElementById('loadingModal');
-        if (loadingModal) {
-            loadingModal.classList.add('d-none');
-            loadingModal.style.display = 'none';
-        }
-        
-        // Remove modal backdrop if exists
         const backdrops = document.querySelectorAll('.modal-backdrop');
         backdrops.forEach(backdrop => backdrop.remove());
         
-        // Re-enable body scroll
         document.body.classList.remove('modal-open');
         document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-        
-        console.log('Cleaned up any stuck modals');
     }, 1000);
 });
 
-// Error handling
-window.addEventListener('error', function(event) {
-    console.error('Global error:', event.error);
-});
-
-// Prevent form submission on enter key
-document.addEventListener('keypress', function(event) {
-    if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA') {
-        event.preventDefault();
-        return false;
-    }
-});
-
-// Handle page visibility change
-document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-        console.log('Page is visible again');
-    }
-});
-
-// Cleanup on page unload
+// Save state before unload
 window.addEventListener('beforeunload', function() {
     if (Object.keys(courseGrades).length > 0) {
         saveCurrentState();
     }
 });
 
-// Debug helpers
+// Debug info
 window.debugInfo = function() {
     console.log('Debug Information:');
     console.log('Courses:', coursesData.length);
@@ -1658,16 +1658,6 @@ window.debugInfo = function() {
     console.log('Is Initialized:', isInitialized);
 };
 
-// Export for debugging
-window.appState = {
-    coursesData,
-    allTermsData,
-    gradeMapping,
-    courseGrades,
-    loadedTermsCount,
-    charts
-};
-
 console.log('Curriculum prediction form loaded successfully');
-console.log('Type window.debugInfo() in console for debug information');
+console.log('Type window.debugInfo() for debug information');
 </script>
