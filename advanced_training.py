@@ -1,12 +1,12 @@
 
-# advanced_training.py - OPTIMIZED VERSION
+# advanced_training.py - OPTIMIZED VERSION FOR LARGE DATASETS (v3)
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Set
 import logging
 from datetime import datetime
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RandomizedSearchCV # Changed to RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -60,6 +60,7 @@ class AdvancedFeatureEngineer:
             logger.info("📸 Creating dynamic temporal snapshots...")
             all_snapshots = []
             
+            # Use a generator or process in chunks to reduce memory usage
             for student_id, student_record in student_records.items():
                 snapshots = self._create_temporal_snapshots(student_id, student_record)
                 all_snapshots.extend(snapshots)
@@ -72,6 +73,9 @@ class AdvancedFeatureEngineer:
             # Step 5: Generate Advanced Features
             logger.info("🔧 Generating advanced contextual features...")
             X = pd.DataFrame(all_snapshots)
+            # Clear all_snapshots to free memory
+            del all_snapshots
+            
             X = self._generate_advanced_features(X)
             
             # Step 6: Extract target variable
@@ -809,88 +813,82 @@ def train_ensemble_model(X, y):
         # Train models
         models = {}
 
-        # Random Forest
+        # RandomForestClassifier
+        logger.info("⚙️ Training RandomForestClassifier...")
+        rf_params = {
+            'n_estimators': [50, 100], # Further reduced options
+            'max_depth': [5, 8],      # Further reduced options
+            'min_samples_split': [2],
+            'min_samples_leaf': [1]
+        }
+        # Changed to RandomizedSearchCV for faster execution
+        rf_search = RandomizedSearchCV(RandomForestClassifier(random_state=42, n_jobs=-1, class_weight='balanced'),
+                               rf_params, n_iter=5, cv=3, verbose=0, scoring='f1', n_jobs=-1, random_state=42)
         try:
-            rf = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=10,
-                min_samples_split=2,
-                min_samples_leaf=1,
-                random_state=42,
-                n_jobs=-1,
-                class_weight='balanced'
-            )
-            rf.fit(X_train, y_train)
-            models['rf'] = rf
-            logger.info("✅ Random Forest trained successfully")
-
+            rf_search.fit(X_train, y_train)
+            models['rf'] = rf_search.best_estimator_
+            logger.info(f"✅ RandomForest Best Params: {rf_search.best_params_}")
+            logger.info(f"✅ RandomForest Best Score: {rf_search.best_score_:.3f}")
             # Log feature importance
-            if hasattr(rf, 'feature_importances_') and len(X.columns) > 0:
-                importances = pd.Series(rf.feature_importances_, index=X.columns)
+            if hasattr(models['rf'], 'feature_importances_') and len(X.columns) > 0:
+                importances = pd.Series(models['rf'].feature_importances_, index=X.columns)
                 top_features = importances.nlargest(10)
-                logger.info(f"🎯 Top 10 important features:")
+                logger.info(f"🎯 Top 10 important features (RF):")
                 for feat, imp in top_features.items():
                     logger.info(f"   - {feat}: {imp:.4f}")
-
         except Exception as e:
-            logger.error(f"❌ Random Forest training failed: {e}")
+            logger.error(f"❌ RandomForest training failed: {e}")
 
-        # Gradient Boosting
+        # GradientBoostingClassifier
+        logger.info("⚙️ Training GradientBoostingClassifier...")
+        gb_params = {
+            'n_estimators': [50, 100], # Further reduced options
+            'learning_rate': [0.05, 0.1],
+            'max_depth': [3, 4]
+        }
+        # Changed to RandomizedSearchCV for faster execution
+        gb_search = RandomizedSearchCV(GradientBoostingClassifier(random_state=42),
+                               gb_params, n_iter=5, cv=3, verbose=0, scoring='f1', n_jobs=-1, random_state=42)
         try:
-            gb = GradientBoostingClassifier(
-                n_estimators=100,
-                learning_rate=0.1,
-                max_depth=5,
-                random_state=42
-            )
-            gb.fit(X_train, y_train)
-            models['gb'] = gb
-            logger.info("✅ Gradient Boosting trained successfully")
+            gb_search.fit(X_train, y_train)
+            models['gb'] = gb_search.best_estimator_
+            logger.info(f"✅ GradientBoosting Best Params: {gb_search.best_params_}")
+            logger.info(f"✅ GradientBoosting Best Score: {gb_search.best_score_:.3f}")
         except Exception as e:
-            logger.error(f"❌ Gradient Boosting training failed: {e}")
+            logger.error(f"❌ GradientBoosting training failed: {e}")
 
         # Logistic Regression
+        logger.info("⚙️ Training LogisticRegression...")
+        lr_params = {
+            'C': [0.5, 1.0, 5.0],
+            'solver': ['liblinear'] # Reduced solvers for simplicity
+        }
+        # Changed to RandomizedSearchCV for faster execution
+        lr_search = RandomizedSearchCV(LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced'),
+                               lr_params, n_iter=3, cv=3, verbose=0, scoring='f1', n_jobs=-1, random_state=42)
         try:
-            lr = LogisticRegression(
-                max_iter=1000,
-                random_state=42,
-                class_weight='balanced',
-                solver='liblinear'
-            )
-            lr.fit(X_train_scaled, y_train)
-            models['lr'] = lr
-            logger.info("✅ Logistic Regression trained successfully")
+            lr_search.fit(X_train_scaled, y_train)
+            models['lr'] = lr_search.best_estimator_
+            logger.info(f"✅ LogisticRegression Best Params: {lr_search.best_params_}")
+            logger.info(f"✅ LogisticRegression Best Score: {lr_search.best_score_:.3f}")
         except Exception as e:
-            logger.error(f"❌ Logistic Regression training failed: {e}")
+            logger.error(f"❌ LogisticRegression training failed: {e}")
 
         # Evaluate ensemble
         accuracy, precision, recall, f1 = 0.0, 0.0, 0.0, 0.0
         if len(X_test) > 0 and models:
             predictions = []
+            ensemble_pred_proba = []
             for name, model in models.items():
                 if name == 'lr':
-                    pred = model.predict(X_test_scaled)
+                    proba = model.predict_proba(X_test_scaled)[:, 1]
                 else:
-                    # For tree-based models, X_test is not scaled
-                    pred = model.predict(X_test)
-                predictions.append(pred)
-
-            # Majority voting or averaging probabilities
-            if predictions:
-                # Use probabilities for a softer ensemble
-                ensemble_pred_proba = []
-                for name, model in models.items():
-                    if name == 'lr':
-                        proba = model.predict_proba(X_test_scaled)[:, 1]
-                    else:
-                        proba = model.predict_proba(X_test)[:, 1]
-                    ensemble_pred_proba.append(proba)
+                    proba = model.predict_proba(X_test)[:, 1]
+                ensemble_pred_proba.append(proba)
                 
-                if ensemble_pred_proba:
-                    ensemble_pred_proba_avg = np.mean(ensemble_pred_proba, axis=0)
-                    ensemble_pred = (ensemble_pred_proba_avg > 0.5).astype(int)
-                else:
-                    ensemble_pred = np.round(np.mean(predictions, axis=0)) # Fallback to majority voting
+            if ensemble_pred_proba:
+                ensemble_pred_proba_avg = np.mean(ensemble_pred_proba, axis=0)
+                ensemble_pred = (ensemble_pred_proba_avg > 0.5).astype(int)
 
                 accuracy = accuracy_score(y_test, ensemble_pred)
                 precision = precision_score(y_test, ensemble_pred, zero_division=0)
