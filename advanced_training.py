@@ -1,5 +1,5 @@
 
-# advanced_training.py - IMPROVED VERSION
+# advanced_training.py - OPTIMIZED VERSION
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Set
@@ -19,11 +19,12 @@ logger = logging.getLogger(__name__)
 
 class AdvancedFeatureEngineer:
     """
-    Advanced Context-Aware Feature Engineering System - IMPROVED VERSION
+    Advanced Context-Aware Feature Engineering System - OPTIMIZED VERSION
     ✅ รองรับ Transcript Format (1 นักศึกษา = หลายแถว)
     ✅ คำนวณการจบอัตโนมัติ (ปรับปรุงการคำนวณปีที่เรียน)
     ✅ สร้าง Dynamic Snapshots ตามช่วงเวลาการเรียน
     ✅ เพิ่ม Features ที่หลากหลายและซับซ้อนขึ้น
+    ✅ ปรับปรุงประสิทธิภาพการทำงาน
     """
     
     def __init__(self, grade_mapping: Dict[str, float]):
@@ -926,4 +927,5 @@ def train_ensemble_model(X, y):
         import traceback
         logger.error(traceback.format_exc())
         raise
+
 
