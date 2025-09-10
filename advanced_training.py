@@ -1,4 +1,4 @@
-# advanced_training.py - COMPLETE ENHANCED VERSION WITH AUTOMATIC GRADUATION CALCULATION
+# advanced_training.py - FIXED VERSION
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Set
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class AdvancedFeatureEngineer:
     """
-    Advanced Context-Aware Feature Engineering System
+    Advanced Context-Aware Feature Engineering System - FIXED VERSION
     ✅ รองรับ Transcript Format (1 นักศึกษา = หลายแถว)
     ✅ คำนวณการจบอัตโนมัติ (≤4 ปี = จบตามเกณฑ์)
     ✅ สร้าง Dynamic Snapshots ตามช่วงเวลาการเรียน
@@ -257,7 +257,7 @@ class AdvancedFeatureEngineer:
     
     def _calculate_years_studied(self, student_data: pd.DataFrame) -> int:
         """
-        คำนวณจำนวนปีที่เรียนจากข้อมูล transcript
+        คำนวณจำนวนปีที่เรียนจากข้อมูล transcript - FIXED VERSION
         """
         # Method 1: ถ้ามีคอลัมน์ปีการศึกษา
         year_col = self._find_column(student_data, ['ปีการศึกษา', 'year', 'academic_year'])
@@ -288,11 +288,21 @@ class AdvancedFeatureEngineer:
             # สมมติว่า 1 ปี = 2 เทอม (ไม่นับ summer)
             return max(1, (total_terms + 1) // 2)
         
-        # Method 3: นับจากจำนวนวิชา (fallback)
-        # สมมติว่านักศึกษาลงประมาณ 6-8 วิชาต่อเทอม, 2 เทอมต่อปี
+        # Method 3: นับจากจำนวนวิชา (fallback) - FIXED
+        # ปรับให้สมจริงมากขึ้น: ประมาณ 5-7 วิชาต่อเทอม, 2 เทอมต่อปี
         total_courses = len(student_data)
-        courses_per_year = 14  # ประมาณ 7 วิชาต่อเทอม x 2 เทอม
-        return max(1, min(8, (total_courses + courses_per_year - 1) // courses_per_year))
+        
+        # ใช้การประมาณที่แม่นยำขึ้น
+        if total_courses <= 10:
+            return 1  # ปี 1
+        elif total_courses <= 20:
+            return 2  # ปี 2
+        elif total_courses <= 30:
+            return 3  # ปี 3
+        elif total_courses <= 40:
+            return 4  # ปี 4
+        else:
+            return 5  # มากกว่า 4 ปี
     
     def _sort_by_time(self, student_data: pd.DataFrame) -> pd.DataFrame:
         """เรียงข้อมูลตามเวลา"""
@@ -315,7 +325,7 @@ class AdvancedFeatureEngineer:
     
     def _create_temporal_snapshots(self, student_id: str, student_record: Dict) -> List[Dict]:
         """
-        สร้าง Dynamic Snapshots สำหรับนักศึกษาแต่ละคน
+        สร้าง Dynamic Snapshots สำหรับนักศึกษาแต่ละคน - FIXED VERSION
         จำลองสถานการณ์ในแต่ละช่วงเวลา (เทอม) ของการเรียน
         """
         snapshots = []
@@ -353,15 +363,19 @@ class AdvancedFeatureEngineer:
                 if snapshot:
                     snapshots.append(snapshot)
         else:
-            # สร้าง snapshots ทุกๆ กลุ่มของวิชา (simulate terms)
-            courses_per_term = 6
+            # FIXED: สร้าง snapshots แบบ progressive
+            # สร้างทุกๆ 5 วิชา เพื่อจำลองการเรียนแต่ละเทอม
+            courses_per_term = 5
             total_courses = len(student_data)
             
-            for i in range(courses_per_term, total_courses + 1, courses_per_term):
-                current_data = student_data.iloc[:i]
+            # สร้าง snapshots แบบ incremental
+            for i in range(courses_per_term, total_courses + courses_per_term, courses_per_term):
+                end_index = min(i, total_courses)
+                current_data = student_data.iloc[:end_index]
+                
                 snapshot = self._create_snapshot_features(
                     student_id=student_id,
-                    snapshot_id=f"{student_id}_snapshot_{i//courses_per_term}",
+                    snapshot_id=f"{student_id}_snapshot_{end_index}",
                     courses_data=current_data,
                     course_col=course_col,
                     grade_col=grade_col,
@@ -370,19 +384,22 @@ class AdvancedFeatureEngineer:
                 )
                 if snapshot:
                     snapshots.append(snapshot)
-            
-            # เพิ่ม final snapshot ด้วยข้อมูลทั้งหมด
-            if total_courses % courses_per_term != 0 or len(snapshots) == 0:
-                final_snapshot = self._create_snapshot_features(
-                    student_id=student_id,
-                    snapshot_id=f"{student_id}_final",
-                    courses_data=student_data,
-                    course_col=course_col,
-                    grade_col=grade_col,
-                    credit_col=credit_col,
-                    graduated=graduated
-                )
-                if final_snapshot:
+        
+        # FIXED: ต้องมี final snapshot เสมอ
+        if len(snapshots) == 0 or len(student_data) > 0:
+            # สร้าง final snapshot ด้วยข้อมูลทั้งหมด
+            final_snapshot = self._create_snapshot_features(
+                student_id=student_id,
+                snapshot_id=f"{student_id}_final",
+                courses_data=student_data,
+                course_col=course_col,
+                grade_col=grade_col,
+                credit_col=credit_col,
+                graduated=graduated
+            )
+            if final_snapshot:
+                # ตรวจสอบว่าไม่ซ้ำกับ snapshot สุดท้าย
+                if not snapshots or snapshots[-1]['Total_Courses_so_far'] != final_snapshot['Total_Courses_so_far']:
                     snapshots.append(final_snapshot)
         
         return snapshots
@@ -392,7 +409,7 @@ class AdvancedFeatureEngineer:
                                  grade_col: str, credit_col: str, 
                                  graduated: int) -> Dict:
         """
-        สร้าง Standardized Feature Set สำหรับ snapshot หนึ่งๆ
+        สร้าง Standardized Feature Set สำหรับ snapshot หนึ่งๆ - FIXED VERSION
         นี่คือหัวใจของระบบ - สร้างชุด features มาตรฐานที่โมเดลต้องการ
         """
         grades = []
@@ -466,6 +483,11 @@ class AdvancedFeatureEngineer:
         recent_window = min(6, len(grades))  # ดู 6 วิชาล่าสุด
         recent_grades = grades[-recent_window:] if len(grades) > recent_window else grades
         
+        # FIXED: คำนวณ completion rate ที่แท้จริง
+        # ใช้จำนวนวิชาแทนหน่วยกิต เพื่อความแม่นยำ
+        estimated_total_courses = 40  # ประมาณ 40 วิชาสำหรับ 4 ปี
+        completion_percentage = min(100, (len(grades) / estimated_total_courses) * 100)
+        
         # สร้าง STANDARDIZED FEATURE SET
         features = {
             'student_id': student_id,
@@ -477,6 +499,7 @@ class AdvancedFeatureEngineer:
             'Total_Courses_so_far': len(grades),
             'Total_F_Count_so_far': sum(1 for g in grades if g == 0),
             'Total_W_Count_so_far': 0,  # จะต้องดูจาก grade letter
+            'Completion_Percentage': completion_percentage,  # เพิ่ม feature นี้
             
             # === Trend & Recent Features (แนวโน้มและล่าสุด) ===
             'GPA_last_window': np.mean(recent_grades) if recent_grades else 0,
@@ -522,7 +545,7 @@ class AdvancedFeatureEngineer:
     
     def _generate_advanced_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        สร้าง Advanced Features เพิ่มเติม (Feature Engineering)
+        สร้าง Advanced Features เพิ่มเติม (Feature Engineering) - FIXED VERSION
         """
         # Interaction features
         if 'GPAX_so_far' in df.columns and 'Total_F_Count_so_far' in df.columns:
@@ -555,8 +578,12 @@ class AdvancedFeatureEngineer:
                 (df['Worse_Than_Avg_Count'] + 1)  # +1 to avoid division by zero
             )
         
-        # Progress indicators
-        if 'Total_Credits_so_far' in df.columns:
+        # Progress indicators - FIXED
+        if 'Completion_Percentage' in df.columns:
+            # ใช้ Completion_Percentage ที่คำนวณไว้แล้ว
+            df['Progress_Rate'] = df['Completion_Percentage'] / 100
+        elif 'Total_Credits_so_far' in df.columns:
+            # Fallback to credits calculation
             expected_credits_per_year = 36  # ประมาณ 36 หน่วยกิตต่อปี
             df['Progress_Rate'] = df['Total_Credits_so_far'] / (expected_credits_per_year * 4)
         
@@ -592,6 +619,8 @@ class AdvancedFeatureEngineer:
             logger.warning("Could not apply variance threshold")
         
         return X
+    
+    # ================== Helper Methods (คงเดิม) ==================
     
     def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> Optional[str]:
         """หาชื่อคอลัมน์จากรายการที่เป็นไปได้"""
@@ -703,7 +732,6 @@ class AdvancedFeatureEngineer:
         return 0
 
 
-# Keep the existing train_ensemble_model function - it's already good
 def train_ensemble_model(X, y):
     """
     Train ensemble model with advanced techniques
@@ -711,16 +739,16 @@ def train_ensemble_model(X, y):
     """
     logger.info("🚀 Starting Advanced Ensemble Model Training...")
     logger.info(f"📊 Input shape: X={X.shape}, y={y.shape}")
-    
+
     try:
         # Handle class imbalance
         from collections import Counter
         unique_classes, class_counts = np.unique(y, return_counts=True)
         logger.info(f"📊 Class distribution: {dict(zip(unique_classes, class_counts))}")
-        
+
         # Ensure minimum samples per class
         min_class_count = min(class_counts) if len(class_counts) > 0 else 0
-        
+
         if len(unique_classes) < 2:
             logger.warning("⚠️ Only one class found! Adding synthetic minority class...")
             minority_class = 1 if unique_classes[0] == 0 else 0
@@ -730,22 +758,22 @@ def train_ensemble_model(X, y):
                 y = pd.concat([y, pd.Series([minority_class])], ignore_index=True)
             unique_classes, class_counts = np.unique(y, return_counts=True)
             logger.info(f"📊 After synthetic: {dict(zip(unique_classes, class_counts))}")
-        
+
         if min_class_count < 2:
             logger.warning(f"⚠️ Insufficient samples in minority class: {min_class_count}")
             minority_class = unique_classes[np.argmin(class_counts)]
             needed = 2 - min_class_count
-            
+
             minority_indices = np.where(y == minority_class)[0]
             if len(minority_indices) > 0:
                 for _ in range(needed):
                     idx = minority_indices[0]
                     X = pd.concat([X, X.iloc[[idx]]], ignore_index=True)
                     y = pd.concat([y, pd.Series([minority_class])], ignore_index=True)
-        
+
         # Adaptive test size
         test_size = min(0.2, max(0.1, 10 / len(X)))
-        
+
         # Split data with stratification if possible
         try:
             X_train, X_test, y_train, y_test = train_test_split(
@@ -756,9 +784,9 @@ def train_ensemble_model(X, y):
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=42
             )
-        
+
         logger.info(f"📊 Train/Test split: {len(X_train)}/{len(X_test)}")
-        
+
         # Apply SMOTE if possible
         try:
             min_samples = min(Counter(y_train).values())
@@ -773,15 +801,15 @@ def train_ensemble_model(X, y):
                 logger.info(f"✅ Applied SMOTE. New distribution: {Counter(y_train)}")
         except Exception as e:
             logger.warning(f"⚠️ SMOTE not applied: {e}")
-        
+
         # Scale features
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test) if len(X_test) > 0 else np.array([])
-        
+
         # Train models
         models = {}
-        
+
         # Random Forest
         try:
             rf = RandomForestClassifier(
@@ -796,7 +824,7 @@ def train_ensemble_model(X, y):
             rf.fit(X_train, y_train)
             models['rf'] = rf
             logger.info("✅ Random Forest trained successfully")
-            
+
             # Log feature importance
             if hasattr(rf, 'feature_importances_'):
                 importances = pd.Series(rf.feature_importances_, index=X.columns)
@@ -804,10 +832,10 @@ def train_ensemble_model(X, y):
                 logger.info(f"🎯 Top 10 important features:")
                 for feat, imp in top_features.items():
                     logger.info(f"   - {feat}: {imp:.4f}")
-                    
+
         except Exception as e:
             logger.error(f"❌ Random Forest training failed: {e}")
-        
+
         # Gradient Boosting
         try:
             gb = GradientBoostingClassifier(
@@ -821,7 +849,7 @@ def train_ensemble_model(X, y):
             logger.info("✅ Gradient Boosting trained successfully")
         except Exception as e:
             logger.error(f"❌ Gradient Boosting training failed: {e}")
-        
+
         # Logistic Regression
         try:
             lr = LogisticRegression(
@@ -835,7 +863,7 @@ def train_ensemble_model(X, y):
             logger.info("✅ Logistic Regression trained successfully")
         except Exception as e:
             logger.error(f"❌ Logistic Regression training failed: {e}")
-        
+
         # Evaluate ensemble
         if len(X_test) > 0 and models:
             predictions = []
@@ -845,10 +873,10 @@ def train_ensemble_model(X, y):
                 else:
                     pred = model.predict(X_test)
                 predictions.append(pred)
-            
+
             # Majority voting
             ensemble_pred = np.round(np.mean(predictions, axis=0))
-            
+
             accuracy = accuracy_score(y_test, ensemble_pred)
             precision = precision_score(y_test, ensemble_pred, zero_division=0)
             recall = recall_score(y_test, ensemble_pred, zero_division=0)
@@ -860,13 +888,13 @@ def train_ensemble_model(X, y):
             recall = 0.85
             f1 = 0.85
             logger.warning("⚠️ No test set available, using default metrics")
-        
+
         logger.info(f"📊 Model Performance:")
         logger.info(f"   - Accuracy: {accuracy:.3f}")
         logger.info(f"   - Precision: {precision:.3f}")
         logger.info(f"   - Recall: {recall:.3f}")
         logger.info(f"   - F1-Score: {f1:.3f}")
-        
+
         return {
             'models': models,
             'scaler': scaler,
@@ -878,7 +906,7 @@ def train_ensemble_model(X, y):
             'validation_samples': len(X_test),
             'feature_names': list(X.columns)
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Error in ensemble training: {e}")
         import traceback
