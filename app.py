@@ -2611,81 +2611,171 @@ def analyze_curriculum():
             }
         }
         
+        # ตรวจสอบความสมบูรณ์ของหลักสูตรก่อนทำนาย
+        def check_curriculum_completion(current_grades, courses_data, min_credits=136, min_gpa=2.0):
+            """ตรวจสอบว่านักศึกษาจบหลักสูตรแล้วหรือยัง"""
+            total_credits = 0
+            total_grade_points = 0
+            total_credits_for_gpa = 0
+            passed_courses = 0
+            
+            for course_id, grade in current_grades.items():
+                if grade:  # มีเกรด
+                    course = next((c for c in courses_data if c['id'] == course_id), None)
+                    if course:
+                        credit = course.get('credit', 3)
+                        grade_point = grade_mapping.get(grade, 0)
+                        
+                        # นับหน่วยกิตที่ผ่าน (ไม่ใช่ F, W, I)
+                        if grade not in ['F', 'W', 'I']:
+                            total_credits += credit
+                            passed_courses += 1
+                        
+                        # คำนวณ GPA (รวม F แต่ไม่รวม W, I)
+                        if grade not in ['W', 'I']:
+                            total_grade_points += grade_point * credit
+                            total_credits_for_gpa += credit
+            
+            gpa = total_grade_points / total_credits_for_gpa if total_credits_for_gpa > 0 else 0
+            
+            # ตรวจสอบเงื่อนไขการจบ
+            is_completed = total_credits >= min_credits and gpa >= min_gpa
+            
+            return {
+                'is_completed': is_completed,
+                'total_credits': total_credits,
+                'gpa': gpa,
+                'passed_courses': passed_courses,
+                'min_credits_met': total_credits >= min_credits,
+                'min_gpa_met': gpa >= min_gpa,
+                'min_credits': min_credits,
+                'min_gpa': min_gpa
+            }
+        
+        # ตรวจสอบความสมบูรณ์ของหลักสูตร
+        completion_status = check_curriculum_completion(current_grades, courses_data)
+        
+        # เพิ่มข้อมูลความสมบูรณ์ในผลลัพธ์
+        response_data['completion_status'] = {
+            'total_credits': completion_status['total_credits'],
+            'min_credits': completion_status['min_credits'],
+            'credits_remaining': max(0, completion_status['min_credits'] - completion_status['total_credits']),
+            'gpa': completion_status['gpa'],
+            'min_gpa': completion_status['min_gpa'],
+            'is_completed': completion_status['is_completed'],
+            'min_credits_met': completion_status['min_credits_met'],
+            'min_gpa_met': completion_status['min_gpa_met']
+        }
+        
         # Try to predict if model is provided
         if model_filename:
             try:
                 logger.info(f"Making prediction with model: {model_filename}")
                 
-                # Load model
-                loaded_model_data = storage.load_model(model_filename)
-                if loaded_model_data:
-                    # สร้าง AdvancedFeatureEngineer และ ContextAwarePredictor
-                    engineer = AdvancedFeatureEngineer(
-                        grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
-                    )
+                # ตรวจสอบว่าจบหลักสูตรแล้วหรือยัง
+                if completion_status['is_completed']:
+                    # ถ้าครบหลักสูตรและ GPA ≥ 2.0 แล้ว → จบแน่นอน
+                    response_data['prediction_result'] = {
+                        'prediction': 'จบ',
+                        'prob_pass': 1.0,
+                        'prob_fail': 0.0,
+                        'confidence': 1.0,
+                        'risk_level': 'ไม่มี',
+                        'gpa_input': float(completion_status['gpa']),
+                        'reason': 'ใส่เกรดครบหลักสูตรและ GPA ≥ 2.00 แล้ว',
+                        'method': 'Curriculum Completion Check',
+                        'status': 'graduated'
+                    }
+                    logger.info(f"Curriculum completed: GPA {completion_status['gpa']:.2f}, Credits {completion_status['total_credits']}")
                     
-                    # โหลด course_profiles จากโมเดล
-                    course_profiles = loaded_model_data.get('course_profiles', {})
-                    engineer.course_profiles = course_profiles
+                elif completion_status['min_credits_met'] and not completion_status['min_gpa_met']:
+                    # ถ้าครบหน่วยกิตแต่ GPA < 2.0 → ไม่จบ
+                    response_data['prediction_result'] = {
+                        'prediction': 'ไม่จบ',
+                        'prob_pass': 0.0,
+                        'prob_fail': 1.0,
+                        'confidence': 1.0,
+                        'risk_level': 'สูง',
+                        'gpa_input': float(completion_status['gpa']),
+                        'reason': f'GPA {completion_status["gpa"]:.2f} ต่ำกว่าเกณฑ์ขั้นต่ำ {completion_status["min_gpa"]:.2f}',
+                        'method': 'Curriculum Completion Check',
+                        'status': 'failed_gpa'
+                    }
+                    logger.info(f"Failed due to low GPA: {completion_status['gpa']:.2f} < {completion_status['min_gpa']}")
                     
-                    # สร้าง transcript data จากข้อมูลปัจจุบัน
-                    transcript_data = []
-                    for course_id, grade in current_grades.items():
-                        if grade:  # มีเกรด
-                            course = next((c for c in courses_data if c['id'] == course_id), None)
-                            if course:
-                                # แปลงเกรดเป็น GRADE_POINT
-                                grade_point = grade_mapping.get(grade, 0)
-                                
-                                transcript_data.append({
-                                    'Dummy StudentNO': student_name,
-                                    'COURSE_CODE': course_id,
-                                    'COURSE_TITLE_TH': course.get('thaiName', ''),
-                                    'CREDIT': course.get('credit', 3),
-                                    'GRADE': grade,
-                                    'GRADE_POINT': grade_point,
-                                    'ปีที่เข้า': 2020,  # ค่าเริ่มต้น
-                                    'ปีการศึกษา': 2024,  # ค่าเริ่มต้น
-                                    'เทอม': 1
-                                })
-                    
-                    if transcript_data:
-                        # แปลงเป็น DataFrame
-                        transcript_df = pd.DataFrame(transcript_data)
+                else:
+                    # ถ้ายังไม่ครบหลักสูตร → ใช้ AI ทำนาย
+                    # Load model
+                    loaded_model_data = storage.load_model(model_filename)
+                    if loaded_model_data:
+                        # สร้าง AdvancedFeatureEngineer และ ContextAwarePredictor
+                        engineer = AdvancedFeatureEngineer(
+                            grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+                        )
                         
-                        # ใช้ ContextAwarePredictor
-                        from advanced_training import ContextAwarePredictor
-                        predictor = ContextAwarePredictor(engineer)
+                        # โหลด course_profiles จากโมเดล
+                        course_profiles = loaded_model_data.get('course_profiles', {})
+                        engineer.course_profiles = course_profiles
                         
-                        # ทำนายด้วย Context-Aware System
-                        prediction_result = predictor.predict_graduation_probability(transcript_df)
+                        # สร้าง transcript data จากข้อมูลปัจจุบัน
+                        transcript_data = []
+                        for course_id, grade in current_grades.items():
+                            if grade:  # มีเกรด
+                                course = next((c for c in courses_data if c['id'] == course_id), None)
+                                if course:
+                                    # แปลงเกรดเป็น GRADE_POINT
+                                    grade_point = grade_mapping.get(grade, 0)
+                                    
+                                    transcript_data.append({
+                                        'Dummy StudentNO': student_name,
+                                        'COURSE_CODE': course_id,
+                                        'COURSE_TITLE_TH': course.get('thaiName', ''),
+                                        'CREDIT': course.get('credit', 3),
+                                        'GRADE': grade,
+                                        'GRADE_POINT': grade_point,
+                                        'ปีที่เข้า': 2020,  # ค่าเริ่มต้น
+                                        'ปีการศึกษา': 2024,  # ค่าเริ่มต้น
+                                        'เทอม': 1
+                                    })
                         
-                        prob_pass = prediction_result['probability']
-                        prob_fail = 1 - prob_pass
-                        confidence = prediction_result['confidence']
-                        
-                        prediction = 'จบ' if prob_pass >= 0.5 else 'ไม่จบ'
-                        
-                        risk_level = 'สูง'
-                        if confidence > 0.8:
-                            risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-                        elif confidence > 0.6:
-                            risk_level = 'ปานกลาง'
-                        
-                        response_data['prediction_result'] = {
-                            'prediction': prediction,
-                            'prob_pass': float(prob_pass),
-                            'prob_fail': float(prob_fail),
-                            'confidence': float(confidence),
-                            'risk_level': risk_level,
-                            'gpa_input': float(avg_gpa),
-                            'features_used': prediction_result['features_used'],
-                            'courses_analyzed': prediction_result['courses_analyzed'],
-                            'method': 'Context-Aware AI'
-                        }
-                        logger.info(f"Prediction successful: {prediction} (confidence: {confidence:.3f})")
-                    else:
-                        logger.warning("No valid transcript data for prediction")
+                        if transcript_data:
+                            # แปลงเป็น DataFrame
+                            transcript_df = pd.DataFrame(transcript_data)
+                            
+                            # ใช้ ContextAwarePredictor
+                            from advanced_training import ContextAwarePredictor
+                            predictor = ContextAwarePredictor(engineer)
+                            
+                            # ทำนายด้วย Context-Aware System
+                            prediction_result = predictor.predict_graduation_probability(transcript_df)
+                            
+                            prob_pass = prediction_result['probability']
+                            prob_fail = 1 - prob_pass
+                            confidence = prediction_result['confidence']
+                            
+                            prediction = 'จบ' if prob_pass >= 0.5 else 'ไม่จบ'
+                            
+                            risk_level = 'สูง'
+                            if confidence > 0.8:
+                                risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
+                            elif confidence > 0.6:
+                                risk_level = 'ปานกลาง'
+                            
+                            response_data['prediction_result'] = {
+                                'prediction': prediction,
+                                'prob_pass': float(prob_pass),
+                                'prob_fail': float(prob_fail),
+                                'confidence': float(confidence),
+                                'risk_level': risk_level,
+                                'gpa_input': float(completion_status['gpa']),
+                                'features_used': prediction_result['features_used'],
+                                'courses_analyzed': prediction_result['courses_analyzed'],
+                                'method': 'Context-Aware AI Prediction',
+                                'status': 'predicted'
+                            }
+                            logger.info(f"AI Prediction: {prediction} (confidence: {confidence:.3f})")
+                        else:
+                            logger.warning("No valid transcript data for prediction")
                         
             except Exception as e:
                 logger.error(f"Error during prediction: {str(e)}")
