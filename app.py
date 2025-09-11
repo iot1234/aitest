@@ -1,5 +1,5 @@
 # แก้ไขส่วนบนของ app.py - TIMEOUT OPTIMIZED VERSION
-from advanced_training_optimized import AdvancedFeatureEngineer, train_ensemble_model  # ใช้ไฟล์ที่ปรับปรุงแล้ว
+from advanced_training import AdvancedFeatureEngineer, train_ensemble_model
 from dotenv import load_dotenv
 import sys
 import signal
