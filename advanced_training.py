@@ -1,5 +1,5 @@
 
-# advanced_training.py - OPTIMIZED VERSION FOR LARGE DATASETS (v5)
+# advanced_training.py - OPTIMIZED VERSION FOR LARGE DATASETS (v6)
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Set
@@ -816,7 +816,8 @@ def train_ensemble_model(X, y):
         # RandomForestClassifier
         logger.info("⚙️ Training RandomForestClassifier...")
         try:
-            rf_model = RandomForestClassifier(n_estimators=100, max_depth=8, min_samples_split=2, min_samples_leaf=1, random_state=42, n_jobs=-1, class_weight='balanced')
+            # Reduced n_estimators and max_depth for faster training on large datasets
+            rf_model = RandomForestClassifier(n_estimators=50, max_depth=5, min_samples_split=2, min_samples_leaf=1, random_state=42, n_jobs=-1, class_weight='balanced')
             rf_model.fit(X_train, y_train)
             models['rf'] = rf_model
             logger.info(f"✅ RandomForest trained.")
@@ -833,7 +834,8 @@ def train_ensemble_model(X, y):
         # GradientBoostingClassifier
         logger.info("⚙️ Training GradientBoostingClassifier...")
         try:
-            gb_model = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+            # Reduced n_estimators and max_depth for faster training on large datasets
+            gb_model = GradientBoostingClassifier(n_estimators=50, learning_rate=0.1, max_depth=2, random_state=42)
             gb_model.fit(X_train, y_train)
             models['gb'] = gb_model
             logger.info(f"✅ GradientBoosting trained.")
@@ -843,7 +845,7 @@ def train_ensemble_model(X, y):
         # Logistic Regression
         logger.info("⚙️ Training LogisticRegression...")
         try:
-            lr_model = LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced', C=1.0, solver='liblinear')
+            lr_model = LogisticRegression(max_iter=500, random_state=42, class_weight='balanced', C=1.0, solver='liblinear')
             lr_model.fit(X_train_scaled, y_train)
             models['lr'] = lr_model
             logger.info(f"✅ LogisticRegression trained.")
