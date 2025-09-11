@@ -2619,59 +2619,52 @@ def analyze_curriculum():
                 # Load model
                 loaded_model_data = storage.load_model(model_filename)
                 if loaded_model_data:
-                    model_info = {
-                        'models': loaded_model_data['models'],
-                        'scaler': loaded_model_data['scaler']
-                    }
-                    feature_cols = loaded_model_data['feature_columns']
+                    # สร้าง AdvancedFeatureEngineer และ ContextAwarePredictor
+                    engineer = AdvancedFeatureEngineer(
+                        grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
+                    )
                     
-                    # Prepare basic features for prediction
-                    student_data_for_prediction = {
-                        'gpa': avg_gpa,
-                        'min_grade': 0,
-                        'max_grade': 4,
-                        'std_grade': 0,
-                        'fail_count': len(failed_courses_ids),
-                        'fail_rate': len(failed_courses_ids) / len(loaded_courses_ids) if loaded_courses_ids else 0,
-                        'total_subjects': len(loaded_courses_ids),
-                        'year_in': 0,
-                        'year_out': 0,
-                    }
+                    # โหลด course_profiles จากโมเดล
+                    course_profiles = loaded_model_data.get('course_profiles', {})
+                    engineer.course_profiles = course_profiles
                     
-                    # Create DataFrame for prediction
-                    processed_input_for_df = {}
-                    for feature in feature_cols:
-                        processed_input_for_df[feature] = [student_data_for_prediction.get(feature, 0.0)]
+                    # สร้าง transcript data จากข้อมูลปัจจุบัน
+                    transcript_data = []
+                    for course_id, grade in current_grades.items():
+                        if grade:  # มีเกรด
+                            course = next((c for c in courses_data if c['id'] == course_id), None)
+                            if course:
+                                # แปลงเกรดเป็น GRADE_POINT
+                                grade_point = grade_mapping.get(grade, 0)
+                                
+                                transcript_data.append({
+                                    'Dummy StudentNO': student_name,
+                                    'COURSE_CODE': course_id,
+                                    'COURSE_TITLE_TH': course.get('thaiName', ''),
+                                    'CREDIT': course.get('credit', 3),
+                                    'GRADE': grade,
+                                    'GRADE_POINT': grade_point,
+                                    'ปีที่เข้า': 2020,  # ค่าเริ่มต้น
+                                    'ปีการศึกษา': 2024,  # ค่าเริ่มต้น
+                                    'เทอม': 1
+                                })
                     
-                    input_df = pd.DataFrame(processed_input_for_df)
-                    
-                    # Make predictions
-                    predictions_proba_list = []
-                    trained_models = model_info['models']
-                    scaler = model_info['scaler']
-                    
-                    for name, model in trained_models.items():
-                        try:
-                            if name == 'lr':
-                                X_scaled = scaler.transform(input_df)
-                                pred_proba = model.predict_proba(X_scaled)
-                            else:
-                                pred_proba = model.predict_proba(input_df)
-                            
-                            if pred_proba.shape[1] == 1:
-                                pred_proba = np.hstack((1 - pred_proba, pred_proba))
-                            
-                            predictions_proba_list.append(pred_proba)
-                        except Exception as e:
-                            logger.warning(f"Could not predict with model {name}: {str(e)}")
-                    
-                    if predictions_proba_list:
-                        avg_prob_per_student = np.mean([pred[0] for pred in predictions_proba_list], axis=0)
-                        prob_pass = avg_prob_per_student[1]
-                        prob_fail = avg_prob_per_student[0]
+                    if transcript_data:
+                        # แปลงเป็น DataFrame
+                        transcript_df = pd.DataFrame(transcript_data)
+                        
+                        # ใช้ ContextAwarePredictor
+                        from advanced_training import ContextAwarePredictor
+                        predictor = ContextAwarePredictor(engineer)
+                        
+                        # ทำนายด้วย Context-Aware System
+                        prediction_result = predictor.predict_graduation_probability(transcript_df)
+                        
+                        prob_pass = prediction_result['probability']
+                        prob_fail = 1 - prob_pass
+                        confidence = prediction_result['confidence']
                         
                         prediction = 'จบ' if prob_pass >= 0.5 else 'ไม่จบ'
-                        confidence = max(prob_pass, prob_fail)
                         
                         risk_level = 'สูง'
                         if confidence > 0.8:
@@ -2685,12 +2678,19 @@ def analyze_curriculum():
                             'prob_fail': float(prob_fail),
                             'confidence': float(confidence),
                             'risk_level': risk_level,
-                            'gpa_input': float(avg_gpa)
+                            'gpa_input': float(avg_gpa),
+                            'features_used': prediction_result['features_used'],
+                            'courses_analyzed': prediction_result['courses_analyzed'],
+                            'method': 'Context-Aware AI'
                         }
                         logger.info(f"Prediction successful: {prediction} (confidence: {confidence:.3f})")
+                    else:
+                        logger.warning("No valid transcript data for prediction")
                         
             except Exception as e:
                 logger.error(f"Error during prediction: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
         
         return jsonify(response_data)
         
