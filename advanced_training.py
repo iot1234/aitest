@@ -1,12 +1,12 @@
 
-# advanced_training.py - OPTIMIZED VERSION FOR LARGE DATASETS (v6)
+# advanced_training.py - OPTIMIZED VERSION FOR LARGE DATASETS (v3)
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Any, Optional, Set
 import logging
 from datetime import datetime
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RandomizedSearchCV # Changed to RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -810,17 +810,25 @@ def train_ensemble_model(X, y):
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test) if len(X_test) > 0 else np.array([])
 
-        # Train models with fixed, reasonable hyperparameters
+        # Train models
         models = {}
 
         # RandomForestClassifier
         logger.info("⚙️ Training RandomForestClassifier...")
+        rf_params = {
+            'n_estimators': [50, 100], # Further reduced options
+            'max_depth': [5, 8],      # Further reduced options
+            'min_samples_split': [2],
+            'min_samples_leaf': [1]
+        }
+        # Changed to RandomizedSearchCV for faster execution
+        rf_search = RandomizedSearchCV(RandomForestClassifier(random_state=42, n_jobs=-1, class_weight='balanced'),
+                               rf_params, n_iter=5, cv=3, verbose=0, scoring='f1', n_jobs=-1, random_state=42)
         try:
-            # Reduced n_estimators and max_depth for faster training on large datasets
-            rf_model = RandomForestClassifier(n_estimators=50, max_depth=5, min_samples_split=2, min_samples_leaf=1, random_state=42, n_jobs=-1, class_weight='balanced')
-            rf_model.fit(X_train, y_train)
-            models['rf'] = rf_model
-            logger.info(f"✅ RandomForest trained.")
+            rf_search.fit(X_train, y_train)
+            models['rf'] = rf_search.best_estimator_
+            logger.info(f"✅ RandomForest Best Params: {rf_search.best_params_}")
+            logger.info(f"✅ RandomForest Best Score: {rf_search.best_score_:.3f}")
             # Log feature importance
             if hasattr(models['rf'], 'feature_importances_') and len(X.columns) > 0:
                 importances = pd.Series(models['rf'].feature_importances_, index=X.columns)
@@ -833,22 +841,36 @@ def train_ensemble_model(X, y):
 
         # GradientBoostingClassifier
         logger.info("⚙️ Training GradientBoostingClassifier...")
+        gb_params = {
+            'n_estimators': [50, 100], # Further reduced options
+            'learning_rate': [0.05, 0.1],
+            'max_depth': [3, 4]
+        }
+        # Changed to RandomizedSearchCV for faster execution
+        gb_search = RandomizedSearchCV(GradientBoostingClassifier(random_state=42),
+                               gb_params, n_iter=5, cv=3, verbose=0, scoring='f1', n_jobs=-1, random_state=42)
         try:
-            # Reduced n_estimators and max_depth for faster training on large datasets
-            gb_model = GradientBoostingClassifier(n_estimators=50, learning_rate=0.1, max_depth=2, random_state=42)
-            gb_model.fit(X_train, y_train)
-            models['gb'] = gb_model
-            logger.info(f"✅ GradientBoosting trained.")
+            gb_search.fit(X_train, y_train)
+            models['gb'] = gb_search.best_estimator_
+            logger.info(f"✅ GradientBoosting Best Params: {gb_search.best_params_}")
+            logger.info(f"✅ GradientBoosting Best Score: {gb_search.best_score_:.3f}")
         except Exception as e:
             logger.error(f"❌ GradientBoosting training failed: {e}")
 
         # Logistic Regression
         logger.info("⚙️ Training LogisticRegression...")
+        lr_params = {
+            'C': [0.5, 1.0, 5.0],
+            'solver': ['liblinear'] # Reduced solvers for simplicity
+        }
+        # Changed to RandomizedSearchCV for faster execution
+        lr_search = RandomizedSearchCV(LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced'),
+                               lr_params, n_iter=3, cv=3, verbose=0, scoring='f1', n_jobs=-1, random_state=42)
         try:
-            lr_model = LogisticRegression(max_iter=500, random_state=42, class_weight='balanced', C=1.0, solver='liblinear')
-            lr_model.fit(X_train_scaled, y_train)
-            models['lr'] = lr_model
-            logger.info(f"✅ LogisticRegression trained.")
+            lr_search.fit(X_train_scaled, y_train)
+            models['lr'] = lr_search.best_estimator_
+            logger.info(f"✅ LogisticRegression Best Params: {lr_search.best_params_}")
+            logger.info(f"✅ LogisticRegression Best Score: {lr_search.best_score_:.3f}")
         except Exception as e:
             logger.error(f"❌ LogisticRegression training failed: {e}")
 
