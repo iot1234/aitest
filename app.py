@@ -1,10 +1,30 @@
 # แก้ไขส่วนบนของ app.py
-from advanced_training import AdvancedFeatureEngineer
-from dotenv import load_dotenv
+import os
 import sys
+from pathlib import Path
 
-# โหลด environment variables จาก .env
-load_dotenv(override=True)
+# โหลด .env ก่อน import อื่นๆ
+from dotenv import load_dotenv
+
+# หา path ของ .env file
+env_path = Path('.') / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path, override=True)
+    print(f"✅ Loaded .env from {env_path.absolute()}")
+else:
+    # ลองหาจาก parent directory
+    parent_env = Path('..') / '.env'
+    if parent_env.exists():
+        load_dotenv(dotenv_path=parent_env, override=True)
+        print(f"✅ Loaded .env from {parent_env.absolute()}")
+    else:
+        print("⚠️ .env file not found, using system environment variables")
+
+# ตรวจสอบว่าโหลดได้จริง
+print(f"R2 Access Key present: {bool(os.getenv('CLOUDFLARE_R2_ACCESS_KEY_ID'))}")
+print(f"R2 Secret Key present: {bool(os.getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY'))}")
+
+from advanced_training import AdvancedFeatureEngineer
 
 from flask import (
     Flask,
