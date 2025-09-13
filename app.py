@@ -1,5 +1,6 @@
 # แก้ไขส่วนบนของ app.py
 from advanced_training import AdvancedFeatureEngineer
+from advanced_model_trainer import AdvancedModelTrainer
 from dotenv import load_dotenv
 import sys
 
@@ -54,9 +55,37 @@ class EnhancedPredictionSystem:
             'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
             'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0
         }
-        plt.style.use('default')
-        sns.set_palette("husl")
+        self.advanced_trainer = AdvancedModelTrainer()
+        self.advanced_model = None
+        self.course_profiles = None
         
+    def load_advanced_model(self, model_path=None):
+        """โหลดโมเดลขั้นสูงที่เทรนแล้ว"""
+        try:
+            if model_path and os.path.exists(model_path):
+                model_data = self.advanced_trainer.load_model(model_path)
+                if model_data:
+                    self.advanced_model = model_data['model']
+                    self.course_profiles = model_data.get('course_profiles', {})
+                    print(f"✅ โหลดโมเดลขั้นสูงสำเร็จ: {model_path}")
+                    return True
+            else:
+                # หาโมเดลล่าสุดในโฟลเดอร์ models
+                models_dir = "models"
+                if os.path.exists(models_dir):
+                    model_files = [f for f in os.listdir(models_dir) if f.endswith('.joblib')]
+                    if model_files:
+                        latest_model = max(model_files, key=lambda x: os.path.getctime(os.path.join(models_dir, x)))
+                        model_path = os.path.join(models_dir, latest_model)
+                        return self.load_advanced_model(model_path)
+                
+                print("⚠️ ไม่พบโมเดลขั้นสูง ใช้การทำนายแบบพื้นฐาน")
+                return False
+                
+        except Exception as e:
+            print(f"❌ ไม่สามารถโหลดโมเดลขั้นสูง: {e}")
+            return False
+    
     def calculate_gpa(self, grades_dict):
         """คำนวณ GPA จากเกรดที่ได้รับ"""
         if not grades_dict:
@@ -113,27 +142,58 @@ class EnhancedPredictionSystem:
         elif gpa < 2.5:
             weaknesses.append("GPA อยู่ในระดับพอใช้ ควรพัฒนา")
         
-        # สร้างคำแนะนำ
+        # สร้างคำแนะนำแบบครอบคลุม
         recommendations = []
+        
+        # คำแนะนำตาม GPA
         if gpa >= 3.5:
             recommendations.extend([
-                "ควรลงวิชาที่ท้าทายเพิ่มเติม",
-                "พิจารณาทำกิจกรรมเสริมหลักสูตร",
-                "เตรียมตัวสำหรับการศึกษาต่อระดับสูง"
+                "🎯 ควรลงวิชาเลือกที่ท้าทายเพิ่มเติมเพื่อพัฒนาทักษะ",
+                "📚 พิจารณาทำโครงงานวิจัยหรือ Independent Study",
+                "🏆 เตรียมตัวสำหรับการศึกษาต่อระดับสูงหรือทุนการศึกษา",
+                "👥 เข้าร่วมกิจกรรมเสริมหลักสูตรและการแข่งขันวิชาการ"
+            ])
+        elif gpa >= 3.0:
+            recommendations.extend([
+                "📖 ควรเน้นวิชาพื้นฐานให้แข็งแกร่งก่อนลงวิชาขั้นสูง",
+                "⏰ จัดตารางเวลาทบทวนบทเรียนอย่างสม่ำเสมอ",
+                "👨‍🏫 ปรึกษาอาจารย์ในวิชาที่มีปัญหาเป็นประจำ",
+                "📝 ทำแบบฝึกหัดเพิ่มเติมในวิชาที่ยาก"
             ])
         elif gpa >= 2.5:
             recommendations.extend([
-                "ควรเน้นวิชาพื้นฐานให้แข็งแกร่ง",
-                "หาเวลาทบทวนบทเรียนเพิ่มเติม",
-                "ปรึกษาอาจารย์ในวิชาที่มีปัญหา"
+                "⚖️ ควรลดจำนวนวิชาต่อเทอมและเน้นคุณภาพ",
+                "🤝 หาเพื่อนกลุ่มเรียนหรือติวเตอร์ช่วยสอน",
+                "🔄 ปรับวิธีการเรียนให้เหมาะกับตัวเอง",
+                "📊 ติดตามผลการเรียนอย่างใกล้ชิด"
+            ])
+        elif gpa >= 2.0:
+            recommendations.extend([
+                "🚨 ต้องปรับปรุงผลการเรียนเร่งด่วน",
+                "📚 พิจารณาการเรียนซ้ำในวิชาที่ไม่ผ่าน",
+                "💡 ปรึกษาอาจารย์ที่ปรึกษาเพื่อวางแผนการเรียน",
+                "🎯 เน้นวิชาหลักและวิชาบังคับก่อน"
             ])
         else:
             recommendations.extend([
-                "ควรลดจำนวนวิชาและเน้นคุณภาพ",
-                "หาติวเตอร์หรือเพื่อนช่วยสอน",
-                "ปรับวิธีการเรียนให้เหมาะสม",
-                "พิจารณาการเรียนซ้ำในวิชาที่ไม่ผ่าน"
+                "🆘 ต้องขอความช่วยเหลือจากอาจารย์และครอบครัว",
+                "📋 ทบทวนเป้าหมายการศึกษาและแรงจูงใจ",
+                "🔧 ปรับวิธีการเรียนและการจัดการเวลาใหม่หมด",
+                "⚕️ ตรวจสอบปัญหาสุขภาพหรือปัจจัยส่วนตัว"
             ])
+        
+        # คำแนะนำตามการกระจายเกรด
+        if grade_counts.get('F', 0) > 0:
+            recommendations.append(f"🔴 มีวิชาที่ไม่ผ่าน {grade_counts['F']} วิชา - ต้องเรียนซ้ำ")
+        
+        if grade_counts.get('A', 0) >= 3:
+            recommendations.append("⭐ มีความสามารถสูง - ควรท้าทายตัวเองเพิ่มขึ้น")
+        
+        # คำแนะนำตามจำนวนวิชา
+        if total_subjects < 5:
+            recommendations.append("📈 ข้อมูลยังน้อย - ควรสะสมผลงานเพิ่มเติม")
+        elif total_subjects > 25:
+            recommendations.append("💪 มีประสบการณ์เรียนมาก - ใช้ประโยชน์จากความรู้ที่สั่งสม")
         
         # ประเมินความเสี่ยง
         if gpa >= 3.5:
@@ -156,64 +216,219 @@ class EnhancedPredictionSystem:
         }
     
     def predict_future_performance(self, current_grades, model=None):
-        """ทำนายผลการเรียนในอนาคต"""
+        """ทำนายผลการเรียนในอนาคตด้วยโมเดล AI จริง"""
         current_gpa = self.calculate_gpa(current_grades)
         
-        # การทำนายแบบง่าย (ถ้าไม่มีโมเดล)
-        if not model:
-            if current_gpa >= 3.5:
-                predicted_grades = {"A": 0.4, "B+": 0.3, "B": 0.2, "C+": 0.1}
-                next_term_gpa = 3.6
-            elif current_gpa >= 3.0:
-                predicted_grades = {"A": 0.2, "B+": 0.4, "B": 0.3, "C+": 0.1}
-                next_term_gpa = 3.2
-            elif current_gpa >= 2.5:
-                predicted_grades = {"B+": 0.2, "B": 0.3, "C+": 0.3, "C": 0.2}
-                next_term_gpa = 2.7
-            else:
-                predicted_grades = {"B": 0.1, "C+": 0.2, "C": 0.4, "D+": 0.2, "D": 0.1}
-                next_term_gpa = 2.2
-        else:
-            # ใช้โมเดลจริงถ้ามี
+        # ลองใช้โมเดลขั้นสูงก่อน
+        if self.advanced_model and self.course_profiles:
             try:
-                # เตรียมข้อมูลสำหรับโมเดล
-                features = self._prepare_model_features(current_grades)
-                prediction = model.predict([features])[0]
-                probabilities = model.predict_proba([features])[0]
+                # ใช้โมเดลขั้นสูงที่เทรนแล้ว
+                features = self.advanced_trainer.create_dynamic_features(current_grades, self.course_profiles)
                 
-                # แปลงผลลัพธ์
-                classes = model.classes_
-                predicted_grades = {classes[i]: float(probabilities[i]) for i in range(len(classes))}
-                next_term_gpa = self.grade_mapping.get(prediction, current_gpa)
-            except:
-                # ถ้าโมเดลมีปัญหา ใช้การทำนายแบบง่าย
-                predicted_grades = {"B": 0.4, "C+": 0.3, "C": 0.3}
-                next_term_gpa = current_gpa * 1.05
+                # ทำนายด้วยโมเดลขั้นสูง
+                prediction_result = self.advanced_model.predict([features])[0]
+                prediction_proba = self.advanced_model.predict_proba([features])[0]
+                
+                confidence = float(max(prediction_proba))
+                
+                # สร้างการกระจายเกรดจากโมเดลขั้นสูง
+                predicted_grades = self._generate_grade_distribution_from_model(
+                    prediction_result, confidence, current_gpa
+                )
+                
+                # คำนวณ GPA ทำนาย
+                predicted_gpa = self._calculate_predicted_gpa(predicted_grades, current_gpa)
+                
+                # กำหนดแนวโน้ม
+                if predicted_gpa > current_gpa + 0.1:
+                    trend = "improving"
+                elif predicted_gpa < current_gpa - 0.1:
+                    trend = "declining"
+                else:
+                    trend = "stable"
+                
+                return {
+                    "predicted_grades": predicted_grades,
+                    "predicted_gpa": round(predicted_gpa, 2),
+                    "confidence": round(confidence, 3),
+                    "trend": trend,
+                    "ai_prediction": {
+                        "result": prediction_result,
+                        "confidence": confidence,
+                        "model_used": True,
+                        "model_type": "Advanced AI Model"
+                    },
+                    "analysis_note": f"ทำนายด้วย Advanced AI จาก {len(current_grades)} วิชา, GPA ปัจจุบัน {current_gpa:.2f}"
+                }
+                
+            except Exception as e:
+                logger.warning(f"Advanced model prediction failed: {e}")
+        
+        # ถ้าไม่มีโมเดลขั้นสูง หรือโมเดลขั้นสูงล้มเหลว ใช้โมเดลปกติ
+        if model and current_grades:
+            try:
+                # เตรียมฟีเจอร์สำหรับโมเดลปกติ
+                features = self._prepare_advanced_features(current_grades)
+                
+                # ทำนายด้วยโมเดลปกติ
+                prediction_result = model.predict([features])[0]
+                prediction_proba = model.predict_proba([features])[0]
+                
+                confidence = float(max(prediction_proba))
+                
+                # สร้างการกระจายเกรดจากโมเดล
+                predicted_grades = self._generate_grade_distribution_from_model(
+                    prediction_result, confidence, current_gpa
+                )
+                
+                # คำนวณ GPA ทำนาย
+                predicted_gpa = self._calculate_predicted_gpa(predicted_grades, current_gpa)
+                
+                # กำหนดแนวโน้ม
+                if predicted_gpa > current_gpa + 0.1:
+                    trend = "improving"
+                elif predicted_gpa < current_gpa - 0.1:
+                    trend = "declining"
+                else:
+                    trend = "stable"
+                
+                return {
+                    "predicted_grades": predicted_grades,
+                    "predicted_gpa": round(predicted_gpa, 2),
+                    "confidence": round(confidence, 3),
+                    "trend": trend,
+                    "ai_prediction": {
+                        "result": prediction_result,
+                        "confidence": confidence,
+                        "model_used": True,
+                        "model_type": "Standard AI Model"
+                    },
+                    "analysis_note": f"ทำนายด้วย Standard AI จาก {len(current_grades)} วิชา, GPA ปัจจุบัน {current_gpa:.2f}"
+                }
+                
+            except Exception as e:
+                logger.warning(f"Standard AI model prediction failed: {e}")
+        
+        # ใช้การทำนายสำรองเมื่อโมเดลไม่พร้อมใช้งาน
+        return self._fallback_prediction(current_gpa, current_grades)
+    
+    def _prepare_advanced_features(self, grades):
+        """เตรียมฟีเจอร์ขั้นสูงสำหรับโมเดล AI"""
+        # คำนวณสถิติพื้นฐาน
+        gpa = self.calculate_gpa(grades)
+        total_subjects = len(grades)
+        grade_counts = Counter(grades.values())
+        
+        # ฟีเจอร์พื้นฐาน
+        features = [
+            gpa,  # GPA ปัจจุบัน
+            total_subjects,  # จำนวนวิชาทั้งหมด
+            total_subjects * 3,  # หน่วยกิตสะสม (สมมติ 3 หน่วยกิต/วิชา)
+        ]
+        
+        # การกระจายเกรด
+        for grade in ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F', 'W']:
+            features.append(grade_counts.get(grade, 0))
+        
+        # อัตราส่วนเกรด
+        if total_subjects > 0:
+            features.extend([
+                grade_counts.get('A', 0) / total_subjects,  # อัตราเกรด A
+                grade_counts.get('F', 0) / total_subjects,  # อัตราเกรด F
+                (grade_counts.get('A', 0) + grade_counts.get('B+', 0)) / total_subjects,  # อัตราเกรดดี
+                (grade_counts.get('D+', 0) + grade_counts.get('D', 0) + grade_counts.get('F', 0)) / total_subjects,  # อัตราเกรดแย่
+            ])
+        else:
+            features.extend([0, 0, 0, 0])
+        
+        # ฟีเจอร์เชิงลึก
+        features.extend([
+            1 if gpa >= 3.5 else 0,  # เกรดดีมาก
+            1 if gpa < 2.0 else 0,   # เกรดต่ำมาก
+            1 if grade_counts.get('F', 0) > 0 else 0,  # เคยตกวิชา
+            min(4.0, gpa + 0.2) if gpa >= 3.0 else max(1.0, gpa - 0.1),  # แนวโน้ม GPA
+        ])
+        
+        return features
+    
+    def _generate_grade_distribution_from_model(self, prediction_result, confidence, current_gpa):
+        """สร้างการกระจายเกรดจากผลลัพธ์โมเดล"""
+        # ปรับการกระจายเกรดตามผลลัพธ์โมเดลและ confidence
+        if prediction_result == "จบ" and confidence > 0.7:
+            # โมเดลมั่นใจว่าจะจบ - เกรดน่าจะดี
+            if current_gpa >= 3.5:
+                return {"A": 0.4, "B+": 0.35, "B": 0.20, "C+": 0.05}
+            elif current_gpa >= 3.0:
+                return {"A": 0.25, "B+": 0.40, "B": 0.25, "C+": 0.10}
+            else:
+                return {"B+": 0.20, "B": 0.35, "C+": 0.30, "C": 0.15}
+        
+        elif prediction_result == "จบ" and confidence <= 0.7:
+            # โมเดลไม่แน่ใจ - เกรดปานกลาง
+            return {"B": 0.25, "C+": 0.35, "C": 0.30, "D+": 0.10}
+        
+        else:
+            # โมเดลคิดว่าไม่จบ - เกรดอาจแย่
+            return {"C": 0.20, "D+": 0.30, "D": 0.35, "F": 0.15}
+    
+    def _calculate_predicted_gpa(self, predicted_grades, current_gpa):
+        """คำนวณ GPA ทำนายจากการกระจายเกรด"""
+        predicted_gpa = 0
+        for grade, probability in predicted_grades.items():
+            predicted_gpa += self.grade_mapping.get(grade, 0) * probability
+        
+        # ปรับให้สมเหตุสมผลกับ GPA ปัจจุบัน
+        if abs(predicted_gpa - current_gpa) > 1.0:
+            predicted_gpa = current_gpa + (0.2 if predicted_gpa > current_gpa else -0.2)
+        
+        return max(0.0, min(4.0, predicted_gpa))
+    
+    def _fallback_prediction(self, current_gpa, current_grades):
+        """การทำนายสำรองเมื่อโมเดลไม่พร้อมใช้งาน"""
+        total_subjects = len(current_grades)
+        
+        # การทำนายแบบพื้นฐานตาม GPA
+        if current_gpa >= 3.5:
+            predicted_grades = {"A": 0.35, "B+": 0.30, "B": 0.25, "C+": 0.10}
+            next_term_gpa = min(4.0, current_gpa + 0.05)
+            confidence = 0.75
+        elif current_gpa >= 3.0:
+            predicted_grades = {"A": 0.20, "B+": 0.35, "B": 0.30, "C+": 0.15}
+            next_term_gpa = current_gpa + 0.02
+            confidence = 0.70
+        elif current_gpa >= 2.5:
+            predicted_grades = {"B": 0.20, "C+": 0.35, "C": 0.30, "D+": 0.15}
+            next_term_gpa = current_gpa
+            confidence = 0.65
+        else:
+            predicted_grades = {"C": 0.25, "D+": 0.30, "D": 0.30, "F": 0.15}
+            next_term_gpa = max(1.5, current_gpa - 0.1)
+            confidence = 0.60
+        
+        # ปรับความมั่นใจตามจำนวนข้อมูล
+        if total_subjects < 5:
+            confidence *= 0.8
+        elif total_subjects > 15:
+            confidence *= 1.1
+        
+        confidence = min(0.95, confidence)
         
         return {
             "predicted_grades": predicted_grades,
             "predicted_gpa": round(next_term_gpa, 2),
-            "confidence": max(predicted_grades.values()),
-            "trend": "improving" if next_term_gpa > current_gpa else "stable" if next_term_gpa == current_gpa else "declining"
+            "confidence": round(confidence, 3),
+            "trend": "improving" if next_term_gpa > current_gpa else "stable" if next_term_gpa == current_gpa else "declining",
+            "ai_prediction": {
+                "result": "ไม่ทราบ",
+                "confidence": confidence,
+                "model_used": False
+            },
+            "analysis_note": f"ทำนายแบบพื้นฐานจาก {total_subjects} วิชา, GPA ปัจจุบัน {current_gpa:.2f} (ไม่มีโมเดล AI)"
         }
     
     def _prepare_model_features(self, grades):
-        """เตรียมฟีเจอร์สำหรับโมเดล"""
-        gpa = self.calculate_gpa(grades)
-        grade_counts = Counter(grades.values())
-        
-        return [
-            gpa,
-            len(grades),
-            grade_counts.get('A', 0),
-            grade_counts.get('B+', 0),
-            grade_counts.get('B', 0),
-            grade_counts.get('C+', 0),
-            grade_counts.get('C', 0),
-            grade_counts.get('D+', 0),
-            grade_counts.get('D', 0),
-            grade_counts.get('F', 0),
-        ]
+        """เตรียมฟีเจอร์สำหรับโมเดล - ใช้ฟีเจอร์ขั้นสูง"""
+        return self._prepare_advanced_features(grades)
     
     def create_visualization_charts(self, grades_dict, prediction_data):
         """สร้างกราฟแสดงผลแบบครอบคลุม"""
@@ -297,6 +512,9 @@ class EnhancedPredictionSystem:
 
 # สร้าง instance ของระบบ
 enhanced_system = EnhancedPredictionSystem()
+
+# โหลดโมเดลขั้นสูงถ้ามี
+enhanced_system.load_advanced_model()
 
 warnings.filterwarnings('ignore')
 
