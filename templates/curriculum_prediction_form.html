@@ -3,291 +3,27 @@
 {% block title %}ทำนายรายบุคคล - {{ super() }}{% endblock %}
 
 {% block custom_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced-prediction.css') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-    /* Enhanced Styles */
-    .main-container {
-        max-width: 1400px;
-        margin: 0 auto;
-    }
-
-    .header-section {
-        background: rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 30px;
-        margin-bottom: 30px;
-    }
-
-    .control-panel {
-        background: white;
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-
-    .term-section {
-        background: white;
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    }
-
-    .term-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        margin: -20px -20px 20px -20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .term-header.locked {
-        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-    }
-
-    .course-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 15px;
-    }
-
-    .course-card {
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 10px;
-        border-left: 4px solid #667eea;
-        transition: all 0.3s ease;
+    /* Additional custom styles for specific elements */
+    .chart-wrapper {
         position: relative;
-    }
-
-    .course-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-
-    .course-card.locked {
-        background: #fff5f5;
-        border-left-color: #dc3545;
-        opacity: 0.9;
-    }
-
-    .course-card.future {
-        background: #e8f4f8;
-        border-left-color: #17a2b8;
-    }
-
-    .course-card.repeated {
-        background: #fff9e6;
-        border-left-color: #ffc107;
-    }
-
-    .grade-select {
-        width: 100%;
-        padding: 8px;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        font-size: 0.95rem;
-        margin-top: 10px;
-    }
-
-    .grade-select:focus {
-        border-color: #667eea;
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        height: 400px;
+        margin: 1rem 0;
     }
     
-    .grade-select:disabled {
-        background-color: #f1f1f1;
-        cursor: not-allowed;
+    .statistics-container {
+        margin: 2rem 0;
     }
-
-    .stats-dashboard {
-        background: white;
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-
-    .stat-card {
-        text-align: center;
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 10px;
-        transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #667eea;
-    }
-
-    .stat-label {
-        color: #6c757d;
-        font-size: 0.9rem;
-        margin-top: 5px;
-    }
-
-    .progress-bar-container {
-        background: #e9ecef;
-        border-radius: 10px;
-        height: 30px;
-        overflow: hidden;
-        margin: 20px 0;
-    }
-
-    .progress-bar-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 600;
-        transition: width 0.5s ease;
-    }
-
-    .results-section {
-        background: white;
-        border-radius: 15px;
-        padding: 30px;
-        margin-top: 30px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    }
-
-    .prediction-badge {
-        display: inline-block;
-        padding: 10px 20px;
-        border-radius: 25px;
+    
+    /* Loading modal improvements */
+    .modal-message {
+        margin-top: 1rem;
         font-size: 1.1rem;
-        font-weight: 600;
-        margin: 10px 5px;
-    }
-
-    .prediction-badge.pass {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-    }
-
-    .prediction-badge.fail {
-        background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
-        color: white;
-    }
-
-    .recommendation-card {
-        background: #f8f9fa;
-        border-left: 4px solid;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 10px 0;
-    }
-
-    .recommendation-card.urgent {
-        border-left-color: #dc3545;
-        background: #fff5f5;
-    }
-
-    .recommendation-card.warning {
-        border-left-color: #ffc107;
-        background: #fff9e6;
-    }
-
-    .recommendation-card.success {
-        border-left-color: #28a745;
-        background: #f0fff4;
-    }
-
-    .chart-container {
-        background: white;
-        border-radius: 15px;
-        padding: 25px;
-        margin-top: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-
-    .quick-action-btn {
-        padding: 12px 25px;
-        border-radius: 25px;
-        font-weight: 500;
-        transition: all 0.3s;
-        border: none;
-        margin: 5px;
-    }
-
-    .quick-action-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    
-    .prerequisite-warning {
-        background: rgba(220, 53, 69, 0.1);
-        border: 1px solid rgba(220, 53, 69, 0.3);
-        border-radius: 5px;
-        padding: 8px;
-        margin-top: 5px;
-        font-size: 0.8rem;
-        color: #721c24;
-    }
-
-    .loading-spinner {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        border: 3px solid rgba(0,0,0,.1);
-        border-radius: 50%;
-        border-top-color: #667eea;
-        animation: spin 1s ease-in-out infinite;
-    }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
-    /* *** FIXED *** Modal overlay styles */
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 9999;
-        display: none;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .modal-overlay.show {
-        display: flex;
-    }
-
-    .modal-content-custom {
-        background: white;
-        border-radius: 15px;
-        padding: 30px;
-        max-width: 400px;
-        width: 90%;
-        text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-
-    @media (max-width: 768px) {
-        .course-grid {
-            grid-template-columns: 1fr;
-        }
-        .stat-value {
-            font-size: 1.5rem;
-        }
+        color: #6b7280;
     }
 </style>
 {% endblock %}
@@ -1758,6 +1494,409 @@ window.appState = {
 
 console.log('Fixed curriculum prediction form loaded successfully');
 console.log('Type window.debugInfo() in console for debug information');
+
+// ===============================
+// ENHANCED PREDICTION SYSTEM
+// ===============================
+
+class EnhancedPredictionUI {
+    constructor() {
+        this.isAnalyzing = false;
+        this.currentResults = null;
+        this.initializeEnhancedFeatures();
+    }
+
+    initializeEnhancedFeatures() {
+        // เพิ่มปุ่มวิเคราะห์แบบขั้นสูง
+        this.addEnhancedAnalysisButton();
+        
+        // เพิ่มส่วนแสดงผลลัพธ์
+        this.addResultsSection();
+        
+        // เพิ่ม event listeners
+        this.setupEventListeners();
+    }
+
+    addEnhancedAnalysisButton() {
+        const existingBtn = document.querySelector('#analyzeBtn');
+        if (existingBtn) {
+            existingBtn.innerHTML = '<i class="bi bi-graph-up-arrow"></i> วิเคราะห์และทำนายแบบขั้นสูง';
+            existingBtn.className = 'btn btn-primary btn-lg enhanced-analyze-btn';
+            existingBtn.onclick = () => this.performEnhancedAnalysis();
+        }
+    }
+
+    addResultsSection() {
+        const container = document.querySelector('.main-container');
+        if (container && !document.querySelector('#enhancedResults')) {
+            const resultsHTML = `
+                <div id="enhancedResults" class="results-section mt-4">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card shadow-lg border-0">
+                                <div class="card-header bg-gradient-primary text-white">
+                                    <h4 class="mb-0"><i class="bi bi-analytics"></i> ผลการวิเคราะห์แบบขั้นสูง</h4>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Loading State -->
+                                    <div id="analysisLoading" class="text-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">กำลังวิเคราะห์...</span>
+                                        </div>
+                                        <p class="mt-3 text-muted">กำลังวิเคราะห์ข้อมูลและสร้างกราฟ...</p>
+                                    </div>
+
+                                    <!-- Results Content -->
+                                    <div id="analysisContent" style="display: none;">
+                                        <!-- Charts Section -->
+                                        <div class="row mb-4">
+                                            <div class="col-12">
+                                                <div class="card border-0 shadow-sm">
+                                                    <div class="card-header bg-light">
+                                                        <h5 class="mb-0"><i class="bi bi-bar-chart-fill"></i> กราฟการวิเคราะห์</h5>
+                                                    </div>
+                                                    <div class="card-body text-center">
+                                                        <img id="analysisChart" src="" alt="กราฟการวิเคราะห์" class="img-fluid rounded">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Analysis Grid -->
+                                        <div class="row">
+                                            <!-- Current Performance -->
+                                            <div class="col-md-6 mb-4">
+                                                <div class="card border-0 shadow-sm h-100">
+                                                    <div class="card-header bg-success text-white">
+                                                        <h6 class="mb-0"><i class="bi bi-trophy-fill"></i> จุดแข็ง</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <ul id="strengthsList" class="list-unstyled mb-0"></ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Areas for Improvement -->
+                                            <div class="col-md-6 mb-4">
+                                                <div class="card border-0 shadow-sm h-100">
+                                                    <div class="card-header bg-warning text-white">
+                                                        <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> จุดที่ควรปรับปรุง</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <ul id="weaknessesList" class="list-unstyled mb-0"></ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Predictions -->
+                                            <div class="col-md-6 mb-4">
+                                                <div class="card border-0 shadow-sm h-100">
+                                                    <div class="card-header bg-info text-white">
+                                                        <h6 class="mb-0"><i class="bi bi-crystal-ball"></i> การทำนาย</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="row text-center">
+                                                            <div class="col-6">
+                                                                <div class="border-end">
+                                                                    <h4 id="predictedGPA" class="text-primary mb-1">-</h4>
+                                                                    <small class="text-muted">GPA ทำนาย</small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <h4 id="predictionTrend" class="mb-1">-</h4>
+                                                                <small class="text-muted">แนวโน้ม</small>
+                                                            </div>
+                                                        </div>
+                                                        <div class="mt-3">
+                                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                <span>ความมั่นใจ:</span>
+                                                                <span id="confidenceScore" class="fw-bold">-</span>
+                                                            </div>
+                                                            <div class="progress">
+                                                                <div id="confidenceBar" class="progress-bar bg-success" style="width: 0%"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Recommendations -->
+                                            <div class="col-md-6 mb-4">
+                                                <div class="card border-0 shadow-sm h-100">
+                                                    <div class="card-header bg-primary text-white">
+                                                        <h6 class="mb-0"><i class="bi bi-lightbulb-fill"></i> คำแนะนำ</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <ul id="recommendationsList" class="list-unstyled mb-0"></ul>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Risk Assessment -->
+                                            <div class="col-12 mb-4">
+                                                <div class="card border-0 shadow-sm">
+                                                    <div class="card-header bg-secondary text-white">
+                                                        <h6 class="mb-0"><i class="bi bi-shield-exclamation"></i> การประเมินความเสี่ยง</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="d-flex align-items-center">
+                                                            <span class="me-3">ระดับความเสี่ยง:</span>
+                                                            <span id="riskLevel" class="badge fs-6">-</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', resultsHTML);
+        }
+    }
+
+    setupEventListeners() {
+        // Auto-update stats when grades change
+        document.addEventListener('change', (e) => {
+            if (e.target.matches('select[id^="grade_"]')) {
+                this.updateQuickStats();
+            }
+        });
+    }
+
+    async performEnhancedAnalysis() {
+        if (this.isAnalyzing) return;
+        
+        try {
+            this.isAnalyzing = true;
+            this.showAnalysisLoading();
+            
+            // รวบรวมข้อมูลเกรด
+            const grades = this.collectCurrentGrades();
+            
+            if (Object.keys(grades).length === 0) {
+                throw new Error('กรุณาใส่เกรดอย่างน้อย 1 วิชา');
+            }
+
+            // เรียก API วิเคราะห์แบบขั้นสูง
+            const response = await fetch('/api/enhanced_analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    grades: grades,
+                    model_name: document.getElementById('modelSelect')?.value || '',
+                    student_id: document.getElementById('studentId')?.value || '',
+                    student_name: document.getElementById('studentName')?.value || ''
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'เกิดข้อผิดพลาดในการวิเคราะห์');
+            }
+
+            this.currentResults = result;
+            this.displayAnalysisResults(result);
+            
+        } catch (error) {
+            console.error('Analysis error:', error);
+            this.showAnalysisError(error.message);
+        } finally {
+            this.isAnalyzing = false;
+        }
+    }
+
+    collectCurrentGrades() {
+        const grades = {};
+        const gradeSelects = document.querySelectorAll('select[id^="grade_"]');
+        
+        gradeSelects.forEach(select => {
+            if (select.value && select.value !== '') {
+                const subjectId = select.id.replace('grade_', '');
+                grades[subjectId] = select.value;
+            }
+        });
+        
+        return grades;
+    }
+
+    showAnalysisLoading() {
+        const resultsSection = document.getElementById('enhancedResults');
+        const loadingDiv = document.getElementById('analysisLoading');
+        const contentDiv = document.getElementById('analysisContent');
+        
+        if (resultsSection) {
+            resultsSection.classList.add('show');
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        if (loadingDiv) loadingDiv.style.display = 'block';
+        if (contentDiv) contentDiv.style.display = 'none';
+    }
+
+    displayAnalysisResults(result) {
+        const loadingDiv = document.getElementById('analysisLoading');
+        const contentDiv = document.getElementById('analysisContent');
+        
+        if (loadingDiv) loadingDiv.style.display = 'none';
+        if (contentDiv) contentDiv.style.display = 'block';
+
+        // แสดงกราฟ
+        const chartImg = document.getElementById('analysisChart');
+        if (chartImg && result.chart_data) {
+            chartImg.src = `data:image/png;base64,${result.chart_data}`;
+        }
+
+        // แสดงจุดแข็ง
+        this.populateList('strengthsList', result.analysis.strengths, 'success');
+        
+        // แสดงจุดอ่อน
+        this.populateList('weaknessesList', result.analysis.weaknesses, 'warning');
+        
+        // แสดงคำแนะนำ
+        this.populateList('recommendationsList', result.analysis.recommendations, 'info');
+        
+        // แสดงการทำนาย
+        const predictedGPA = document.getElementById('predictedGPA');
+        const predictionTrend = document.getElementById('predictionTrend');
+        const confidenceScore = document.getElementById('confidenceScore');
+        const confidenceBar = document.getElementById('confidenceBar');
+        
+        if (predictedGPA) predictedGPA.textContent = result.prediction.predicted_gpa;
+        if (predictionTrend) {
+            predictionTrend.textContent = this.getTrendText(result.prediction.trend);
+            predictionTrend.className = `text-${this.getTrendColor(result.prediction.trend)}`;
+        }
+        if (confidenceScore) confidenceScore.textContent = `${Math.round(result.prediction.confidence * 100)}%`;
+        if (confidenceBar) {
+            const confidence = Math.round(result.prediction.confidence * 100);
+            confidenceBar.style.width = `${confidence}%`;
+            confidenceBar.className = `progress-bar ${this.getConfidenceColor(confidence)}`;
+        }
+        
+        // แสดงระดับความเสี่ยง
+        const riskLevel = document.getElementById('riskLevel');
+        if (riskLevel) {
+            riskLevel.textContent = result.analysis.risk_level;
+            riskLevel.className = `badge fs-6 ${this.getRiskColor(result.analysis.risk_level)}`;
+        }
+
+        // อัพเดทสถิติ
+        this.updateStatsFromAnalysis(result);
+    }
+
+    populateList(elementId, items, type) {
+        const listElement = document.getElementById(elementId);
+        if (!listElement || !items) return;
+        
+        listElement.innerHTML = '';
+        items.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'mb-2';
+            li.innerHTML = `<i class="bi bi-check-circle-fill text-${type} me-2"></i>${item}`;
+            listElement.appendChild(li);
+        });
+    }
+
+    getTrendText(trend) {
+        const trendMap = {
+            'improving': '📈 ปรับตัวดีขึ้น',
+            'stable': '➡️ คงที่',
+            'declining': '📉 ลดลง'
+        };
+        return trendMap[trend] || trend;
+    }
+
+    getTrendColor(trend) {
+        const colorMap = {
+            'improving': 'success',
+            'stable': 'warning',
+            'declining': 'danger'
+        };
+        return colorMap[trend] || 'secondary';
+    }
+
+    getConfidenceColor(confidence) {
+        if (confidence >= 80) return 'bg-success';
+        if (confidence >= 60) return 'bg-warning';
+        return 'bg-danger';
+    }
+
+    getRiskColor(riskLevel) {
+        if (riskLevel.includes('ต่ำ')) return 'bg-success';
+        if (riskLevel.includes('ปานกลาง')) return 'bg-warning';
+        if (riskLevel.includes('สูง')) return 'bg-danger';
+        return 'bg-secondary';
+    }
+
+    updateStatsFromAnalysis(result) {
+        // อัพเดทสถิติใน dashboard
+        const statGPA = document.getElementById('statGPA');
+        const statCredits = document.getElementById('statCredits');
+        
+        if (statGPA) statGPA.textContent = result.analysis.gpa.toFixed(2);
+        if (statCredits) statCredits.textContent = result.statistics.total_credits;
+    }
+
+    updateQuickStats() {
+        // อัพเดทสถิติแบบเร็วเมื่อมีการเปลี่ยนแปลงเกรด
+        const grades = this.collectCurrentGrades();
+        
+        if (Object.keys(grades).length > 0) {
+            fetch('/api/quick_prediction', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ grades: grades })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    const statGPA = document.getElementById('statGPA');
+                    if (statGPA) statGPA.textContent = result.current_gpa.toFixed(2);
+                }
+            })
+            .catch(error => console.error('Quick stats update error:', error));
+        }
+    }
+
+    showAnalysisError(message) {
+        const loadingDiv = document.getElementById('analysisLoading');
+        const contentDiv = document.getElementById('analysisContent');
+        
+        if (loadingDiv) {
+            loadingDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <strong>เกิดข้อผิดพลาด:</strong> ${message}
+                </div>
+            `;
+        }
+        if (contentDiv) contentDiv.style.display = 'none';
+    }
+}
+
+// Initialize Enhanced Prediction System
+document.addEventListener('DOMContentLoaded', function() {
+    window.enhancedPrediction = new EnhancedPredictionUI();
+    console.log('Enhanced Prediction System initialized');
+});
 </script>
+
+<!-- Enhanced Prediction System Script -->
+<script src="{{ url_for('static', filename='js/enhanced-prediction.js') }}"></script>
+<script src="{{ url_for('static', filename='js/prediction_charts.js') }}"></script>
+
 {% endblock %}
 
