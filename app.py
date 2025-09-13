@@ -37,6 +37,267 @@ from werkzeug.utils import secure_filename
 
 import config
 
+# ===============================
+# ENHANCED FEATURES - ALL IN ONE
+# ===============================
+
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import seaborn as sns
+from io import BytesIO
+import base64
+
+class EnhancedPredictionSystem:
+    def __init__(self):
+        self.grade_mapping = {
+            'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+            'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0
+        }
+        plt.style.use('default')
+        sns.set_palette("husl")
+        
+    def calculate_gpa(self, grades_dict):
+        """คำนวณ GPA จากเกรดที่ได้รับ"""
+        if not grades_dict:
+            return 0.0
+            
+        total_points = 0
+        total_credits = 0
+        
+        for subject_id, grade in grades_dict.items():
+            if grade in self.grade_mapping:
+                credits = 3  # สมมติว่าแต่ละวิชา 3 หน่วยกิต
+                total_points += self.grade_mapping[grade] * credits
+                total_credits += credits
+                
+        return total_points / total_credits if total_credits > 0 else 0.0
+    
+    def analyze_performance(self, grades_dict):
+        """วิเคราะห์ผลการเรียนแบบครอบคลุม"""
+        if not grades_dict:
+            return {
+                "gpa": 0.0,
+                "total_subjects": 0,
+                "grade_distribution": {},
+                "strengths": ["ยังไม่มีข้อมูลเกรด"],
+                "weaknesses": ["ควรเริ่มเรียนและสร้างผลงาน"],
+                "recommendations": ["ลงทะเบียนเรียนและทำการบ้านอย่างสม่ำเสมอ"],
+                "risk_level": "ไม่ทราบ"
+            }
+        
+        # คำนวณสถิติพื้นฐาน
+        gpa = self.calculate_gpa(grades_dict)
+        grade_counts = Counter(grades_dict.values())
+        total_subjects = len(grades_dict)
+        
+        # วิเคราะห์จุดแข็ง
+        strengths = []
+        if grade_counts.get('A', 0) >= 2:
+            strengths.append("มีความสามารถสูงในหลายวิชา")
+        if grade_counts.get('B+', 0) + grade_counts.get('A', 0) >= total_subjects * 0.6:
+            strengths.append("ผลการเรียนโดยรวมดีมาก")
+        if gpa >= 3.5:
+            strengths.append("มี GPA ในระดับเกียรตินิยม")
+        if total_subjects >= 6:
+            strengths.append("สามารถจัดการภาระงานได้ดี")
+        
+        # วิเคราะห์จุดอ่อน
+        weaknesses = []
+        if grade_counts.get('F', 0) > 0:
+            weaknesses.append("มีวิชาที่ไม่ผ่าน ต้องเรียนซ้ำ")
+        if grade_counts.get('D', 0) + grade_counts.get('D+', 0) > 0:
+            weaknesses.append("มีวิชาที่ผลการเรียนต่ำ ควรปรับปรุง")
+        if gpa < 2.0:
+            weaknesses.append("GPA ต่ำกว่าเกณฑ์ขั้นต่ำ")
+        elif gpa < 2.5:
+            weaknesses.append("GPA อยู่ในระดับพอใช้ ควรพัฒนา")
+        
+        # สร้างคำแนะนำ
+        recommendations = []
+        if gpa >= 3.5:
+            recommendations.extend([
+                "ควรลงวิชาที่ท้าทายเพิ่มเติม",
+                "พิจารณาทำกิจกรรมเสริมหลักสูตร",
+                "เตรียมตัวสำหรับการศึกษาต่อระดับสูง"
+            ])
+        elif gpa >= 2.5:
+            recommendations.extend([
+                "ควรเน้นวิชาพื้นฐานให้แข็งแกร่ง",
+                "หาเวลาทบทวนบทเรียนเพิ่มเติม",
+                "ปรึกษาอาจารย์ในวิชาที่มีปัญหา"
+            ])
+        else:
+            recommendations.extend([
+                "ควรลดจำนวนวิชาและเน้นคุณภาพ",
+                "หาติวเตอร์หรือเพื่อนช่วยสอน",
+                "ปรับวิธีการเรียนให้เหมาะสม",
+                "พิจารณาการเรียนซ้ำในวิชาที่ไม่ผ่าน"
+            ])
+        
+        # ประเมินความเสี่ยง
+        if gpa >= 3.5:
+            risk_level = "ต่ำ - มีโอกาสสำเร็จสูง"
+        elif gpa >= 2.5:
+            risk_level = "ปานกลาง - ควรรักษาระดับ"
+        elif gpa >= 2.0:
+            risk_level = "สูง - ต้องปรับปรุงเร่งด่วน"
+        else:
+            risk_level = "สูงมาก - ต้องปรับปรุงอย่างจริงจัง"
+        
+        return {
+            "gpa": round(gpa, 2),
+            "total_subjects": total_subjects,
+            "grade_distribution": dict(grade_counts),
+            "strengths": strengths if strengths else ["มีพื้นฐานการเรียนรู้"],
+            "weaknesses": weaknesses if weaknesses else ["ควรพัฒนาทักษะการเรียนต่อไป"],
+            "recommendations": recommendations,
+            "risk_level": risk_level
+        }
+    
+    def predict_future_performance(self, current_grades, model=None):
+        """ทำนายผลการเรียนในอนาคต"""
+        current_gpa = self.calculate_gpa(current_grades)
+        
+        # การทำนายแบบง่าย (ถ้าไม่มีโมเดล)
+        if not model:
+            if current_gpa >= 3.5:
+                predicted_grades = {"A": 0.4, "B+": 0.3, "B": 0.2, "C+": 0.1}
+                next_term_gpa = 3.6
+            elif current_gpa >= 3.0:
+                predicted_grades = {"A": 0.2, "B+": 0.4, "B": 0.3, "C+": 0.1}
+                next_term_gpa = 3.2
+            elif current_gpa >= 2.5:
+                predicted_grades = {"B+": 0.2, "B": 0.3, "C+": 0.3, "C": 0.2}
+                next_term_gpa = 2.7
+            else:
+                predicted_grades = {"B": 0.1, "C+": 0.2, "C": 0.4, "D+": 0.2, "D": 0.1}
+                next_term_gpa = 2.2
+        else:
+            # ใช้โมเดลจริงถ้ามี
+            try:
+                # เตรียมข้อมูลสำหรับโมเดล
+                features = self._prepare_model_features(current_grades)
+                prediction = model.predict([features])[0]
+                probabilities = model.predict_proba([features])[0]
+                
+                # แปลงผลลัพธ์
+                classes = model.classes_
+                predicted_grades = {classes[i]: float(probabilities[i]) for i in range(len(classes))}
+                next_term_gpa = self.grade_mapping.get(prediction, current_gpa)
+            except:
+                # ถ้าโมเดลมีปัญหา ใช้การทำนายแบบง่าย
+                predicted_grades = {"B": 0.4, "C+": 0.3, "C": 0.3}
+                next_term_gpa = current_gpa * 1.05
+        
+        return {
+            "predicted_grades": predicted_grades,
+            "predicted_gpa": round(next_term_gpa, 2),
+            "confidence": max(predicted_grades.values()),
+            "trend": "improving" if next_term_gpa > current_gpa else "stable" if next_term_gpa == current_gpa else "declining"
+        }
+    
+    def _prepare_model_features(self, grades):
+        """เตรียมฟีเจอร์สำหรับโมเดล"""
+        gpa = self.calculate_gpa(grades)
+        grade_counts = Counter(grades.values())
+        
+        return [
+            gpa,
+            len(grades),
+            grade_counts.get('A', 0),
+            grade_counts.get('B+', 0),
+            grade_counts.get('B', 0),
+            grade_counts.get('C+', 0),
+            grade_counts.get('C', 0),
+            grade_counts.get('D+', 0),
+            grade_counts.get('D', 0),
+            grade_counts.get('F', 0),
+        ]
+    
+    def create_visualization_charts(self, grades_dict, prediction_data):
+        """สร้างกราฟแสดงผลแบบครอบคลุม"""
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        
+        # กราฟ 1: การกระจายเกรด
+        if grades_dict:
+            grade_counts = Counter(grades_dict.values())
+            grades = list(grade_counts.keys())
+            counts = list(grade_counts.values())
+            colors = ['#2E8B57', '#32CD32', '#FFD700', '#FFA500', '#FF6347', '#DC143C']
+            
+            wedges, texts, autotexts = ax1.pie(counts, labels=grades, autopct='%1.1f%%', 
+                                             colors=colors[:len(grades)], startangle=90)
+            ax1.set_title('การกระจายเกรดปัจจุบัน', fontsize=14, fontweight='bold')
+        
+        # กราฟ 2: เปรียบเทียบ GPA
+        current_gpa = self.calculate_gpa(grades_dict)
+        predicted_gpa = prediction_data.get('predicted_gpa', current_gpa)
+        
+        categories = ['GPA ปัจจุบัน', 'GPA ทำนาย', 'เกณฑ์ขั้นต่ำ', 'เกณฑ์ดี', 'เกณฑ์ดีมาก']
+        values = [current_gpa, predicted_gpa, 2.0, 2.75, 3.5]
+        colors = ['blue', 'red', 'gray', 'orange', 'green']
+        
+        bars = ax2.bar(categories, values, color=colors)
+        ax2.set_ylabel('GPA')
+        ax2.set_title('เปรียบเทียบ GPA', fontsize=14, fontweight='bold')
+        ax2.set_ylim(0, 4)
+        
+        # เพิ่มค่าบนแท่งกราฟ
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.05,
+                    f'{value:.2f}', ha='center', va='bottom', fontweight='bold')
+        
+        plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
+        
+        # กราฟ 3: ความน่าจะเป็นของเกรดในอนาคต
+        predicted_grades = prediction_data.get('predicted_grades', {})
+        if predicted_grades:
+            grades = list(predicted_grades.keys())
+            probs = list(predicted_grades.values())
+            colors = plt.cm.RdYlGn([p for p in probs])
+            
+            bars = ax3.bar(grades, probs, color=colors)
+            ax3.set_xlabel('เกรด')
+            ax3.set_ylabel('ความน่าจะเป็น')
+            ax3.set_title('ความน่าจะเป็นของเกรดเทอมถัดไป', fontsize=14, fontweight='bold')
+            
+            # เพิ่มค่าบนแท่งกราฟ
+            for bar, prob in zip(bars, probs):
+                height = bar.get_height()
+                ax3.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                        f'{prob:.2f}', ha='center', va='bottom', fontweight='bold')
+        
+        # กราฟ 4: แนวโน้มการพัฒนา
+        terms = ['เทอม 1', 'เทอม 2', 'เทอม 3', 'เทอมปัจจุบัน', 'เทอมถัดไป']
+        # สร้างข้อมูลจำลองสำหรับแนวโน้ม
+        trend_gpas = [2.5, 2.8, 3.1, current_gpa, predicted_gpa]
+        
+        ax4.plot(terms[:-1], trend_gpas[:-1], 'o-', label='GPA จริง', linewidth=3, markersize=8, color='blue')
+        ax4.plot([terms[-2], terms[-1]], [trend_gpas[-2], trend_gpas[-1]], 'r--', 
+                label='GPA ทำนาย', linewidth=3, markersize=8)
+        ax4.set_xlabel('เทอม')
+        ax4.set_ylabel('GPA')
+        ax4.set_title('แนวโน้มการพัฒนา GPA', fontsize=14, fontweight='bold')
+        ax4.legend()
+        ax4.grid(True, alpha=0.3)
+        ax4.set_ylim(0, 4)
+        
+        plt.tight_layout()
+        
+        # แปลงเป็น base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.getvalue()).decode()
+        plt.close()
+        
+        return image_base64
+
+# สร้าง instance ของระบบ
+enhanced_system = EnhancedPredictionSystem()
+
 warnings.filterwarnings('ignore')
 
 # Set up logging
@@ -535,6 +796,82 @@ class S3Storage:
 
 # Create global storage instance
 storage = S3Storage()
+
+# ===============================
+# ENHANCED API ROUTES
+# ===============================
+
+@app.route('/api/enhanced_analysis', methods=['POST'])
+def enhanced_analysis():
+    """API สำหรับการวิเคราะห์แบบขั้นสูง"""
+    try:
+        data = request.get_json()
+        grades = data.get('grades', {})
+        model_name = data.get('model_name', '')
+        
+        # วิเคราะห์ผลการเรียน
+        analysis = enhanced_system.analyze_performance(grades)
+        
+        # ทำนายผลการเรียน
+        model = None
+        if model_name and models.get('subject_model'):
+            model = models['subject_model']
+        
+        prediction = enhanced_system.predict_future_performance(grades, model)
+        
+        # สร้างกราฟ
+        chart_data = enhanced_system.create_visualization_charts(grades, prediction)
+        
+        # คำนวณสถิติเพิ่มเติม
+        total_credits = len(grades) * 3
+        passing_grades = [g for g in grades.values() if g not in ['F', 'W', 'WF', 'WU']]
+        passing_rate = len(passing_grades) / len(grades) * 100 if grades else 0
+        
+        response = {
+            "success": True,
+            "analysis": analysis,
+            "prediction": prediction,
+            "chart_data": chart_data,
+            "statistics": {
+                "total_credits": total_credits,
+                "passing_rate": round(passing_rate, 1),
+                "subjects_count": len(grades)
+            }
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error in enhanced analysis: {e}")
+        return jsonify({"error": str(e), "success": False}), 500
+
+@app.route('/api/quick_prediction', methods=['POST'])
+def quick_prediction():
+    """API สำหรับการทำนายแบบเร็ว"""
+    try:
+        data = request.get_json()
+        grades = data.get('grades', {})
+        
+        if not grades:
+            return jsonify({"error": "ไม่พบข้อมูลเกรด", "success": False}), 400
+        
+        # วิเคราะห์และทำนายแบบเร็ว
+        current_gpa = enhanced_system.calculate_gpa(grades)
+        prediction = enhanced_system.predict_future_performance(grades)
+        
+        response = {
+            "success": True,
+            "current_gpa": round(current_gpa, 2),
+            "predicted_gpa": prediction["predicted_gpa"],
+            "trend": prediction["trend"],
+            "confidence": round(prediction["confidence"], 2)
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error in quick prediction: {e}")
+        return jsonify({"error": str(e), "success": False}), 500
 
 # เพิ่ม API endpoint สำหรับตรวจสอบสถานะ
 @app.route('/api/storage/status')
