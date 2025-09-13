@@ -1,6 +1,5 @@
 # แก้ไขส่วนบนของ app.py
 from advanced_training import AdvancedFeatureEngineer
-from advanced_model_trainer import AdvancedModelTrainer
 from dotenv import load_dotenv
 import sys
 
@@ -19,6 +18,8 @@ import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, classification_report, f1_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
@@ -48,6 +49,242 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
+
+# เพิ่มคลาส AdvancedModelTrainer ลงใน app.py
+class AdvancedModelTrainer:
+    def __init__(self):
+        self.models = {
+            'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
+            'GradientBoosting': GradientBoostingClassifier(n_estimators=100, random_state=42),
+            'LogisticRegression': LogisticRegression(random_state=42, max_iter=1000),
+            'SVM': SVC(probability=True, random_state=42)
+        }
+        self.best_model = None
+        self.best_score = 0
+        
+    def prepare_training_data(self, df):
+        """เตรียมข้อมูลสำหรับการเทรน"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("🎯 เตรียมข้อมูลแบบ Dynamic Snapshots...")
+        
+        # สร้างโปรไฟล์รายวิชา
+        logger.info("🏛️ สร้างโปรไฟล์รายวิชา (Course Profiling)...")
+        course_profiles = self.create_course_profiles(df)
+        logger.info(f"✅ สร้างโปรไฟล์ {len(course_profiles)} รายวิชาเสร็จสิ้น")
+        
+        # สร้างข้อมูลเทรนแบบ Dynamic Snapshots
+        X, y = self.create_dynamic_snapshots(df, course_profiles)
+        
+        logger.info(f"✅ สร้างข้อมูลเทรน {len(X)} ตัวอย่างจาก {len(df)} นักศึกษา")
+        
+        return X, y, course_profiles
+    
+    def create_course_profiles(self, df):
+        """สร้างโปรไฟล์รายวิชา"""
+        course_profiles = {}
+        grade_mapping = {'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0}
+        
+        # หารายวิชาทั้งหมด
+        course_columns = [col for col in df.columns if col not in ['STUDENT_ID', 'RESULT']]
+        
+        for course in course_columns:
+            course_data = df[course].dropna()
+            if len(course_data) > 0:
+                # คำนวณสถิติรายวิชา
+                numeric_grades = [grade_mapping.get(grade, 0) for grade in course_data if grade in grade_mapping]
+                
+                if numeric_grades:
+                    course_profiles[course] = {
+                        'avg_gpa': np.mean(numeric_grades),
+                        'std_gpa': np.std(numeric_grades),
+                        'pass_rate': len([g for g in numeric_grades if g >= 2.0]) / len(numeric_grades),
+                        'difficulty': 4.0 - np.mean(numeric_grades),  # ยิ่งยาก avg_gpa ยิ่งต่ำ
+                        'total_students': len(numeric_grades)
+                    }
+        
+        return course_profiles
+    
+    def create_dynamic_snapshots(self, df, course_profiles):
+        """สร้างข้อมูลแบบ Dynamic Snapshots"""
+        X = []
+        y = []
+        
+        for _, student in df.iterrows():
+            # หาวิชาที่นักศึกษาเรียน
+            student_courses = {}
+            for col in df.columns:
+                if col not in ['STUDENT_ID', 'RESULT'] and pd.notna(student[col]):
+                    student_courses[col] = student[col]
+            
+            # สร้าง snapshots ในแต่ละจุด (3, 6, 9, 12, 15+ วิชา)
+            course_list = list(student_courses.items())
+            for snapshot_size in [3, 6, 9, 12, len(course_list)]:
+                if len(course_list) >= snapshot_size:
+                    # เลือกวิชาแรก snapshot_size วิชา
+                    current_courses = dict(course_list[:snapshot_size])
+                    
+                    # สร้างฟีเจอร์
+                    features = self.create_dynamic_features(current_courses, course_profiles)
+                    
+                    X.append(features)
+                    y.append(student['RESULT'])
+        
+        return np.array(X), np.array(y)
+    
+    def create_dynamic_features(self, grades_dict, course_profiles):
+        """สร้างฟีเจอร์แบบ Dynamic"""
+        grade_mapping = {'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0}
+        
+        if not grades_dict:
+            return np.zeros(15)  # ฟีเจอร์ 15 ตัว
+        
+        # ฟีเจอร์พื้นฐาน
+        numeric_grades = [grade_mapping.get(grade, 0) for grade in grades_dict.values() if grade in grade_mapping]
+        
+        if not numeric_grades:
+            return np.zeros(15)
+        
+        # 1-5: สถิติเกรด
+        current_gpa = np.mean(numeric_grades)
+        gpa_std = np.std(numeric_grades) if len(numeric_grades) > 1 else 0
+        min_grade = min(numeric_grades)
+        max_grade = max(numeric_grades)
+        grade_range = max_grade - min_grade
+        
+        # 6-8: การกระจายเกรด
+        high_grades = len([g for g in numeric_grades if g >= 3.5]) / len(numeric_grades)
+        medium_grades = len([g for g in numeric_grades if 2.5 <= g < 3.5]) / len(numeric_grades)
+        low_grades = len([g for g in numeric_grades if g < 2.5]) / len(numeric_grades)
+        
+        # 9-11: ข้อมูลรายวิชา
+        total_courses = len(grades_dict)
+        avg_difficulty = 0
+        avg_pass_rate = 0
+        
+        if course_profiles:
+            difficulties = []
+            pass_rates = []
+            for course in grades_dict.keys():
+                if course in course_profiles:
+                    difficulties.append(course_profiles[course]['difficulty'])
+                    pass_rates.append(course_profiles[course]['pass_rate'])
+            
+            avg_difficulty = np.mean(difficulties) if difficulties else 0
+            avg_pass_rate = np.mean(pass_rates) if pass_rates else 0
+        
+        # 12-15: แนวโน้ม
+        if len(numeric_grades) >= 3:
+            recent_trend = np.mean(numeric_grades[-3:]) - np.mean(numeric_grades[:-3])
+        else:
+            recent_trend = 0
+        
+        consistency = 1 / (1 + gpa_std)  # ยิ่ง std น้อย ยิ่ง consistent
+        improvement_potential = (4.0 - current_gpa) / 4.0
+        
+        return np.array([
+            current_gpa, gpa_std, min_grade, max_grade, grade_range,
+            high_grades, medium_grades, low_grades,
+            total_courses, avg_difficulty, avg_pass_rate,
+            recent_trend, consistency, improvement_potential, 
+            len(numeric_grades)  # จำนวนวิชาที่มีเกรด
+        ])
+    
+    def train_models(self, X, y):
+        """เทรนโมเดลทั้งหมด"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info("🧠 เริ่มเทรนโมเดล AI...")
+        
+        # แบ่งข้อมูล
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        
+        results = {}
+        best_model_name = None
+        
+        for name, model in self.models.items():
+            logger.info(f"   🔄 เทรน {name}...")
+            
+            # เทรนโมเดล
+            model.fit(X_train, y_train)
+            
+            # ประเมินผล
+            y_pred = model.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred, average='weighted')
+            
+            results[name] = {
+                'model': model,
+                'accuracy': accuracy,
+                'f1_score': f1,
+                'predictions': y_pred
+            }
+            
+            logger.info(f"      ✅ {name}: Accuracy={accuracy:.3f}, F1={f1:.3f}")
+            
+            # เก็บโมเดลที่ดีที่สุด
+            if f1 > self.best_score:
+                self.best_score = f1
+                self.best_model = model
+                best_model_name = name
+        
+        logger.info(f"🏆 โมเดลที่ดีที่สุด: {best_model_name} (F1={self.best_score:.3f})")
+        
+        # แสดงรายงานผล
+        if best_model_name:
+            logger.info("\n📊 รายงานผลการประเมิน:")
+            best_predictions = results[best_model_name]['predictions']
+            report = classification_report(y_test, best_predictions)
+            logger.info(report)
+        
+        return results, best_model_name
+    
+    def save_model(self, model_name, course_profiles=None):
+        """บันทึกโมเดล"""
+        import logging
+        import os
+        from datetime import datetime
+        
+        logger = logging.getLogger(__name__)
+        
+        if not self.best_model:
+            logger.error("❌ ไม่มีโมเดลให้บันทึก")
+            return None
+        
+        # สร้างโฟลเดอร์ models ถ้าไม่มี
+        os.makedirs("models", exist_ok=True)
+        
+        # สร้างชื่อไฟล์
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{model_name}_{timestamp}.joblib"
+        filepath = os.path.join("models", filename)
+        
+        # เตรียมข้อมูลที่จะบันทึก
+        model_data = {
+            'model': self.best_model,
+            'course_profiles': course_profiles,
+            'best_score': self.best_score,
+            'timestamp': timestamp
+        }
+        
+        # บันทึกโมเดล
+        joblib.dump(model_data, filepath)
+        logger.info(f"💾 บันทึกโมเดลเรียบร้อย: {filepath}")
+        
+        return filepath
+    
+    def load_model(self, filepath):
+        """โหลดโมเดล"""
+        try:
+            model_data = joblib.load(filepath)
+            self.best_model = model_data['model']
+            self.best_score = model_data.get('best_score', 0)
+            return model_data
+        except Exception as e:
+            print(f"❌ ไม่สามารถโหลดโมเดล: {e}")
+            return None
 
 class EnhancedPredictionSystem:
     def __init__(self):
