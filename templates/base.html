@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ระบบทำนายความสำเร็จของนักศึกษา{% end молок %}</title>
+    <title>{% block title %}ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -101,10 +101,10 @@
         
         body {
             font-family: 'Inter', 'Kanit', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            background: #0f172a; /* Dark background by default */
             background-attachment: fixed;
             min-height: 100vh;
-            color: var(--gray-800);
+            color: var(--gray-100); /* Light text for dark background */
             line-height: 1.6;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             overflow-x: hidden;
@@ -118,9 +118,9 @@
             width: 100%;
             height: 100%;
             background: 
-                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
+                radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.2) 0%, transparent 50%);
             z-index: -1;
             animation: float 20s ease-in-out infinite;
         }
@@ -131,32 +131,42 @@
             66% { transform: translateY(10px) rotate(-1deg); }
         }
         
-        body.dark-mode {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-            color: var(--gray-100);
+        /* Light Mode - Toggle */
+        body.light-mode {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            color: var(--gray-800);
         }
         
-        body.dark-mode::before {
+        body.light-mode::before {
             background: 
-                radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.2) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.2) 0%, transparent 50%);
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
         }
         
         /* Navigation Styles */
         .navbar {
-            background: rgba(255, 255, 255, 0.8) !important;
+            background: rgba(15, 23, 42, 0.8) !important; /* Darker navbar for dark mode */
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: var(--shadow-lg);
             border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .navbar.scrolled {
-            background: rgba(255, 255, 255, 0.95) !important;
+            background: rgba(15, 23, 42, 0.95) !important;
             box-shadow: var(--shadow-xl);
+        }
+
+        body.light-mode .navbar {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        body.light-mode .navbar.scrolled {
+            background: rgba(255, 255, 255, 0.95) !important;
         }
         
         .navbar-brand {
@@ -180,11 +190,11 @@
             border-radius: var(--radius-lg);
             position: relative;
             overflow: hidden;
-            color: var(--gray-700);
+            color: var(--gray-300); /* Light text for dark navbar */
         }
         
         .navbar-nav .nav-link:hover {
-            color: var(--primary-color) !important;
+            color: var(--primary-light) !important;
             transform: translateY(-2px);
         }
 
@@ -193,21 +203,34 @@
             font-weight: 600;
             background: rgba(99, 102, 241, 0.1);
         }
+
+        body.light-mode .navbar-nav .nav-link {
+            color: var(--gray-700);
+        }
+
+        body.light-mode .navbar-nav .nav-link:hover {
+            color: var(--primary-color) !important;
+        }
         
         .dropdown-menu {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(15, 23, 42, 0.95); /* Darker dropdown for dark mode */
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: var(--radius-xl);
             box-shadow: var(--shadow-xl);
             padding: 0.5rem;
+        }
+
+        body.light-mode .dropdown-menu {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .dropdown-item {
             border-radius: var(--radius-md);
             transition: all 0.3s ease;
             margin-bottom: 0.25rem;
-            color: var(--gray-700);
+            color: var(--gray-100); /* Light text for dark dropdown */
         }
         
         .dropdown-item:hover {
@@ -215,18 +238,23 @@
             color: white;
             transform: translateX(5px);
         }
+
+        body.light-mode .dropdown-item {
+            color: var(--gray-700);
+        }
         
         /* Card Styles */
         .card {
             border-radius: var(--radius-2xl);
             box-shadow: var(--shadow-xl);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Lighter border for dark mode */
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(30, 41, 59, 0.7); /* Darker, more transparent background for dark mode */
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            color: var(--gray-100); /* Light text for dark cards */
         }
         
         .card::before {
@@ -279,6 +307,12 @@
         
         .card-body {
             padding: 2rem;
+        }
+
+        body.light-mode .card {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--gray-800);
         }
         
         /* Enhanced Button Styles with Distinct Colors */
@@ -572,39 +606,39 @@
         /* Form Styles */
         .form-control, .form-select {
             border-radius: var(--radius-lg);
-            border: 2px solid var(--gray-200);
+            border: 2px solid var(--gray-700); /* Darker border for dark mode */
             transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(30, 41, 59, 0.9); /* Darker background for dark mode */
             backdrop-filter: blur(10px);
             padding: 0.75rem 1rem;
-            color: var(--gray-800);
+            color: var(--gray-100); /* Light text for dark forms */
         }
         
         .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
             transform: translateY(-2px);
         }
 
-        body.dark-mode .form-control, body.dark-mode .form-select {
-            background: rgba(30, 41, 59, 0.9);
-            border-color: var(--gray-700);
-            color: var(--gray-100);
+        body.light-mode .form-control, body.light-mode .form-select {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: var(--gray-200);
+            color: var(--gray-800);
         }
 
-        body.dark-mode .form-control:focus, body.dark-mode .form-select:focus {
-            border-color: var(--primary-light);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+        body.light-mode .form-control:focus, body.light-mode .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
         }
         
         .form-label {
             font-weight: 600;
-            color: var(--gray-700);
+            color: var(--gray-300); /* Light text for dark labels */
             margin-bottom: 0.75rem;
         }
 
-        body.dark-mode .form-label {
-            color: var(--gray-300);
+        body.light-mode .form-label {
+            color: var(--gray-700);
         }
         
         /* Alert Styles */
@@ -616,7 +650,7 @@
             position: relative;
             overflow: hidden;
             padding: 1rem 1.5rem;
-            color: var(--gray-800);
+            color: var(--gray-100); /* Light text for dark alerts */
         }
         
         .alert::before {
@@ -632,33 +666,53 @@
         .alert-success {
             background-color: rgba(16, 185, 129, 0.1);
             border-left: 4px solid var(--success-color);
-            color: var(--success-dark);
+            color: var(--success-light);
         }
 
         .alert-danger {
             background-color: rgba(239, 68, 68, 0.1);
             border-left: 4px solid var(--danger-color);
-            color: var(--danger-dark);
+            color: var(--danger-light);
         }
 
         .alert-warning {
             background-color: rgba(245, 158, 11, 0.1);
             border-left: 4px solid var(--warning-color);
-            color: var(--warning-dark);
+            color: var(--warning-light);
         }
 
         .alert-info {
             background-color: rgba(59, 130, 246, 0.1);
             border-left: 4px solid var(--info-color);
+            color: var(--info-light);
+        }
+
+        body.light-mode .alert-success {
+            color: var(--success-dark);
+        }
+
+        body.light-mode .alert-danger {
+            color: var(--danger-dark);
+        }
+
+        body.light-mode .alert-warning {
+            color: var(--warning-dark);
+        }
+
+        body.light-mode .alert-info {
             color: var(--info-dark);
         }
         
         /* Progress Bar */
         .progress {
             border-radius: var(--radius-full);
-            background: var(--gray-200);
+            background: var(--gray-700); /* Darker background for dark mode */
             overflow: hidden;
             height: 0.75rem;
+        }
+
+        body.light-mode .progress {
+            background: var(--gray-200);
         }
         
         .progress-bar {
@@ -690,8 +744,8 @@
         
         /* Dark Mode Toggle */
         .dark-mode-toggle {
-            background: var(--gray-100);
-            border: 2px solid var(--gray-200);
+            background: var(--gray-800); /* Darker background for toggle in dark mode */
+            border: 2px solid var(--gray-700);
             border-radius: var(--radius-full);
             width: 60px;
             height: 30px;
@@ -718,12 +772,12 @@
             z-index: 1;
         }
         
-        .dark-mode .dark-mode-toggle {
-            background: var(--primary-color);
-            border-color: var(--primary-color);
+        body.light-mode .dark-mode-toggle {
+            background: var(--gray-100);
+            border-color: var(--gray-200);
         }
         
-        .dark-mode .dark-mode-toggle::before {
+        body.light-mode .dark-mode-toggle::before {
             transform: translateX(30px);
         }
 
@@ -734,12 +788,20 @@
             z-index: 0;
         }
 
-        .dark-mode .dark-mode-toggle .icon.moon {
+        .dark-mode-toggle .icon.moon {
             color: white;
         }
 
-        .dark-mode .dark-mode-toggle .icon.sun {
+        .dark-mode-toggle .icon.sun {
             color: var(--gray-300);
+        }
+
+        body.light-mode .dark-mode-toggle .icon.moon {
+            color: var(--gray-500);
+        }
+
+        body.light-mode .dark-mode-toggle .icon.sun {
+            color: white;
         }
         
         /* Loading Animation */
@@ -815,16 +877,16 @@
         
         /* Utility Classes */
         .glass {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(30, 41, 59, 0.5); /* Darker glass for dark mode */
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: var(--gray-800);
-        }
-
-        body.dark-mode .glass {
-            background: rgba(30, 41, 59, 0.5);
             border: 1px solid rgba(47, 60, 80, 0.5);
             color: var(--gray-100);
+        }
+
+        body.light-mode .glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--gray-800);
         }
         
         .gradient-text {
@@ -879,6 +941,10 @@
         }
         
         ::-webkit-scrollbar-track {
+            background: var(--gray-800); /* Darker scrollbar track for dark mode */
+        }
+
+        body.light-mode ::-webkit-scrollbar-track {
             background: var(--gray-100);
         }
         
@@ -894,7 +960,7 @@
         {% block custom_css %}{% endblock %}
     </style>
 </head>
-<body>
+<body class="dark-mode"> <!-- Set dark-mode as default -->
     <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main_page') }}">
@@ -1248,16 +1314,12 @@
         // Dark Mode Toggle
         function toggleDarkMode() {
             const body = document.body;
-            const darkModeToggle = document.getElementById('darkModeToggle');
+            body.classList.toggle('light-mode'); // Toggle light-mode class
             
-            body.classList.toggle('dark-mode');
-            
-            if (body.classList.contains('dark-mode')) {
-                darkModeToggle.innerHTML = '<span class="icon sun"><i class="bi bi-sun-fill"></i></span><span class="icon moon"><i class="bi bi-moon-fill"></i></span>';
-                localStorage.setItem('darkMode', 'true');
+            if (body.classList.contains('light-mode')) {
+                localStorage.setItem('darkMode', 'false'); // Store false for light mode
             } else {
-                darkModeToggle.innerHTML = '<span class="icon sun"><i class="bi bi-sun-fill"></i></span><span class="icon moon"><i class="bi bi-moon-fill"></i></span>';
-                localStorage.setItem('darkMode', 'false');
+                localStorage.setItem('darkMode', 'true'); // Store true for dark mode
             }
             updateDarkModeToggleIcons();
         }
@@ -1265,19 +1327,26 @@
         function updateDarkModeToggleIcons() {
             const body = document.body;
             const darkModeToggle = document.getElementById('darkModeToggle');
-            if (body.classList.contains('dark-mode')) {
+            if (body.classList.contains('light-mode')) {
+                // In light mode, sun icon is active
+                darkModeToggle.querySelector('.icon.sun').style.color = 'white';
+                darkModeToggle.querySelector('.icon.moon').style.color = 'var(--gray-500)';
+                darkModeToggle.querySelector('::before').style.transform = 'translateX(30px)';
+            } else {
+                // In dark mode, moon icon is active
                 darkModeToggle.querySelector('.icon.sun').style.color = 'var(--gray-300)';
                 darkModeToggle.querySelector('.icon.moon').style.color = 'white';
-            } else {
-                darkModeToggle.querySelector('.icon.sun').style.color = 'var(--gray-500)';
-                darkModeToggle.querySelector('.icon.moon').style.color = 'var(--gray-500)';
+                darkModeToggle.querySelector('::before').style.transform = 'translateX(2px)';
             }
         }
         
         // Load Dark Mode Preference
         document.addEventListener('DOMContentLoaded', function() {
-            if (localStorage.getItem('darkMode') === 'true') {
-                document.body.classList.add('dark-mode');
+            // Default to dark mode if no preference or preference is dark
+            if (localStorage.getItem('darkMode') === 'false') {
+                document.body.classList.add('light-mode');
+            } else {
+                document.body.classList.remove('light-mode'); // Ensure dark mode is default if not explicitly light
             }
             updateDarkModeToggleIcons();
             
