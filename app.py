@@ -3146,10 +3146,23 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
             'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 
             'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'I': 0.0
         }
-        total_terms = 8  # สมมติหลักสูตร 8 เทอม
         
-        # คำนวณ GPA เป้าหมาย (เส้นเขียว)
-        target_gpa = 3.25  # เป้าหมาย GPA ที่ดี
+        # ใช้จำนวนเทอมจริงที่โหลดมา
+        total_terms = max(loaded_terms_count, 4)  # อย่างน้อย 4 เทอม
+        
+        # คำนวณ GPA เป้าหมายจากโมเดล (เส้นเขียว)
+        target_gpa = 3.25  # ค่าเริ่มต้น
+        
+        # ใช้โมเดล AI คำนวณเป้าหมายที่เหมาะสม
+        if hasattr(app, 'advanced_trainer') and app.advanced_trainer:
+            try:
+                # ใช้โมเดลทำนายเป้าหมาย GPA ที่เหมาะสม
+                prediction_result = app.advanced_trainer.predict_graduation(current_grades)
+                optimal_gpa = prediction_result.get('optimal_gpa', 3.25)
+                target_gpa = max(3.0, min(4.0, optimal_gpa))  # จำกัดระหว่าง 3.0-4.0
+            except:
+                target_gpa = 3.25
+        
         target_line = [target_gpa] * (total_terms + 2)  # +2 สำหรับทำนายอนาคต
         
         # คำนวณ GPA ผลจริง (เส้นน้ำเงิน) - ใช้ข้อมูลจริงจากเกรดที่มี
@@ -3175,9 +3188,9 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
             
             # สร้างข้อมูล GPA ตามเทอม (จำลอง progression)
             for term in range(1, total_terms + 1):
-                if term <= 4:  # เทอมที่ผ่านมา
+                if term <= loaded_terms_count:  # เทอมที่มีข้อมูลจริง
                     # จำลองการพัฒนา GPA
-                    progress_factor = term / 4.0
+                    progress_factor = term / loaded_terms_count
                     term_gpa = current_gpa * progress_factor
                     actual_line.append(round(term_gpa, 2))
                 else:
