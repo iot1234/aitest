@@ -1,102 +1,10 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จัดการโมเดล - ระบบทำนายความสำเร็จของนักศึกษา</title>
-    
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <style>
-:root {
-    /* Modern Color Palette - Consistent with main site */
-    --primary-color: #6366f1;
-    --primary-dark: #4f46e5;
-    --primary-light: #a5b4fc;
-    --secondary-color: #06b6d4;
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
-    --info-color: #3b82f6;
-    
-    /* Neutral Colors */
-    --gray-50: #f8fafc;
-    --gray-100: #f1f5f9;
-    --gray-200: #e2e8f0;
-    --gray-300: #cbd5e1;
-    --gray-400: #94a3b8;
-    --gray-500: #64748b;
-    --gray-600: #475569;
-    --gray-700: #334155;
-    --gray-800: #1e293b;
-    --gray-900: #0f172a;
-    
-    /* Gradients */
-    --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
-    --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    --info-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    --glass-gradient: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
-    
-    /* Shadows */
-    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-    --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-    
-    /* Border Radius */
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
-    --radius-xl: 1rem;
-    --radius-2xl: 1.5rem;
-    --radius-full: 9999px;
-}
+{% extends "base.html" %}
 
-body {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-    background-attachment: fixed;
-    font-family: 'Inter', 'Kanit', -apple-system, BlinkMacSystemFont, sans-serif;
-    color: var(--gray-800);
-}
+{% block title %}จัดการโมเดล - ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}
 
-/* Page Header */
-.page-header {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(20px);
-    border-radius: var(--radius-2xl);
-    padding: 2rem;
-    margin-bottom: 2rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: var(--shadow-xl);
-}
-
-.page-title {
-    font-size: 2.5rem;
-    font-weight: 800;
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 0.5rem;
-}
-
-.page-subtitle {
-    color: var(--gray-600);
-    font-size: 1.125rem;
-    font-weight: 500;
-}
-
-/* Model Cards */
+{% block extra_head %}
+<style>
+/* Model-specific styles */
 .model-card {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px) saturate(180%);
@@ -147,11 +55,6 @@ body {
     background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
     transform: rotate(45deg);
     animation: shimmer 3s infinite;
-}
-
-@keyframes shimmer {
-    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
 }
 
 .model-filename {
@@ -364,20 +267,6 @@ body {
     background: rgba(99, 102, 241, 0.05);
 }
 
-/* Badges */
-.badge {
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--radius-md);
-    font-weight: 600;
-    font-size: 0.75rem;
-}
-
-.badge-primary { background: var(--primary-color); }
-.badge-success { background: var(--success-color); }
-.badge-warning { background: var(--warning-color); }
-.badge-info { background: var(--info-color); }
-.badge-danger { background: var(--danger-color); }
-
 /* Empty State */
 .empty-state {
     background: rgba(255, 255, 255, 0.1);
@@ -407,172 +296,6 @@ body {
     margin-bottom: 2rem;
 }
 
-/* Buttons */
-.btn {
-    border-radius: var(--radius-full);
-    font-weight: 600;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    box-shadow: var(--shadow-md);
-}
-
-.btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    transition: left 0.5s;
-}
-
-.btn:hover::before {
-    left: 100%;
-}
-
-.btn:hover {
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: var(--shadow-xl);
-}
-
-.btn-primary {
-    background: var(--primary-gradient);
-    color: white;
-}
-
-.btn-success {
-    background: var(--success-gradient);
-    color: white;
-}
-
-.btn-outline-info {
-    background: transparent;
-    color: var(--info-color);
-    border: 2px solid var(--info-color);
-    box-shadow: none;
-}
-
-.btn-outline-info:hover {
-    background: var(--info-color);
-    color: white;
-}
-
-.btn-outline-danger {
-    background: transparent;
-    color: var(--danger-color);
-    border: 2px solid var(--danger-color);
-    box-shadow: none;
-}
-
-.btn-outline-danger:hover {
-    background: var(--danger-color);
-    color: white;
-}
-
-.btn-outline-light {
-    background: transparent;
-    color: white;
-    border: 2px solid rgba(255, 255, 255, 0.5);
-    box-shadow: none;
-}
-
-.btn-outline-light:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: white;
-    color: white;
-}
-
-.btn-light {
-    background: rgba(255, 255, 255, 0.9);
-    color: var(--gray-700);
-    backdrop-filter: blur(10px);
-}
-
-.btn-light:hover {
-    background: white;
-    color: var(--gray-800);
-}
-
-/* Button Groups */
-.btn-group .btn {
-    border-radius: 0;
-    margin-right: -1px;
-}
-
-.btn-group .btn:first-child {
-    border-radius: var(--radius-full) 0 0 var(--radius-full);
-}
-
-.btn-group .btn:last-child {
-    border-radius: 0 var(--radius-full) var(--radius-full) 0;
-    margin-right: 0;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .page-title {
-        font-size: 2rem;
-    }
-    
-    .metrics-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .btn-group {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .btn-group .btn {
-        border-radius: var(--radius-lg);
-        margin-right: 0;
-    }
-    
-    .btn-group .btn:first-child,
-    .btn-group .btn:last-child {
-        border-radius: var(--radius-lg);
-    }
-    
-    .comparison-chart-container {
-        height: 300px;
-    }
-}
-
-/* Animations */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.fade-in-up {
-    animation: fadeInUp 0.6s ease-out;
-}
-
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.slide-in-right {
-    animation: slideInRight 0.6s ease-out;
-}
-
 /* Loading States */
 .loading-card {
     background: var(--glass-gradient);
@@ -596,124 +319,148 @@ body {
     to { transform: rotate(360deg); }
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-    width: 8px;
+/* Page Header */
+.page-header {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border-radius: var(--radius-2xl);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: var(--shadow-xl);
 }
 
-::-webkit-scrollbar-track {
-    background: var(--gray-100);
-}
-
-::-webkit-scrollbar-thumb {
+.page-title {
+    font-size: 2.5rem;
+    font-weight: 800;
     background: var(--primary-gradient);
-    border-radius: var(--radius-full);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-dark);
+.page-subtitle {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.125rem;
+    font-weight: 500;
 }
-    </style>
-</head>
-<body>
-    <div class="container py-5">
-        <div id="alertContainer"></div>
-        
-        <!-- Page Header -->
-        <div class="page-header fade-in-up">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h1 class="page-title">
-                        <i class="bi bi-folder-fill me-3"></i>จัดการโมเดล AI
-                    </h1>
-                    <p class="page-subtitle">เปรียบเทียบ วิเคราะห์ และจัดการโมเดลที่ได้ฝึกไว้อย่างมีประสิทธิภาพ</p>
-                </div>
-                <div class="col-md-4 text-end">
-                    <div class="btn-group" role="group">
-                        <a href="#" class="btn btn-outline-light">
-                            <i class="bi bi-plus-circle me-2"></i>ฝึกโมเดลใหม่
-                        </a>
-                        <button class="btn btn-success" id="compareBtn" onclick="compareSelectedModels()" disabled>
-                            <i class="bi bi-bar-chart-line me-2"></i>เปรียบเทียบ (เลือก 2+ โมเดล)
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Comparison Chart Section -->
-        <div class="comparison-section d-none fade-in-up" id="comparisonChartContainer" style="animation-delay: 0.1s;">
-            <div class="comparison-header">
-                <i class="bi bi-graph-up text-primary fs-4"></i>
-                <h3 class="comparison-title">การเปรียบเทียบประสิทธิภาพโมเดล</h3>
+/* Responsive Design */
+@media (max-width: 768px) {
+    .page-title {
+        font-size: 2rem;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .comparison-chart-container {
+        height: 300px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div id="alertContainer"></div>
+    
+    <!-- Page Header -->
+    <div class="page-header fade-in-up">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="page-title">
+                    <i class="bi bi-folder-fill me-3"></i>จัดการโมเดล AI
+                </h1>
+                <p class="page-subtitle">เปรียบเทียบ วิเคราะห์ และจัดการโมเดลที่ได้ฝึกไว้อย่างมีประสิทธิภาพ</p>
             </div>
-            <div class="row">
-                <div class="col-lg-8">
-                    <div class="comparison-chart-container">
-                        <canvas id="comparisonChart"></canvas>
-                    </div>
-                </div>
-                <div class="col-lg-4">
-                    <div class="comparison-stats">
-                        <h6 class="stats-title">
-                            <i class="bi bi-clipboard-data me-2"></i>สถิติการเปรียบเทียบ
-                        </h6>
-                        <div id="comparisonStats"></div>
-                    </div>
+            <div class="col-md-4 text-end">
+                <div class="btn-group" role="group">
+                    <a href="#" class="btn btn-outline-light">
+                        <i class="bi bi-plus-circle me-2"></i>ฝึกโมเดลใหม่
+                    </a>
+                    <button class="btn btn-success" id="compareBtn" onclick="compareSelectedModels()" disabled>
+                        <i class="bi bi-bar-chart-line me-2"></i>เปรียบเทียบ (เลือก 2+ โมเดล)
+                    </button>
                 </div>
             </div>
-        </div>
-
-        <!-- Models Grid -->
-        <div id="modelsList" class="row"></div>
-
-        <!-- Comparison Table -->
-        <div class="comparison-table-container mt-5 d-none fade-in-up" id="comparisonTableContainer" style="animation-delay: 0.2s;">
-            <div class="table-header">
-                <h5 class="table-title">
-                    <i class="bi bi-table me-2"></i>ตารางเปรียบเทียบโดยละเอียด
-                </h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0" id="comparisonTable">
-                    <thead>
-                        <tr>
-                            <th><i class="bi bi-cpu me-1"></i>โมเดล</th>
-                            <th><i class="bi bi-speedometer2 me-1"></i>ประสิทธิภาพ</th>
-                            <th><i class="bi bi-database me-1"></i>ข้อมูลฝึก</th>
-                            <th><i class="bi bi-calendar me-1"></i>สร้างเมื่อ</th>
-                            <th><i class="bi bi-award me-1"></i>คะแนนรวม</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Empty State -->
-        <div class="empty-state fade-in-up" id="emptyState">
-            <div class="empty-icon">
-                <i class="bi bi-folder-x"></i>
-            </div>
-            <h4 class="empty-title">ยังไม่มีโมเดลที่ฝึกแล้ว</h4>
-            <p class="empty-subtitle">เริ่มต้นสร้างโมเดล AI แรกของคุณเพื่อทำนายความสำเร็จของนักศึกษา</p>
-            <a href="#" class="btn btn-light btn-lg">
-                <i class="bi bi-plus-circle me-2"></i>ฝึกโมเดลใหม่
-            </a>
-        </div>
-
-        <!-- Loading State -->
-        <div class="loading-card d-none" id="loadingState">
-            <div class="loading-spinner"></div>
-            <h5>กำลังโหลดโมเดล...</h5>
-            <p class="text-muted">กรุณารอสักครู่</p>
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
+    <!-- Comparison Chart Section -->
+    <div class="comparison-section d-none fade-in-up" id="comparisonChartContainer" style="animation-delay: 0.1s;">
+        <div class="comparison-header">
+            <i class="bi bi-graph-up text-primary fs-4"></i>
+            <h3 class="comparison-title">การเปรียบเทียบประสิทธิภาพโมเดล</h3>
+        </div>
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="comparison-chart-container">
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="comparison-stats">
+                    <h6 class="stats-title">
+                        <i class="bi bi-clipboard-data me-2"></i>สถิติการเปรียบเทียบ
+                    </h6>
+                    <div id="comparisonStats"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Models Grid -->
+    <div id="modelsList" class="row"></div>
+
+    <!-- Comparison Table -->
+    <div class="comparison-table-container mt-5 d-none fade-in-up" id="comparisonTableContainer" style="animation-delay: 0.2s;">
+        <div class="table-header">
+            <h5 class="table-title">
+                <i class="bi bi-table me-2"></i>ตารางเปรียบเทียบโดยละเอียด
+            </h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="comparisonTable">
+                <thead>
+                    <tr>
+                        <th><i class="bi bi-cpu me-1"></i>โมเดล</th>
+                        <th><i class="bi bi-speedometer2 me-1"></i>ประสิทธิภาพ</th>
+                        <th><i class="bi bi-database me-1"></i>ข้อมูลฝึก</th>
+                        <th><i class="bi bi-calendar me-1"></i>สร้างเมื่อ</th>
+                        <th><i class="bi bi-award me-1"></i>คะแนนรวม</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state fade-in-up" id="emptyState">
+        <div class="empty-icon">
+            <i class="bi bi-folder-x"></i>
+        </div>
+        <h4 class="empty-title">ยังไม่มีโมเดลที่ฝึกแล้ว</h4>
+        <p class="empty-subtitle">เริ่มต้นสร้างโมเดล AI แรกของคุณเพื่อทำนายความสำเร็จของนักศึกษา</p>
+        <a href="#" class="btn btn-light btn-lg">
+            <i class="bi bi-plus-circle me-2"></i>ฝึกโมเดลใหม่
+        </a>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-card d-none" id="loadingState">
+        <div class="loading-spinner"></div>
+        <h5 class="text-white">กำลังโหลดโมเดล...</h5>
+        <p class="text-white-50">กรุณารอสักครู่</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
 let availableModels = [];
 let selectedModels = [];
 let comparisonChart = null;
@@ -760,28 +507,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         loadModels();
     }, 1000);
-    
-    // Initialize animations
-    const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
-    };
-    
-    const observer = new IntersectionObserver(function(entries) {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
-            }
-        });
-    }, observerOptions);
-    
-    // Observe elements for animation
-    document.querySelectorAll('.fade-in-up, .slide-in-right').forEach(el => {
-        el.style.opacity = '0';
-        el.style.transform = 'translateY(30px)';
-        observer.observe(el);
-    });
 });
 
 function loadModels() {
@@ -1111,10 +836,10 @@ function displayComparisonTable(models) {
             </td>
             <td>
                 <div class="d-flex flex-wrap gap-1">
-                    <span class="badge badge-primary">${((performance.accuracy || 0) * 100).toFixed(1)}%</span>
-                    <span class="badge badge-success">${((performance.precision || 0) * 100).toFixed(1)}%</span>
-                    <span class="badge badge-warning">${((performance.recall || 0) * 100).toFixed(1)}%</span>
-                    <span class="badge badge-info">${((performance.f1_score || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-primary">${((performance.accuracy || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-success">${((performance.precision || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-warning">${((performance.recall || 0) * 100).toFixed(1)}%</span>
+                    <span class="badge bg-info">${((performance.f1_score || 0) * 100).toFixed(1)}%</span>
                 </div>
             </td>
             <td>
@@ -1183,41 +908,6 @@ function deleteModel(filename) {
         showAlert(`ลบโมเดล '${filename}' เรียบร้อยแล้ว`, 'success');
     }, 1500);
 }
-
-// Enhanced alert function
-function showAlert(message, type = 'info', containerId = 'alertContainer') {
-    const alertContainer = document.getElementById(containerId) || document.querySelector('.container');
-    if (!alertContainer) return;
-    
-    const icons = {
-        success: 'bi-check-circle-fill',
-        danger: 'bi-exclamation-triangle-fill',
-        warning: 'bi-exclamation-circle-fill',
-        info: 'bi-info-circle-fill'
-    };
-    
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.style.borderRadius = 'var(--radius-lg)';
-    alertDiv.style.border = 'none';
-    alertDiv.style.boxShadow = 'var(--shadow-lg)';
-    alertDiv.innerHTML = `
-        <i class="bi ${icons[type]} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    alertContainer.insertBefore(alertDiv, alertContainer.firstChild);
-    
-    // Auto dismiss after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.classList.remove('show');
-            setTimeout(() => alertDiv.remove(), 150);
-        }
-    }, 5000);
-}
-    </script>
-</body>
-</html>
+</script>
+{% endblock %}
 
