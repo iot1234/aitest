@@ -12,44 +12,44 @@
     
     <style>
         :root {
-            /* Modern Color Palette - Distinct Colors */
-            --primary-color: #6366f1;
+            /* Modern Color Palette - Inspired by Elito */
+            --primary-color: #6366f1; /* Indigo */
             --primary-dark: #4f46e5;
             --primary-light: #a5b4fc;
             
-            --secondary-color: #06b6d4;
+            --secondary-color: #06b6d4; /* Cyan */
             --secondary-dark: #0891b2;
             --secondary-light: #67e8f9;
             
-            --success-color: #10b981;
+            --success-color: #10b981; /* Emerald */
             --success-dark: #059669;
             --success-light: #6ee7b7;
             
-            --warning-color: #f59e0b;
+            --warning-color: #f59e0b; /* Amber */
             --warning-dark: #d97706;
             --warning-light: #fbbf24;
             
-            --danger-color: #ef4444;
+            --danger-color: #ef4444; /* Red */
             --danger-dark: #dc2626;
             --danger-light: #f87171;
             
-            --info-color: #3b82f6;
+            --info-color: #3b82f6; /* Blue */
             --info-dark: #2563eb;
             --info-light: #93c5fd;
             
-            --purple-color: #8b5cf6;
+            --purple-color: #8b5cf6; /* Violet */
             --purple-dark: #7c3aed;
             --purple-light: #c4b5fd;
             
-            --orange-color: #f97316;
+            --orange-color: #f97316; /* Orange */
             --orange-dark: #ea580c;
             --orange-light: #fb923c;
             
-            --teal-color: #14b8a6;
+            --teal-color: #14b8a6; /* Teal */
             --teal-dark: #0f766e;
             --teal-light: #5eead4;
             
-            --pink-color: #ec4899;
+            --pink-color: #ec4899; /* Pink */
             --pink-dark: #db2777;
             --pink-light: #f9a8d4;
             
@@ -65,17 +65,25 @@
             --gray-800: #1e293b;
             --gray-900: #0f172a;
             
-            /* Distinct Gradients for Each Button Type */
-            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-            --secondary-gradient: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-            --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-            --info-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            --purple-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-            --orange-gradient: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-            --teal-gradient: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
-            --pink-gradient: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+            /* Elito-inspired Dark Colors */
+            --elito-bg-dark: #1A1A1A;
+            --elito-card-dark: #2C2C2C;
+            --elito-text-light: #E0E0E0;
+            --elito-text-muted: #A0A0A0;
+            --elito-accent-green: #00FF7F; /* A vibrant green for highlights */
+            --elito-accent-yellow: #FFD700; /* A vibrant yellow for highlights */
+
+            /* Gradients */
+            --primary-gradient: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            --secondary-gradient: linear-gradient(135deg, var(--secondary-color) 0%, var(--secondary-dark) 100%);
+            --success-gradient: linear-gradient(135deg, var(--success-color) 0%, var(--success-dark) 100%);
+            --warning-gradient: linear-gradient(135deg, var(--warning-color) 0%, var(--warning-dark) 100%);
+            --danger-gradient: linear-gradient(135deg, var(--danger-color) 0%, var(--danger-dark) 100%);
+            --info-gradient: linear-gradient(135deg, var(--info-color) 0%, var(--info-dark) 100%);
+            --purple-gradient: linear-gradient(135deg, var(--purple-color) 0%, var(--purple-dark) 100%);
+            --orange-gradient: linear-gradient(135deg, var(--orange-color) 0%, var(--orange-dark) 100%);
+            --teal-gradient: linear-gradient(135deg, var(--teal-color) 0%, var(--teal-dark) 100%);
+            --pink-gradient: linear-gradient(135deg, var(--pink-color) 0%, var(--pink-dark) 100%);
             
             --glass-gradient: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
             
@@ -101,10 +109,10 @@
         
         body {
             font-family: 'Inter', 'Kanit', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            background-color: var(--elito-bg-dark); /* Dark background by default */
             background-attachment: fixed;
             min-height: 100vh;
-            color: var(--gray-800);
+            color: var(--elito-text-light); /* Light text for dark background */
             line-height: 1.6;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             overflow-x: hidden;
@@ -118,9 +126,9 @@
             width: 100%;
             height: 100%;
             background: 
-                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
+                radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.1) 0%, transparent 50%);
             z-index: -1;
             animation: float 20s ease-in-out infinite;
         }
@@ -131,38 +139,48 @@
             66% { transform: translateY(10px) rotate(-1deg); }
         }
         
-        body.dark-mode {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-            color: var(--gray-100);
+        /* Light Mode - Toggle */
+        body.light-mode {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            color: var(--gray-800);
         }
         
-        body.dark-mode::before {
+        body.light-mode::before {
             background: 
-                radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.2) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.2) 0%, transparent 50%);
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
         }
         
         /* Navigation Styles */
         .navbar {
-            background: rgba(255, 255, 255, 0.8) !important;
+            background: rgba(26, 26, 26, 0.8) !important; /* Darker navbar for dark mode */
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: var(--shadow-lg);
             border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .navbar.scrolled {
-            background: rgba(255, 255, 255, 0.95) !important;
+            background: rgba(26, 26, 26, 0.95) !important;
             box-shadow: var(--shadow-xl);
+        }
+
+        body.light-mode .navbar {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        body.light-mode .navbar.scrolled {
+            background: rgba(255, 255, 255, 0.95) !important;
         }
         
         .navbar-brand {
             font-weight: 800;
             font-size: 1.75rem;
-            background: var(--primary-gradient);
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -180,43 +198,47 @@
             border-radius: var(--radius-lg);
             position: relative;
             overflow: hidden;
-        }
-        
-        .navbar-nav .nav-link::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: var(--primary-gradient);
-            transition: left 0.3s ease;
-            z-index: -1;
-            opacity: 0.1;
-        }
-        
-        .navbar-nav .nav-link:hover::before {
-            left: 0;
+            color: var(--elito-text-muted); /* Light text for dark navbar */
         }
         
         .navbar-nav .nav-link:hover {
-            color: var(--primary-color) !important;
+            color: var(--elito-text-light) !important;
             transform: translateY(-2px);
+        }
+
+        .navbar-nav .nav-link.active {
+            color: var(--elito-text-light) !important;
+            font-weight: 600;
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        body.light-mode .navbar-nav .nav-link {
+            color: var(--gray-700);
+        }
+
+        body.light-mode .navbar-nav .nav-link:hover {
+            color: var(--primary-color) !important;
         }
         
         .dropdown-menu {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(26, 26, 26, 0.95); /* Darker dropdown for dark mode */
             backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
             border-radius: var(--radius-xl);
             box-shadow: var(--shadow-xl);
             padding: 0.5rem;
+        }
+
+        body.light-mode .dropdown-menu {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
         .dropdown-item {
             border-radius: var(--radius-md);
             transition: all 0.3s ease;
             margin-bottom: 0.25rem;
+            color: var(--elito-text-light); /* Light text for dark dropdown */
         }
         
         .dropdown-item:hover {
@@ -224,18 +246,23 @@
             color: white;
             transform: translateX(5px);
         }
+
+        body.light-mode .dropdown-item {
+            color: var(--gray-700);
+        }
         
         /* Card Styles */
         .card {
             border-radius: var(--radius-2xl);
             box-shadow: var(--shadow-xl);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05); /* Lighter border for dark mode */
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            background: rgba(255, 255, 255, 0.9);
+            background: var(--elito-card-dark); /* Darker, more transparent background for dark mode */
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            color: var(--elito-text-light); /* Light text for dark cards */
         }
         
         .card::before {
@@ -260,13 +287,14 @@
         }
         
         .card-header {
-            background: var(--primary-gradient);
-            color: white;
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.2));
+            color: var(--elito-text-light);
             font-weight: 600;
             border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
             padding: 1.5rem;
             position: relative;
             overflow: hidden;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         
         .card-header::before {
@@ -276,7 +304,7 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.05), transparent);
             transform: rotate(45deg);
             animation: shimmer 3s infinite;
         }
@@ -288,6 +316,12 @@
         
         .card-body {
             padding: 2rem;
+        }
+
+        body.light-mode .card {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--gray-800);
         }
         
         /* Enhanced Button Styles with Distinct Colors */
@@ -334,7 +368,7 @@
         }
         
         .btn-primary:hover {
-            background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #3730a3 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
             color: white;
@@ -352,7 +386,7 @@
         }
         
         .btn-success:hover {
-            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            background: linear-gradient(135deg, var(--success-dark) 0%, #047857 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
             color: white;
@@ -370,7 +404,7 @@
         }
         
         .btn-warning:hover {
-            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            background: linear-gradient(135deg, var(--warning-dark) 0%, #b45309 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4);
             color: white;
@@ -388,7 +422,7 @@
         }
         
         .btn-danger:hover {
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            background: linear-gradient(135deg, var(--danger-dark) 0%, #b91c1c 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);
             color: white;
@@ -406,7 +440,7 @@
         }
         
         .btn-info:hover {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            background: linear-gradient(135deg, var(--info-dark) 0%, #1d4ed8 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
             color: white;
@@ -424,7 +458,7 @@
         }
         
         .btn-secondary:hover {
-            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+            background: linear-gradient(135deg, var(--secondary-dark) 0%, #0e7490 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(6, 182, 212, 0.4);
             color: white;
@@ -442,7 +476,7 @@
         }
         
         .btn-purple:hover {
-            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            background: linear-gradient(135deg, var(--purple-dark) 0%, #6d28d9 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4);
             color: white;
@@ -460,7 +494,7 @@
         }
         
         .btn-orange:hover {
-            background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+            background: linear-gradient(135deg, var(--orange-dark) 0%, #c2410c 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(249, 115, 22, 0.4);
             color: white;
@@ -478,7 +512,7 @@
         }
         
         .btn-teal:hover {
-            background: linear-gradient(135deg, #0f766e 0%, #0d5b56 100%);
+            background: linear-gradient(135deg, var(--teal-dark) 0%, #0d5b56 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(20, 184, 166, 0.4);
             color: white;
@@ -496,7 +530,7 @@
         }
         
         .btn-pink:hover {
-            background: linear-gradient(135deg, #db2777 0%, #be185d 100%);
+            background: linear-gradient(135deg, var(--pink-dark) 0%, #9d174d 100%);
             transform: translateY(-3px) scale(1.05);
             box-shadow: 0 10px 25px rgba(236, 72, 153, 0.4);
             color: white;
@@ -581,23 +615,39 @@
         /* Form Styles */
         .form-control, .form-select {
             border-radius: var(--radius-lg);
-            border: 2px solid var(--gray-200);
+            border: 2px solid rgba(255, 255, 255, 0.1); /* Darker border for dark mode */
             transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(44, 44, 44, 0.9); /* Darker background for dark mode */
             backdrop-filter: blur(10px);
             padding: 0.75rem 1rem;
+            color: var(--elito-text-light); /* Light text for dark forms */
         }
         
         .form-control:focus, .form-select:focus {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+        }
+
+        body.light-mode .form-control, body.light-mode .form-select {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: var(--gray-200);
+            color: var(--gray-800);
+        }
+
+        body.light-mode .form-control:focus, body.light-mode .form-select:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-            transform: translateY(-2px);
         }
         
         .form-label {
             font-weight: 600;
-            color: var(--gray-700);
+            color: var(--elito-text-muted); /* Light text for dark labels */
             margin-bottom: 0.75rem;
+        }
+
+        body.light-mode .form-label {
+            color: var(--gray-700);
         }
         
         /* Alert Styles */
@@ -609,6 +659,7 @@
             position: relative;
             overflow: hidden;
             padding: 1rem 1.5rem;
+            color: var(--elito-text-light); /* Light text for dark alerts */
         }
         
         .alert::before {
@@ -620,13 +671,57 @@
             height: 100%;
             background: currentColor;
         }
+
+        .alert-success {
+            background-color: rgba(16, 185, 129, 0.1);
+            border-left: 4px solid var(--success-color);
+            color: var(--success-light);
+        }
+
+        .alert-danger {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid var(--danger-color);
+            color: var(--danger-light);
+        }
+
+        .alert-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid var(--warning-color);
+            color: var(--warning-light);
+        }
+
+        .alert-info {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--info-color);
+            color: var(--info-light);
+        }
+
+        body.light-mode .alert-success {
+            color: var(--success-dark);
+        }
+
+        body.light-mode .alert-danger {
+            color: var(--danger-dark);
+        }
+
+        body.light-mode .alert-warning {
+            color: var(--warning-dark);
+        }
+
+        body.light-mode .alert-info {
+            color: var(--info-dark);
+        }
         
         /* Progress Bar */
         .progress {
             border-radius: var(--radius-full);
-            background: var(--gray-200);
+            background: rgba(255, 255, 255, 0.1); /* Darker background for dark mode */
             overflow: hidden;
             height: 0.75rem;
+        }
+
+        body.light-mode .progress {
+            background: var(--gray-200);
         }
         
         .progress-bar {
@@ -636,14 +731,15 @@
         
         /* Footer */
         .footer {
-            background: rgba(15, 23, 42, 0.95);
+            background: var(--elito-bg-dark);
             backdrop-filter: blur(20px);
-            color: var(--gray-100);
+            color: var(--elito-text-light);
             padding: 3rem 0 2rem;
             margin-top: 4rem;
             border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
             position: relative;
             overflow: hidden;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
         
         .footer::before {
@@ -658,14 +754,18 @@
         
         /* Dark Mode Toggle */
         .dark-mode-toggle {
-            background: var(--gray-100);
-            border: 2px solid var(--gray-200);
+            background: var(--elito-card-dark); /* Darker background for toggle in dark mode */
+            border: 2px solid rgba(255, 255, 255, 0.1);
             border-radius: var(--radius-full);
             width: 60px;
             height: 30px;
             position: relative;
             cursor: pointer;
             transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 5px;
         }
         
         .dark-mode-toggle::before {
@@ -679,15 +779,39 @@
             border-radius: 50%;
             transition: transform 0.3s ease;
             box-shadow: var(--shadow-sm);
+            z-index: 1;
         }
         
-        .dark-mode .dark-mode-toggle {
-            background: var(--primary-color);
-            border-color: var(--primary-color);
+        body.light-mode .dark-mode-toggle {
+            background: var(--gray-100);
+            border-color: var(--gray-200);
         }
         
-        .dark-mode .dark-mode-toggle::before {
+        body.light-mode .dark-mode-toggle::before {
             transform: translateX(30px);
+        }
+
+        .dark-mode-toggle .icon {
+            font-size: 1rem;
+            color: var(--elito-text-muted);
+            transition: color 0.3s ease;
+            z-index: 0;
+        }
+
+        .dark-mode-toggle .icon.moon {
+            color: var(--elito-text-light);
+        }
+
+        .dark-mode-toggle .icon.sun {
+            color: var(--elito-text-muted);
+        }
+
+        body.light-mode .dark-mode-toggle .icon.moon {
+            color: var(--gray-500);
+        }
+
+        body.light-mode .dark-mode-toggle .icon.sun {
+            color: var(--gray-800);
         }
         
         /* Loading Animation */
@@ -763,16 +887,31 @@
         
         /* Utility Classes */
         .glass {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(44, 44, 44, 0.5); /* Darker glass for dark mode */
             backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--elito-text-light);
+        }
+
+        body.light-mode .glass {
+            background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--gray-800);
         }
         
         .gradient-text {
-            background: var(--primary-gradient);
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+        }
+
+        .text-elito-accent-green {
+            color: var(--elito-accent-green);
+        }
+
+        .text-elito-accent-yellow {
+            color: var(--elito-accent-yellow);
         }
         
         .hover-lift {
@@ -820,6 +959,10 @@
         }
         
         ::-webkit-scrollbar-track {
+            background: var(--elito-bg-dark); /* Darker scrollbar track for dark mode */
+        }
+
+        body.light-mode ::-webkit-scrollbar-track {
             background: var(--gray-100);
         }
         
@@ -835,7 +978,7 @@
         {% block custom_css %}{% endblock %}
     </style>
 </head>
-<body>
+<body class="dark-mode"> <!-- Set dark-mode as default -->
     <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main_page') }}">
@@ -876,7 +1019,8 @@
                     </li>
                     <li class="nav-item">
                         <button class="nav-link btn border-0 bg-transparent" onclick="toggleDarkMode()" id="darkModeToggle">
-                            <i class="bi bi-moon-fill me-1"></i> โหมดมืด
+                            <span class="icon sun"><i class="bi bi-sun-fill"></i></span>
+                            <span class="icon moon"><i class="bi bi-moon-fill"></i></span>
                         </button>
                     </li>
                 </ul>
@@ -888,19 +1032,30 @@
         <div class="container">
             <div id="alertContainer"></div>
             {% block content %}
-            <!-- Demo Content -->
-            <div class="row mb-5">
-                <div class="col-12 text-center">
-                    <h1 class="display-4 fw-bold gradient-text mb-4 fade-in-up">
-                        ระบบทำนายความสำเร็จของนักศึกษา
-                    </h1>
-                    <p class="lead text-muted mb-5 fade-in-up" style="animation-delay: 0.2s;">
-                        ใช้เทคโนโลยี AI และ Machine Learning เพื่อวิเคราะห์และทำนายผลการเรียนของนักศึกษา
-                    </p>
+            <!-- Hero Section - Inspired by Elito -->
+            <section class="hero-section text-center py-5 mb-5">
+                <div class="row align-items-center">
+                    <div class="col-lg-8 mx-auto">
+                        <h1 class="display-3 fw-bold mb-4 fade-in-up">
+                            Hello, I am <span class="gradient-text">Student Predictor</span>.
+                        </h1>
+                        <p class="lead text-elito-text-muted mb-5 fade-in-up" style="animation-delay: 0.2s;">
+                            ใช้เทคโนโลยี AI และ Machine Learning เพื่อวิเคราะห์และทำนายผลการเรียนของนักศึกษา
+                            ช่วยให้สถาบันการศึกษาสามารถวางแผนและพัฒนาการเรียนการสอนได้อย่างมีประสิทธิภาพ
+                        </p>
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center fade-in-up" style="animation-delay: 0.4s;">
+                            <a href="#" class="btn btn-primary btn-lg">
+                                <i class="bi bi-play-fill me-2"></i>เริ่มใช้งาน
+                            </a>
+                            <a href="#" class="btn btn-outline-primary btn-lg">
+                                <i class="bi bi-info-circle-fill me-2"></i>เรียนรู้เพิ่มเติม
+                            </a>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            
-            <!-- Statistics Cards -->
+            </section>
+
+            <!-- Statistics Cards - Adapted from original -->
             <div class="row mb-5">
                 <div class="col-12">
                     <div class="card fade-in-up">
@@ -913,26 +1068,26 @@
                             <div class="row text-center">
                                 <div class="col-md-3 mb-3">
                                     <div class="glass p-4 rounded-3">
-                                        <h3 class="gradient-text fw-bold">95</h3>
-                                        <p class="text-muted mb-0">ความแม่นยำ (%)</p>
+                                        <h3 class="text-elito-accent-green fw-bold">95</h3>
+                                        <p class="text-elito-text-muted mb-0">ความแม่นยำ (%)</p>
                                     </div>
                                 </div>
                                 <div class="col-md-3 mb-3">
                                     <div class="glass p-4 rounded-3">
-                                        <h3 class="gradient-text fw-bold">10000</h3>
-                                        <p class="text-muted mb-0">ข้อมูลนักศึกษา</p>
+                                        <h3 class="text-elito-accent-yellow fw-bold">10000</h3>
+                                        <p class="text-elito-text-muted mb-0">ข้อมูลนักศึกษา</p>
                                     </div>
                                 </div>
                                 <div class="col-md-3 mb-3">
                                     <div class="glass p-4 rounded-3">
-                                        <h3 class="gradient-text fw-bold">50</h3>
-                                        <p class="text-muted mb-0">รายวิชาที่วิเคราะห์</p>
+                                        <h3 class="text-elito-accent-green fw-bold">50</h3>
+                                        <p class="text-elito-text-muted mb-0">รายวิชาที่วิเคราะห์</p>
                                     </div>
                                 </div>
                                 <div class="col-md-3 mb-3">
                                     <div class="glass p-4 rounded-3">
-                                        <h3 class="gradient-text fw-bold">4</h3>
-                                        <p class="text-muted mb-0">ปีการศึกษา</p>
+                                        <h3 class="text-elito-accent-yellow fw-bold">4</h3>
+                                        <p class="text-elito-text-muted mb-0">ปีการศึกษา</p>
                                     </div>
                                 </div>
                             </div>
@@ -941,7 +1096,7 @@
                 </div>
             </div>
             
-            <!-- Feature Cards with Enhanced Buttons -->
+            <!-- Feature Cards with Enhanced Buttons - Adapted from original -->
             <div class="row g-4 mb-5">
                 <div class="col-md-6 col-lg-4">
                     <div class="card h-100 hover-lift fade-in-up">
@@ -951,7 +1106,7 @@
                             </h5>
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <p class="card-text flex-grow-1">สร้างและฝึกโมเดล Machine Learning เพื่อทำนายผลการเรียนของนักศึกษา</p>
+                            <p class="card-text flex-grow-1 text-elito-text-muted">สร้างและฝึกโมเดล Machine Learning เพื่อทำนายผลการเรียนของนักศึกษา</p>
                             <div class="mt-auto">
                                 <a href="#" class="btn btn-primary w-100">
                                     <i class="bi bi-play-fill me-1"></i>เริ่มฝึกโมเดล
@@ -969,10 +1124,10 @@
                             </h5>
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <p class="card-text flex-grow-1">ทำนายความสำเร็จของนักศึกษาแต่ละคนตามข้อมูลส่วนบุคคล</p>
+                            <p class="card-text flex-grow-1 text-elito-text-muted">ทำนายความสำเร็จของนักศึกษาแต่ละคนตามข้อมูลส่วนบุคคล</p>
                             <div class="mt-auto">
-                                <a href="#" class="btn btn-success w-100">
-                                    <i class="bi bi-search me-1"></i>เริ่มทำนาย
+                                <a href="#" class="btn btn-info w-100">
+                                    <i class="bi bi-search me-1"></i>ทำนายผล
                                 </a>
                             </div>
                         </div>
@@ -987,10 +1142,10 @@
                             </h5>
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <p class="card-text flex-grow-1">วิเคราะห์ประสิทธิภาพของหลักสูตรและแนวโน้มผลการเรียน</p>
+                            <p class="card-text flex-grow-1 text-elito-text-muted">วิเคราะห์ความสัมพันธ์ของรายวิชาและผลการเรียนในแต่ละหลักสูตร</p>
                             <div class="mt-auto">
-                                <a href="#" class="btn btn-info w-100">
-                                    <i class="bi bi-bar-chart-fill me-1"></i>ดูการวิเคราะห์
+                                <a href="#" class="btn btn-success w-100">
+                                    <i class="bi bi-bar-chart-fill me-1"></i>ดูหลักสูตร
                                 </a>
                             </div>
                         </div>
@@ -1005,7 +1160,7 @@
                             </h5>
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <p class="card-text flex-grow-1">วิเคราะห์ข้อมูลเชิงลึกและสร้างรายงานสถิติ</p>
+                            <p class="card-text flex-grow-1 text-elito-text-muted">วิเคราะห์ข้อมูลเชิงลึกและสร้างรายงานสถิติ</p>
                             <div class="mt-auto">
                                 <a href="#" class="btn btn-warning w-100">
                                     <i class="bi bi-clipboard-data me-1"></i>ดูรายงาน
@@ -1023,7 +1178,7 @@
                             </h5>
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <p class="card-text flex-grow-1">ระบบช่วยเหลือนักศึกษาให้เลือกรายวิชาที่เหมาะสมกับตนเอง</p>
+                            <p class="card-text flex-grow-1 text-elito-text-muted">ระบบช่วยเหลือนักศึกษาให้เลือกรายวิชาที่เหมาะสมกับตนเอง</p>
                             <div class="mt-auto">
                                 <a href="#" class="btn btn-dark w-100">
                                     <i class="bi bi-mortarboard me-1"></i>เลือกวิชา
@@ -1041,7 +1196,7 @@
                             </h5>
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <p class="card-text flex-grow-1">จัดการ AI ที่ฝึกไว้ อัปเดตข้อมูล และปรับปรุงประสิทธิภาพ</p>
+                            <p class="card-text flex-grow-1 text-elito-text-muted">จัดการ AI ที่ฝึกไว้ อัปเดตข้อมูล และปรับปรุงประสิทธิภาพ</p>
                             <div class="mt-auto">
                                 <a href="#" class="btn btn-secondary w-100">
                                     <i class="bi bi-gear-fill me-1"></i>จัดการ
@@ -1052,7 +1207,7 @@
                 </div>
             </div>
             
-            <!-- Button Showcase Section -->
+            <!-- Button Showcase Section - For demonstration -->
             <div class="row mb-5">
                 <div class="col-12">
                     <div class="card fade-in-up">
@@ -1064,7 +1219,7 @@
                         <div class="card-body">
                             <div class="row g-3">
                                 <div class="col-md-6 col-lg-4">
-                                    <h6 class="text-muted mb-3">ปุ่มหลัก</h6>
+                                    <h6 class="text-elito-text-muted mb-3">ปุ่มหลัก</h6>
                                     <div class="d-grid gap-2">
                                         <button class="btn btn-primary">Primary Button</button>
                                         <button class="btn btn-secondary">Secondary Button</button>
@@ -1072,7 +1227,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-6 col-lg-4">
-                                    <h6 class="text-muted mb-3">ปุ่มสถานะ</h6>
+                                    <h6 class="text-elito-text-muted mb-3">ปุ่มสถานะ</h6>
                                     <div class="d-grid gap-2">
                                         <button class="btn btn-warning">Warning Button</button>
                                         <button class="btn btn-danger">Danger Button</button>
@@ -1080,7 +1235,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-6 col-lg-4">
-                                    <h6 class="text-muted mb-3">ปุ่มพิเศษ</h6>
+                                    <h6 class="text-elito-text-muted mb-3">ปุ่มพิเศษ</h6>
                                     <div class="d-grid gap-2">
                                         <button class="btn btn-purple">Purple Button</button>
                                         <button class="btn btn-orange">Orange Button</button>
@@ -1088,7 +1243,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-6 col-lg-4">
-                                    <h6 class="text-muted mb-3">ปุ่มขนาดต่างๆ</h6>
+                                    <h6 class="text-elito-text-muted mb-3">ปุ่มขนาดต่างๆ</h6>
                                     <div class="d-grid gap-2">
                                         <button class="btn btn-primary btn-sm">Small Button</button>
                                         <button class="btn btn-success">Normal Button</button>
@@ -1096,7 +1251,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-6 col-lg-4">
-                                    <h6 class="text-muted mb-3">ปุ่มแบบ Outline</h6>
+                                    <h6 class="text-elito-text-muted mb-3">ปุ่มแบบ Outline</h6>
                                     <div class="d-grid gap-2">
                                         <button class="btn btn-outline-primary">Outline Primary</button>
                                         <button class="btn btn-light">Light Button</button>
@@ -1104,7 +1259,7 @@
                                     </div>
                                 </div>
                                 <div class="col-md-6 col-lg-4">
-                                    <h6 class="text-muted mb-3">ปุ่มสีเพิ่มเติม</h6>
+                                    <h6 class="text-elito-text-muted mb-3">ปุ่มสีเพิ่มเติม</h6>
                                     <div class="d-grid gap-2">
                                         <button class="btn btn-pink">Pink Button</button>
                                         <button class="btn btn-purple">Purple Button</button>
@@ -1115,7 +1270,7 @@
                             
                             <!-- Button Group Example -->
                             <div class="mt-4">
-                                <h6 class="text-muted mb-3">กลุ่มปุ่ม</h6>
+                                <h6 class="text-elito-text-muted mb-3">กลุ่มปุ่ม</h6>
                                 <div class="btn-group" role="group">
                                     <button class="btn btn-primary">ซ้าย</button>
                                     <button class="btn btn-success">กลาง</button>
@@ -1137,28 +1292,28 @@
                     <h5 class="gradient-text fw-bold">
                         <i class="bi bi-mortarboard-fill me-2"></i>Student Predictor
                     </h5>
-                    <p class="text-light mb-3">
+                    <p class="text-elito-text-muted mb-3">
                         ระบบทำนายความสำเร็จของนักศึกษาด้วย AI และ Machine Learning 
                         ที่ช่วยให้สถาบันการศึกษาสามารถวางแผนและพัฒนาการเรียนการสอนได้อย่างมีประสิทธิภาพ
                     </p>
                     <div class="d-flex gap-3">
-                        <a href="#" class="text-light hover-lift">
+                        <a href="#" class="text-elito-text-muted hover-lift">
                             <i class="bi bi-facebook fs-5"></i>
                         </a>
-                        <a href="#" class="text-light hover-lift">
+                        <a href="#" class="text-elito-text-muted hover-lift">
                             <i class="bi bi-twitter fs-5"></i>
                         </a>
-                        <a href="#" class="text-light hover-lift">
+                        <a href="#" class="text-elito-text-muted hover-lift">
                             <i class="bi bi-linkedin fs-5"></i>
                         </a>
-                        <a href="#" class="text-light hover-lift">
+                        <a href="#" class="text-elito-text-muted hover-lift">
                             <i class="bi bi-github fs-5"></i>
                         </a>
                     </div>
                 </div>
                 <div class="col-md-4 text-md-end">
-                    <p class="text-light mb-1">© 2024 Student Predictor</p>
-                    <p class="text-muted small">All rights reserved.</p>
+                    <p class="text-elito-text-muted mb-1">© 2024 Student Predictor</p>
+                    <p class="text-elito-text-muted small">All rights reserved.</p>
                 </div>
             </div>
         </div>
@@ -1188,24 +1343,44 @@
         // Dark Mode Toggle
         function toggleDarkMode() {
             const body = document.body;
-            const darkModeToggle = document.getElementById('darkModeToggle');
+            body.classList.toggle('light-mode'); // Toggle light-mode class
             
-            body.classList.toggle('dark-mode');
-            
-            if (body.classList.contains('dark-mode')) {
-                darkModeToggle.innerHTML = '<i class="bi bi-sun-fill me-1"></i> โหมดสว่าง';
-                localStorage.setItem('darkMode', 'true');
+            if (body.classList.contains('light-mode')) {
+                localStorage.setItem('darkMode', 'false'); // Store false for light mode
             } else {
-                darkModeToggle.innerHTML = '<i class="bi bi-moon-fill me-1"></i> โหมดมืด';
-                localStorage.setItem('darkMode', 'false');
+                localStorage.setItem('darkMode', 'true'); // Store true for dark mode
+            }
+            updateDarkModeToggleIcons();
+        }
+
+        function updateDarkModeToggleIcons() {
+            const body = document.body;
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const sunIcon = darkModeToggle.querySelector('.icon.sun');
+            const moonIcon = darkModeToggle.querySelector('.icon.moon');
+            
+            if (body.classList.contains('light-mode')) {
+                // In light mode, sun icon is active
+                sunIcon.style.color = 'var(--gray-800)'; // Dark color for sun in light mode
+                moonIcon.style.color = 'var(--gray-500)'; // Muted color for moon in light mode
+                darkModeToggle.style.justifyContent = 'flex-end'; // Move toggle to right
+            } else {
+                // In dark mode, moon icon is active
+                sunIcon.style.color = 'var(--elito-text-muted)'; // Muted color for sun in dark mode
+                moonIcon.style.color = 'var(--elito-text-light)'; // Light color for moon in dark mode
+                darkModeToggle.style.justifyContent = 'flex-start'; // Move toggle to left
             }
         }
         
         // Load Dark Mode Preference
         document.addEventListener('DOMContentLoaded', function() {
-            if (localStorage.getItem('darkMode') === 'true') {
-                toggleDarkMode();
+            // Default to dark mode if no preference or preference is dark
+            if (localStorage.getItem('darkMode') === 'false') {
+                document.body.classList.add('light-mode');
+            } else {
+                document.body.classList.remove('light-mode'); // Ensure dark mode is default if not explicitly light
             }
+            updateDarkModeToggleIcons();
             
             // Initialize animations
             const observerOptions = {
@@ -1227,6 +1402,14 @@
                 el.style.opacity = '0';
                 el.style.transform = 'translateY(30px)';
                 observer.observe(el);
+            });
+
+            // Set active nav link
+            const currentPath = window.location.pathname;
+            document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                }
             });
         });
         
@@ -1358,8 +1541,6 @@
                 this.parentElement.classList.remove('focused');
             });
         });
-        
-        {% block custom_js %}{% endblock %}
         
     </script>
 </body>
