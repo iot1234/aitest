@@ -480,6 +480,141 @@
             </div>
         </div>
         
+        <!-- กราฟ 3 เส้นและการวิเคราะห์ขั้นสูง -->
+        <div class="chart-container" id="threeLineChartContainer" style="display: none;">
+            <h5 class="mb-3">
+                <i class="bi bi-graph-up-arrow"></i> กราฟการทำนาย 3 เส้น
+                <small class="text-muted">(เป้าหมาย, ผลจริง, ทำนาย)</small>
+            </h5>
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <strong>คำอธิบาย:</strong>
+                        <span class="badge bg-success me-2">เส้นเขียว</span> เป้าหมาย GPA ที่ควรจะเป็น |
+                        <span class="badge bg-primary me-2">เส้นน้ำเงิน</span> ผลจริงที่ผ่านมา |
+                        <span class="badge" style="background-color: #fd7e14;">เส้นส้ม</span> การทำนายเทอมถัดไป
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <canvas id="threeLineChart" height="400"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- การวิเคราะห์เหตุผลที่ไม่จบ -->
+        <div class="chart-container" id="graduationAnalysisContainer" style="display: none;">
+            <h5 class="mb-3">
+                <i class="bi bi-exclamation-triangle"></i> การวิเคราะห์เส้นทางการเรียน
+            </h5>
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h2 class="text-primary" id="currentGpaDisplay">0.00</h2>
+                            <p class="card-text">GPA ปัจจุบัน</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h2 class="text-info" id="graduationProbabilityDisplay">0%</h2>
+                            <p class="card-text">โอกาสจบการศึกษา</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h2 id="riskLevelDisplay" class="text-secondary">ไม่ทราบ</h2>
+                            <p class="card-text">ระดับความเสี่ยง</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <i class="bi bi-exclamation-circle"></i> เหตุผลที่อาจไม่จบการศึกษา
+                        </div>
+                        <div class="card-body" id="failureReasonsContent">
+                            <p class="text-muted">กำลังวิเคราะห์...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <i class="bi bi-lightbulb"></i> คำแนะนำสำหรับการปรับปรุง
+                        </div>
+                        <div class="card-body" id="improvementRecommendations">
+                            <p class="text-muted">กำลังสร้างคำแนะนำ...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ตารางทำนายเกรดเทอมถัดไป -->
+        <div class="chart-container" id="nextTermPredictionContainer" style="display: none;">
+            <h5 class="mb-3">
+                <i class="bi bi-calendar-plus"></i> ตารางทำนายเกรดเทอมถัดไป
+            </h5>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6>GPA เทอมถัดไป (ทำนาย)</h6>
+                            <h4 class="text-primary" id="predictedTermGpa">0.00</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6>GPA สะสมใหม่ (ทำนาย)</h6>
+                            <h4 class="text-success" id="predictedCumulativeGpa">0.00</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6>การปรับปรุง</h6>
+                            <h4 id="gpaImprovement" class="text-info">+0.00</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>รหัสวิชา</th>
+                            <th>ชื่อวิชา</th>
+                            <th>หน่วยกิต</th>
+                            <th>ความยาก</th>
+                            <th>เกรดที่ทำนาย</th>
+                            <th>ความมั่นใจ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nextTermPredictionTable">
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">กำลังสร้างตารางทำนาย...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
         <div class="text-center mt-4">
             <button class="btn btn-outline-primary" id="exportPdfBtn">
                 <i class="bi bi-file-pdf"></i> Export PDF
@@ -1734,6 +1869,299 @@ window.addEventListener('beforeunload', function() {
         currentAnalysisController.abort();
     }
 });
+
+// ===============================
+// ฟังก์ชันสำหรับกราฟ 3 เส้นและการวิเคราะห์ขั้นสูง
+// ===============================
+
+// สร้างกราฟ 3 เส้น
+async function createThreeLineChart(chartData) {
+    const ctx = document.getElementById('threeLineChart').getContext('2d');
+    
+    // ทำลายกราฟเก่าถ้ามี
+    if (charts.threeLineChart) {
+        charts.threeLineChart.destroy();
+    }
+    
+    charts.threeLineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.terms,
+            datasets: [
+                {
+                    label: 'เป้าหมาย GPA',
+                    data: chartData.target_line,
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4,
+                    pointBackgroundColor: '#28a745',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6
+                },
+                {
+                    label: 'ผลจริง',
+                    data: chartData.actual_line,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4,
+                    pointBackgroundColor: '#007bff',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6
+                },
+                {
+                    label: 'ทำนาย',
+                    data: chartData.prediction_line,
+                    borderColor: '#fd7e14',
+                    backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                    borderWidth: 3,
+                    borderDash: [5, 5],
+                    fill: false,
+                    tension: 0.4,
+                    pointBackgroundColor: '#fd7e14',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'กราฟการทำนาย GPA 3 เส้น',
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'เทอม'
+                    }
+                },
+                y: {
+                    display: true,
+                    title: {
+                        display: true,
+                        text: 'GPA'
+                    },
+                    min: 0,
+                    max: 4,
+                    ticks: {
+                        stepSize: 0.5
+                    }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+}
+
+// แสดงการวิเคราะห์เหตุผลที่ไม่จบ
+function displayGraduationAnalysis(analysisData) {
+    // อัปเดตสถิติหลัก
+    document.getElementById('currentGpaDisplay').textContent = analysisData.current_gpa.toFixed(2);
+    document.getElementById('graduationProbabilityDisplay').textContent = analysisData.graduation_probability.toFixed(1) + '%';
+    
+    const riskDisplay = document.getElementById('riskLevelDisplay');
+    riskDisplay.textContent = analysisData.risk_level;
+    
+    // เปลี่ยนสีตามระดับความเสี่ยง
+    riskDisplay.className = 'text-secondary';
+    if (analysisData.risk_level === 'สูง') {
+        riskDisplay.className = 'text-danger';
+    } else if (analysisData.risk_level === 'ปานกลาง') {
+        riskDisplay.className = 'text-warning';
+    } else if (analysisData.risk_level === 'ต่ำ') {
+        riskDisplay.className = 'text-success';
+    }
+    
+    // แสดงเหตุผลที่ไม่จบ
+    const failureReasonsContent = document.getElementById('failureReasonsContent');
+    if (analysisData.failure_reasons && analysisData.failure_reasons.length > 0) {
+        let reasonsHtml = '<ul class="list-unstyled">';
+        analysisData.failure_reasons.forEach(reason => {
+            reasonsHtml += `<li class="mb-2"><i class="bi bi-exclamation-circle text-warning me-2"></i>${reason}</li>`;
+        });
+        reasonsHtml += '</ul>';
+        failureReasonsContent.innerHTML = reasonsHtml;
+    } else {
+        failureReasonsContent.innerHTML = '<p class="text-success"><i class="bi bi-check-circle me-2"></i>ไม่พบปัญหาที่จะทำให้ไม่จบการศึกษา</p>';
+    }
+    
+    // แสดงคำแนะนำการปรับปรุง
+    const improvementRecommendations = document.getElementById('improvementRecommendations');
+    if (analysisData.improvement_recommendations && analysisData.improvement_recommendations.length > 0) {
+        let recommendationsHtml = '<ul class="list-unstyled">';
+        analysisData.improvement_recommendations.forEach(recommendation => {
+            recommendationsHtml += `<li class="mb-2"><i class="bi bi-lightbulb text-success me-2"></i>${recommendation}</li>`;
+        });
+        recommendationsHtml += '</ul>';
+        improvementRecommendations.innerHTML = recommendationsHtml;
+    } else {
+        improvementRecommendations.innerHTML = '<p class="text-info"><i class="bi bi-info-circle me-2"></i>ผลการเรียนอยู่ในเกณฑ์ดี</p>';
+    }
+}
+
+// แสดงตารางทำนายเกรดเทอมถัดไป
+function displayNextTermPrediction(predictionData) {
+    // อัปเดตสถิติหลัก
+    document.getElementById('predictedTermGpa').textContent = predictionData.predicted_term_gpa.toFixed(2);
+    document.getElementById('predictedCumulativeGpa').textContent = predictionData.predicted_cumulative_gpa.toFixed(2);
+    
+    const improvementElement = document.getElementById('gpaImprovement');
+    const improvement = predictionData.improvement;
+    improvementElement.textContent = (improvement >= 0 ? '+' : '') + improvement.toFixed(2);
+    improvementElement.className = improvement >= 0 ? 'text-success' : 'text-danger';
+    
+    // สร้างตารางทำนาย
+    const tableBody = document.getElementById('nextTermPredictionTable');
+    if (predictionData.course_predictions && predictionData.course_predictions.length > 0) {
+        let tableHtml = '';
+        predictionData.course_predictions.forEach(course => {
+            const difficultyBadge = getDifficultyBadge(course.difficulty);
+            const confidenceBadge = getConfidenceBadge(course.confidence);
+            const gradeBadge = getGradeBadge(course.predicted_grade);
+            
+            tableHtml += `
+                <tr>
+                    <td><code>${course.course_id}</code></td>
+                    <td>${course.course_name}</td>
+                    <td class="text-center">${course.credit}</td>
+                    <td class="text-center">${difficultyBadge}</td>
+                    <td class="text-center">${gradeBadge}</td>
+                    <td class="text-center">${confidenceBadge}</td>
+                </tr>
+            `;
+        });
+        tableBody.innerHTML = tableHtml;
+    } else {
+        tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">ไม่มีข้อมูลการทำนาย</td></tr>';
+    }
+}
+
+// ฟังก์ชันช่วยสำหรับสร้าง badge
+function getDifficultyBadge(difficulty) {
+    const badges = {
+        'ง่าย': '<span class="badge bg-success">ง่าย</span>',
+        'ปานกลาง': '<span class="badge bg-warning">ปานกลาง</span>',
+        'ยาก': '<span class="badge bg-danger">ยาก</span>'
+    };
+    return badges[difficulty] || '<span class="badge bg-secondary">ไม่ทราบ</span>';
+}
+
+function getConfidenceBadge(confidence) {
+    if (confidence >= 0.8) {
+        return '<span class="badge bg-success">' + (confidence * 100).toFixed(0) + '%</span>';
+    } else if (confidence >= 0.6) {
+        return '<span class="badge bg-warning">' + (confidence * 100).toFixed(0) + '%</span>';
+    } else {
+        return '<span class="badge bg-danger">' + (confidence * 100).toFixed(0) + '%</span>';
+    }
+}
+
+function getGradeBadge(grade) {
+    const gradeColors = {
+        'A': 'success', 'B+': 'success', 'B': 'info', 
+        'C+': 'info', 'C': 'warning', 'D+': 'warning', 
+        'D': 'danger', 'F': 'danger'
+    };
+    const color = gradeColors[grade] || 'secondary';
+    return `<span class="badge bg-${color}">${grade}</span>`;
+}
+
+// ฟังก์ชันหลักสำหรับโหลดและแสดงการวิเคราะห์ขั้นสูง
+async function loadAdvancedAnalysis() {
+    const studentName = document.getElementById('studentName').value || 'นักศึกษา';
+    
+    try {
+        // เรียก API สำหรับการวิเคราะห์ครอบคลุม
+        const response = await fetch('/api/comprehensive-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_name: studentName,
+                current_grades: courseGrades,
+                loaded_terms_count: loadedTermsCount
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // แสดงกราฟ 3 เส้น
+            if (result.chart_data) {
+                await createThreeLineChart(result.chart_data);
+                document.getElementById('threeLineChartContainer').style.display = 'block';
+            }
+            
+            // แสดงการวิเคราะห์เหตุผลที่ไม่จบ
+            if (result.graduation_analysis) {
+                displayGraduationAnalysis(result.graduation_analysis);
+                document.getElementById('graduationAnalysisContainer').style.display = 'block';
+            }
+            
+            // แสดงตารางทำนายเกรดเทอมถัดไป
+            if (result.next_term_prediction) {
+                displayNextTermPrediction(result.next_term_prediction);
+                document.getElementById('nextTermPredictionContainer').style.display = 'block';
+            }
+            
+            showAlert('โหลดการวิเคราะห์ขั้นสูงเสร็จสิ้น', 'success');
+        } else {
+            throw new Error(result.error || 'Failed to load advanced analysis');
+        }
+        
+    } catch (error) {
+        console.error('Error loading advanced analysis:', error);
+        showAlert('เกิดข้อผิดพลาดในการโหลดการวิเคราะห์ขั้นสูง: ' + error.message, 'danger');
+    }
+}
+
+// ปรับปรุงฟังก์ชัน displayAdvancedResults เพื่อเรียกใช้การวิเคราะห์ขั้นสูง
+const originalDisplayAdvancedResults = displayAdvancedResults;
+displayAdvancedResults = function(data) {
+    // เรียกฟังก์ชันเดิม
+    originalDisplayAdvancedResults(data);
+    
+    // เพิ่มการโหลดการวิเคราะห์ขั้นสูง
+    setTimeout(() => {
+        loadAdvancedAnalysis();
+    }, 1000);
+};
 
 // Debug helpers
 window.debugInfo = function() {
