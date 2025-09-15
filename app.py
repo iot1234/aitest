@@ -25,8 +25,6 @@ print(f"R2 Access Key present: {bool(os.getenv('CLOUDFLARE_R2_ACCESS_KEY_ID'))}"
 print(f"R2 Secret Key present: {bool(os.getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY'))}")
 
 from advanced_training import AdvancedFeatureEngineer
-from preprocess_data import preprocess_tan1_data
-from prediction_visualizer import PredictionVisualizer
 
 from flask import (
     Flask,
@@ -487,7 +485,6 @@ class EnhancedPredictionSystem:
         self.course_profiles = None
         self.scaler = None
         self.course_credit_map = {}
-        self.visualizer = PredictionVisualizer()
         
     def load_advanced_model(self, model_path=None):
         """โหลดโมเดลขั้นสูงที่เทรนแล้ว"""
@@ -592,85 +589,6 @@ class EnhancedPredictionSystem:
             'total_courses': total_courses,
             'model_type': 'basic'
         }
-    
-    def create_prediction_visualization(self, grades_dict, target_gpa=3.0, upcoming_courses=None):
-        """สร้างกราฟแสดงการทำนายผลการเรียน"""
-        try:
-            # สร้างกราฟการทำนาย 3 เส้น
-            chart_path = self.visualizer.create_prediction_chart(
-                grades_dict=grades_dict,
-                target_gpa=target_gpa,
-                save_path="static/prediction_chart.png"
-            )
-            
-            # สร้างตารางทำนายเกรดถ้ามีวิชาถัดไป
-            table_path = None
-            if upcoming_courses:
-                table_path = self.visualizer.create_grade_prediction_table(
-                    grades_dict=grades_dict,
-                    upcoming_courses=upcoming_courses,
-                    save_path="static/grade_prediction_table.png"
-                )
-            
-            return {
-                'success': True,
-                'chart_path': chart_path,
-                'table_path': table_path,
-                'message': 'สร้างกราฟการทำนายสำเร็จ'
-            }
-            
-        except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'message': 'ไม่สามารถสร้างกราฟการทำนายได้'
-            }
-    
-    def analyze_academic_journey(self, grades_dict):
-        """วิเคราะห์เส้นทางการเรียนแบบครอบคลุม"""
-        try:
-            # คำนวณสถิติพื้นฐาน
-            current_gpa = self.calculate_gpa(grades_dict)
-            total_courses = len(grades_dict)
-            
-            # วิเคราะห์การกระจายเกรด
-            grade_distribution = {}
-            for grade in grades_dict.values():
-                if grade in grade_distribution:
-                    grade_distribution[grade] += 1
-                else:
-                    grade_distribution[grade] = 1
-            
-            # คำนวณแนวโน้ม
-            recent_courses = list(grades_dict.items())[-5:]  # 5 วิชาล่าสุด
-            recent_gpa = self.calculate_gpa(dict(recent_courses)) if recent_courses else 0
-            
-            # ประเมินความเสี่ยง
-            failed_courses = sum(1 for grade in grades_dict.values() if grade in ['F', 'W', 'WF', 'WU'])
-            risk_level = 'ต่ำ' if current_gpa >= 3.0 else 'กลาง' if current_gpa >= 2.0 else 'สูง'
-            
-            # คำนวณหน่วยกิตที่ต้องการเพื่อจบ
-            total_credits = total_courses * 3  # สมมติแต่ละวิชา 3 หน่วยกิต
-            required_credits = 136  # หน่วยกิตที่ต้องการจบ
-            remaining_credits = max(0, required_credits - total_credits)
-            
-            return {
-                'current_gpa': current_gpa,
-                'recent_gpa': recent_gpa,
-                'total_courses': total_courses,
-                'total_credits': total_credits,
-                'remaining_credits': remaining_credits,
-                'grade_distribution': grade_distribution,
-                'failed_courses': failed_courses,
-                'risk_level': risk_level,
-                'completion_percentage': min(100, (total_credits / required_credits) * 100)
-            }
-            
-        except Exception as e:
-            return {
-                'error': str(e),
-                'message': 'ไม่สามารถวิเคราะห์เส้นทางการเรียนได้'
-            }
 
 # ต่อไปเป็นส่วนของ Flask endpoints
     def analyze_performance(self, grades_dict):
@@ -4253,81 +4171,6 @@ def predict_manual_input():
     except Exception as e:
         logger.error(f"Error during manual input prediction: {str(e)}")
         return jsonify({'success': False, 'error': f'An error occurred during prediction: {str(e)}'})
-
-@app.route('/create_prediction_chart', methods=['POST'])
-def create_prediction_chart():
-    """สร้างกราฟการทำนายผลการเรียน 3 เส้น"""
-    try:
-        data = request.json
-        grades_dict = data.get('grades', {})
-        target_gpa = data.get('target_gpa', 3.0)
-        upcoming_courses = data.get('upcoming_courses', [])
-        
-        if not grades_dict:
-            return jsonify({'success': False, 'error': 'ไม่มีข้อมูลเกรด'})
-        
-        # สร้าง prediction system
-        predictor = EnhancedPredictionSystem()
-        
-        # สร้างกราฟการทำนาย
-        result = predictor.create_prediction_visualization(
-            grades_dict=grades_dict,
-            target_gpa=target_gpa,
-            upcoming_courses=upcoming_courses
-        )
-        
-        if result['success']:
-            # วิเคราะห์เส้นทางการเรียน
-            journey_analysis = predictor.analyze_academic_journey(grades_dict)
-            
-            return jsonify({
-                'success': True,
-                'chart_path': result['chart_path'],
-                'table_path': result.get('table_path'),
-                'analysis': journey_analysis,
-                'message': 'สร้างกราฟการทำนายสำเร็จ'
-            })
-        else:
-            return jsonify(result)
-            
-    except Exception as e:
-        logger.error(f"Error creating prediction chart: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/prediction-demo')
-def prediction_demo():
-    """หน้าเดโมสำหรับทดสอบระบบการทำนายผลการเรียน"""
-    return render_template('prediction_demo.html')
-
-@app.route('/analyze_academic_progress', methods=['POST'])
-def analyze_academic_progress():
-    """วิเคราะห์ความก้าวหน้าทางการเรียน"""
-    try:
-        data = request.json
-        grades_dict = data.get('grades', {})
-        
-        if not grades_dict:
-            return jsonify({'success': False, 'error': 'ไม่มีข้อมูลเกรด'})
-        
-        # สร้าง prediction system
-        predictor = EnhancedPredictionSystem()
-        
-        # วิเคราะห์เส้นทางการเรียน
-        analysis = predictor.analyze_academic_journey(grades_dict)
-        
-        # ทำนายการจบการศึกษา
-        prediction = predictor.predict_graduation(grades_dict)
-        
-        return jsonify({
-            'success': True,
-            'analysis': analysis,
-            'prediction': prediction,
-            'message': 'วิเคราะห์ความก้าวหน้าสำเร็จ'
-        })
-        
-    except Exception as e:
-        logger.error(f"Error analyzing academic progress: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)})
 
 def load_existing_models():
     """Loads existing trained models from storage."""
