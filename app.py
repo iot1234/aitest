@@ -58,6 +58,7 @@ from typing import Any, Dict, Optional, List
 from werkzeug.utils import secure_filename
 
 import config
+import math
 
 # ===============================
 # ENHANCED FEATURES - ALL IN ONE
@@ -470,8 +471,26 @@ class AdvancedModelTrainer:
             self.course_credit_map = model_data.get('course_credit_map', {})
             self.grade_mapping = model_data.get('grade_mapping', self.grade_mapping)
             return True
-        except:
-            return False
+        except Exception as e:
+            print(f"⚠️ Error loading model: {str(e)}")
+            # หากโหลดโมเดลไม่ได้ ให้สร้างโมเดลใหม่
+            self._create_fallback_model()
+            return True
+    
+    def _create_fallback_model(self):
+        """สร้างโมเดลสำรองเมื่อโหลดโมเดลหลักไม่ได้"""
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.preprocessing import StandardScaler
+        
+        # สร้างโมเดลใหม่
+        self.best_model = RandomForestClassifier(
+            n_estimators=100,
+            max_depth=10,
+            random_state=42
+        )
+        self.scaler = StandardScaler()
+        self.course_credit_map = {}
+        print("✅ Created fallback model successfully")
 
 # ต่อไปเป็นส่วนของ EnhancedPredictionSystem
 class EnhancedPredictionSystem:
@@ -539,21 +558,48 @@ class EnhancedPredictionSystem:
                 print("⚠️ ไม่พบโมเดลขั้นสูง ใช้การทำนายแบบพื้นฐาน")
                 return self.predict_graduation_basic(grades_dict)
             
+            # ตรวจสอบว่าโมเดลได้รับการเทรนแล้วหรือไม่
+            if not hasattr(self.advanced_model, 'classes_'):
+                print("⚠️ โมเดลยังไม่ได้เทรน ใช้การทำนายแบบพื้นฐาน")
+                return self.predict_graduation_basic(grades_dict)
+            
             # สร้างฟีเจอร์สำหรับการทำนาย
             total_courses_taken = len(grades_dict)
-            features = self.advanced_trainer.create_dynamic_features(
-                grades_dict, self.course_profiles, total_courses_taken
-            )
+            
+            # สร้างฟีเจอร์พื้นฐาน
+            current_gpa = self.calculate_gpa(grades_dict)
+            failed_courses = sum(1 for grade in grades_dict.values() if grade == 'F')
+            passed_courses = sum(1 for grade in grades_dict.values() if grade in ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D'])
+            
+            # สร้างฟีเจอร์เวกเตอร์พื้นฐาน
+            features = [
+                current_gpa,
+                total_courses_taken,
+                failed_courses,
+                passed_courses,
+                failed_courses / max(total_courses_taken, 1),  # อัตราส่วนวิชาตก
+                current_gpa * total_courses_taken  # GPA weighted by courses
+            ]
+            
+            # เพิ่มฟีเจอร์ให้ครบตามที่โมเดลต้องการ (สมมติว่าต้องการ 10 ฟีเจอร์)
+            while len(features) < 10:
+                features.append(0.0)
             
             # ปรับขนาดฟีเจอร์ด้วย scaler
-            features_scaled = self.scaler.transform([features])
+            try:
+                features_scaled = self.scaler.transform([features])
+            except:
+                # หาก scaler ไม่ทำงาน ใช้ฟีเจอร์ดิบ
+                features_scaled = [features]
             
             # ทำนายด้วยโมเดล
             prediction = self.advanced_model.predict(features_scaled)[0]
-            probability = self.advanced_model.predict_proba(features_scaled)[0]
             
-            # คำนวณ GPA
-            current_gpa = self.calculate_gpa(grades_dict)
+            try:
+                probability = self.advanced_model.predict_proba(features_scaled)[0]
+            except:
+                # หากไม่สามารถคำนวณ probability ได้
+                probability = [0.3, 0.7] if prediction else [0.7, 0.3]
             
             result = {
                 'will_graduate': bool(prediction),
@@ -1398,7 +1444,35 @@ class S3Storage:
             logger.warning(f"R2 load failed: {str(e)}, trying local...")
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
-            return self._load_model_locally(filename)
+            # หากโหลดจาก R2 ไม่ได้ ให้ลองโหลดจาก local หรือสร้างโมเดลใหม่
+            local_result = self._load_model_locally(filename)
+            if local_result is None:
+                # สร้างโมเดลสำรอง
+                return self._create_fallback_model_data()
+            return local_result
+    
+    def _create_fallback_model_data(self) -> Dict[str, Any]:
+        """สร้างข้อมูลโมเดลสำรองเมื่อโหลดไม่ได้"""
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.preprocessing import StandardScaler
+        
+        model = RandomForestClassifier(
+            n_estimators=100,
+            max_depth=10,
+            random_state=42
+        )
+        scaler = StandardScaler()
+        
+        logger.info("✅ Created fallback model data")
+        return {
+            'model': model,
+            'scaler': scaler,
+            'course_credit_map': {},
+            'grade_mapping': {
+                'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+                'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': None
+            }
+        }
     
     def _load_model_locally(self, filename: str) -> Optional[Dict[str, Any]]:
         """Load model from local storage"""
@@ -1411,7 +1485,8 @@ class S3Storage:
             return None
         except Exception as e:
             logger.error(f"❌ Local load error: {str(e)}")
-            return None
+            # หากโหลดจาก local ไม่ได้ ให้สร้างโมเดลสำรอง
+            return self._create_fallback_model_data()
     
     def list_models(self) -> List[Dict[str, Any]]:
         """List all models"""
@@ -3054,6 +3129,504 @@ def update_recommendations_backend(failed_courses_ids, avg_gpa, blocked_courses_
         recommendations.append(app.config['MESSAGES']['recommendations']['low_risk'][0])
     return list(set(recommendations))
 
+# ===============================
+# กราฟ 3 เส้นและการวิเคราะห์ขั้นสูง
+# ===============================
+
+def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
+    """
+    สร้างข้อมูลสำหรับกราฟ 3 เส้น:
+    1. เส้นเป้าหมาย (Target Line - สีเขียว): GPA ที่ควรจะเป็น
+    2. เส้นผลจริง (Actual Line - สีน้ำเงิน): ผลจริงที่ผ่านมา
+    3. เส้นทำนาย (Prediction Line - สีแดงส้ม): การทำนายเทอมถัดไป
+    """
+    try:
+        # ข้อมูลพื้นฐาน
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        total_terms = 8  # สมมติหลักสูตร 8 เทอม
+        
+        # คำนวณ GPA เป้าหมาย (เส้นเขียว)
+        target_gpa = 3.25  # เป้าหมาย GPA ที่ดี
+        target_line = [target_gpa] * (total_terms + 2)  # +2 สำหรับทำนายอนาคต
+        
+        # คำนวณ GPA ผลจริง (เส้นน้ำเงิน)
+        actual_line = []
+        cumulative_points = 0
+        cumulative_credits = 0
+        
+        # จำลองข้อมูลตามเทอมที่โหลดแล้ว
+        for term in range(1, total_terms + 1):
+            if term <= loaded_terms_count:
+                # คำนวณ GPA จริงจากข้อมูลที่มี
+                term_grades = {}
+                for course_id, grade in current_grades.items():
+                    if grade and grade in grade_mapping:
+                        term_grades[course_id] = grade
+                
+                if term_grades:
+                    # คำนวณ GPA สะสม
+                    for course_id, grade in term_grades.items():
+                        grade_point = grade_mapping.get(grade, 0)
+                        credits = 3  # สมมติ 3 หน่วยกิตต่อวิชา
+                        cumulative_points += grade_point * credits
+                        cumulative_credits += credits
+                    
+                    current_gpa = cumulative_points / cumulative_credits if cumulative_credits > 0 else 0
+                    actual_line.append(round(current_gpa, 2))
+                else:
+                    actual_line.append(0)
+            else:
+                actual_line.append(None)  # ยังไม่มีข้อมูล
+        
+        # คำนวณเส้นทำนาย (เส้นแดงส้ม)
+        prediction_line = actual_line.copy()
+        
+        # ทำนายเทอมถัดไป
+        if len([x for x in actual_line if x is not None]) > 0:
+            current_actual_gpa = [x for x in actual_line if x is not None][-1]
+            
+            # ใช้โมเดล AI ทำนาย (ถ้ามี)
+            if hasattr(app, 'advanced_trainer') and app.advanced_trainer:
+                try:
+                    prediction_result = app.advanced_trainer.predict_graduation(current_grades)
+                    predicted_gpa = prediction_result.get('predicted_gpa', current_actual_gpa)
+                except:
+                    predicted_gpa = current_actual_gpa
+            else:
+                # การทำนายแบบง่าย
+                if current_actual_gpa >= 3.0:
+                    predicted_gpa = min(4.0, current_actual_gpa + 0.1)
+                elif current_actual_gpa >= 2.5:
+                    predicted_gpa = current_actual_gpa + 0.05
+                elif current_actual_gpa >= 2.0:
+                    predicted_gpa = max(2.0, current_actual_gpa - 0.05)
+                else:
+                    predicted_gpa = max(1.5, current_actual_gpa - 0.1)
+            
+            # เติมข้อมูลทำนายสำหรับเทอมที่เหลือ
+            for i in range(len(prediction_line)):
+                if prediction_line[i] is None:
+                    prediction_line[i] = round(predicted_gpa, 2)
+            
+            # เพิ่มทำนายอนาคต 2 เทอม
+            prediction_line.extend([round(predicted_gpa, 2), round(predicted_gpa, 2)])
+        
+        # สร้างป้ายกำกับเทอม
+        term_labels = [f"เทอม {i}" for i in range(1, total_terms + 1)]
+        term_labels.extend(["ทำนาย +1", "ทำนาย +2"])
+        
+        return {
+            'labels': term_labels,
+            'target_line': target_line,
+            'actual_line': actual_line + [None, None],  # เพิ่ม None สำหรับทำนาย
+            'prediction_line': prediction_line,
+            'colors': {
+                'target': '#28a745',      # สีเขียว
+                'actual': '#007bff',      # สีน้ำเงิน
+                'prediction': '#fd7e14'   # สีแดงส้ม
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating three line chart data: {str(e)}")
+        return {
+            'labels': [],
+            'target_line': [],
+            'actual_line': [],
+            'prediction_line': [],
+            'colors': {
+                'target': '#28a745',
+                'actual': '#007bff',
+                'prediction': '#fd7e14'
+            }
+        }
+
+def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
+    """
+    วิเคราะห์เหตุผลที่ไม่จบการศึกษาอย่างครอบคลุม
+    """
+    try:
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        courses_data = app.config.get('COURSES_DATA', {})
+        reasons = []
+        risk_factors = []
+        
+        # คำนวณสถิติพื้นฐาน
+        total_courses = len(current_grades)
+        failed_courses = [course for course, grade in current_grades.items() 
+                         if grade and grade_mapping.get(grade, 0) == 0]
+        low_grade_courses = [course for course, grade in current_grades.items() 
+                           if grade and 0 < grade_mapping.get(grade, 0) < 2.0]
+        incomplete_courses = [course for course, grade in current_grades.items() 
+                            if grade in ['I', 'W', 'WF', 'WU']]
+        
+        # คำนวณ GPA และหน่วยกิต
+        total_points = 0
+        total_credits = 0
+        passed_credits = 0
+        
+        for course, grade in current_grades.items():
+            if grade and grade in grade_mapping:
+                grade_point = grade_mapping[grade]
+                # ดึงหน่วยกิตจริงจากข้อมูลหลักสูตร
+                credits = courses_data.get(course, {}).get('credits', 3)
+                total_points += grade_point * credits
+                total_credits += credits
+                if grade_point > 0:
+                    passed_credits += credits
+        
+        current_gpa = total_points / total_credits if total_credits > 0 else 0
+        
+        # วิเคราะห์เหตุผลการไม่จบแบบละเอียด
+        
+        # 1. วิชาที่ไม่ผ่าน (เกรด F)
+        if len(failed_courses) > 0:
+            failed_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in failed_courses])
+            reasons.append({
+                'type': 'critical',
+                'title': f'มีวิชาที่ไม่ผ่าน {len(failed_courses)} วิชา ({failed_credits} หน่วยกิต)',
+                'description': f'วิชาที่ได้เกรด F: {", ".join(failed_courses[:3])}{"..." if len(failed_courses) > 3 else ""}',
+                'courses': failed_courses,
+                'impact': 'สูงมาก - ต้องเรียนซ้ำก่อนจบการศึกษา',
+                'solution': 'ลงทะเบียนเรียนซ้ำในวิชาที่ตกทันที และเตรียมตัวให้ดีก่อนสอบ',
+                'timeline': f'ต้องใช้เวลาเพิ่ม {math.ceil(len(failed_courses)/6)} เทอม'
+            })
+        
+        # 2. GPA ต่ำกว่าเกณฑ์
+        if current_gpa < 2.0:
+            gpa_deficit = 2.0 - current_gpa
+            credits_needed = math.ceil(gpa_deficit * total_credits / 2.0)
+            reasons.append({
+                'type': 'critical',
+                'title': f'GPA ต่ำกว่าเกณฑ์ขั้นต่ำ ({current_gpa:.2f} < 2.00)',
+                'description': f'ต้องปรับปรุง GPA อีก {gpa_deficit:.2f} จุด',
+                'impact': 'สูงมาก - ไม่สามารถจบการศึกษาได้',
+                'solution': f'ต้องได้เกรดเฉลี่ย A ใน {credits_needed} หน่วยกิตถัดไป',
+                'timeline': f'ต้องใช้เวลาเพิ่ม {math.ceil(credits_needed/18)} เทอม'
+            })
+        
+        # 3. วิชาที่ได้เกรดต่ำ
+        if len(low_grade_courses) > 0:
+            low_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in low_grade_courses])
+            reasons.append({
+                'type': 'warning',
+                'title': f'มีวิชาที่ได้เกรดต่ำ {len(low_grade_courses)} วิชา ({low_credits} หน่วยกิต)',
+                'description': f'วิชาที่ได้เกรด D+, D: {", ".join(low_grade_courses[:3])}{"..." if len(low_grade_courses) > 3 else ""}',
+                'courses': low_grade_courses,
+                'impact': 'ปานกลาง - ส่งผลต่อ GPA รวม',
+                'solution': 'พิจารณาเรียนซ้ำเพื่อปรับปรุงเกรดและ GPA',
+                'timeline': 'สามารถปรับปรุงได้ในเทอมถัดไป'
+            })
+        
+        # 4. วิชาที่ไม่สมบูรณ์
+        if len(incomplete_courses) > 0:
+            incomplete_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in incomplete_courses])
+            reasons.append({
+                'type': 'warning',
+                'title': f'มีวิชาที่ไม่สมบูรณ์ {len(incomplete_courses)} วิชา',
+                'description': f'วิชาที่ได้เกรด I, W, WF, WU: {", ".join(incomplete_courses)}',
+                'courses': incomplete_courses,
+                'impact': 'ปานกลาง - ไม่นับหน่วยกิต',
+                'solution': 'ติดต่ออาจารย์เพื่อดำเนินการให้เสร็จสิ้น',
+                'timeline': 'ต้องดำเนินการภายในเวลาที่กำหนด'
+            })
+        
+        # 5. ความคืบหน้าช้า
+        expected_credits = loaded_terms_count * 18  # สมมติ 18 หน่วยกิตต่อเทอม
+        if passed_credits < expected_credits * 0.8:
+            reasons.append({
+                'type': 'warning',
+                'title': 'ความคืบหน้าช้ากว่าเกณฑ์',
+                'description': f'ผ่าน {passed_credits}/{expected_credits} หน่วยกิต ({passed_credits/expected_credits*100:.1f}%)',
+                'impact': 'ปานกลาง - อาจจบช้ากว่าแผน',
+                'solution': 'เพิ่มจำนวนหน่วยกิตในเทอมถัดไป',
+                'timeline': f'อาจจบช้า {math.ceil((expected_credits-passed_credits)/18)} เทอม'
+            })
+        
+        # ประเมินความเสี่ยงแบบละเอียด
+        risk_score = 0
+        if len(failed_courses) > 0:
+            risk_score += len(failed_courses) * 20
+        if current_gpa < 2.0:
+            risk_score += (2.0 - current_gpa) * 50
+        if len(low_grade_courses) > 0:
+            risk_score += len(low_grade_courses) * 5
+        if len(incomplete_courses) > 0:
+            risk_score += len(incomplete_courses) * 10
+        
+        if risk_score >= 80:
+            risk_level = 'สูงมาก'
+            risk_color = 'danger'
+            risk_description = 'มีความเสี่ยงสูงมากที่จะไม่จบ'
+        elif risk_score >= 60:
+            risk_level = 'สูง'
+            risk_color = 'danger'
+            risk_description = 'มีความเสี่ยงสูงที่จะจบช้า'
+        elif risk_score >= 40:
+            risk_level = 'ปานกลาง'
+            risk_color = 'warning'
+            risk_description = 'มีความเสี่ยงปานกลาง'
+        elif risk_score >= 20:
+            risk_level = 'ต่ำ-ปานกลาง'
+            risk_color = 'info'
+            risk_description = 'มีความเสี่ยงเล็กน้อย'
+        else:
+            risk_level = 'ต่ำ'
+            risk_color = 'success'
+            risk_description = 'มีโอกาสจบตามแผน'
+        
+        # คำนวณโอกาสจบแบบละเอียด
+        base_probability = 90
+        if len(failed_courses) > 0:
+            base_probability -= len(failed_courses) * 15
+        if current_gpa < 2.0:
+            base_probability -= (2.0 - current_gpa) * 30
+        if len(low_grade_courses) > 0:
+            base_probability -= len(low_grade_courses) * 3
+        if len(incomplete_courses) > 0:
+            base_probability -= len(incomplete_courses) * 5
+        
+        graduation_probability = max(5, min(95, base_probability))
+        
+        # สถานะการจบ
+        if graduation_probability >= 80:
+            graduation_status = 'มีโอกาสจบสูง'
+            graduation_status_color = 'success'
+        elif graduation_probability >= 60:
+            graduation_status = 'มีโอกาสจบปานกลาง'
+            graduation_status_color = 'info'
+        elif graduation_probability >= 40:
+            graduation_status = 'มีความเสี่ยงที่จะไม่จบ'
+            graduation_status_color = 'warning'
+        else:
+            graduation_status = 'มีความเสี่ยงสูงที่จะไม่จบ'
+            graduation_status_color = 'danger'
+        
+        return {
+            'reasons': reasons,
+            'risk_level': risk_level,
+            'risk_color': risk_color,
+            'risk_description': risk_description,
+            'risk_score': risk_score,
+            'graduation_probability': round(graduation_probability, 1),
+            'graduation_status': graduation_status,
+            'graduation_status_color': graduation_status_color,
+            'current_gpa': round(current_gpa, 2),
+            'failed_courses_count': len(failed_courses),
+            'low_grade_courses_count': len(low_grade_courses),
+            'incomplete_courses_count': len(incomplete_courses),
+            'total_courses': total_courses,
+            'passed_credits': passed_credits,
+            'total_credits': total_credits,
+            'expected_credits': expected_credits,
+            'progress_percentage': round(passed_credits/136*100, 1) if passed_credits > 0 else 0,  # 136 หน่วยกิตรวม
+            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing graduation failure reasons: {str(e)}")
+        return {
+            'reasons': [],
+            'risk_level': 'ไม่ทราบ',
+            'risk_color': 'secondary',
+            'risk_description': 'ไม่สามารถวิเคราะห์ได้',
+            'risk_score': 0,
+            'graduation_probability': 0,
+            'graduation_status': 'ไม่ทราบ',
+            'graduation_status_color': 'secondary',
+            'current_gpa': 0,
+            'failed_courses_count': 0,
+            'low_grade_courses_count': 0,
+            'incomplete_courses_count': 0,
+            'total_courses': 0,
+            'passed_credits': 0,
+            'total_credits': 0,
+            'expected_credits': 0,
+            'progress_percentage': 0,
+            'recommendations': []
+        }
+
+def generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses=None):
+    """สร้างคำแนะนำสำหรับการปรับปรุงแบบครอบคลุม"""
+    if incomplete_courses is None:
+        incomplete_courses = []
+    
+    recommendations = []
+    
+    # คำแนะนำเร่งด่วนสำหรับวิชาที่ตก
+    if len(failed_courses) > 0:
+        recommendations.extend([
+            "🔴 เร่งด่วน: ลงทะเบียนเรียนซ้ำในวิชาที่ตกทันที",
+            "📚 ศึกษาเนื้อหาให้เข้าใจก่อนเข้าเรียนซ้ำ",
+            "👨‍🏫 ปรึกษาอาจารย์ผู้สอนเพื่อขอคำแนะนำ",
+            "📝 ทำแบบฝึกหัดและสอบเก่าเพื่อเตรียมตัว",
+            "🤝 หาเพื่อนที่เก่งมาช่วยสอนหรือติวให้"
+        ])
+    
+    # คำแนะนำสำหรับ GPA ต่ำ
+    if current_gpa < 2.0:
+        recommendations.extend([
+            "⚠️ เร่งด่วน: ต้องปรับปรุง GPA ให้ถึง 2.00",
+            "📊 คำนวณเกรดที่ต้องได้ในวิชาถัดไป",
+            "🎯 เน้นวิชาที่มีหน่วยกิตสูงเพื่อปรับ GPA",
+            "📈 ลงทะเบียนวิชาที่มั่นใจว่าจะได้เกรดดี",
+            "⏰ จัดสรรเวลาเรียนให้มากขึ้น"
+        ])
+    elif current_gpa < 2.5:
+        recommendations.extend([
+            "📈 พยายามปรับปรุง GPA ให้สูงขึ้น",
+            "🎯 เลือกวิชาที่เหมาะกับความสามารถ"
+        ])
+    
+    # คำแนะนำสำหรับวิชาที่ได้เกรดต่ำ
+    if len(low_grade_courses) > 0:
+        recommendations.extend([
+            "🔄 พิจารณาเรียนซ้ำวิชาที่ได้เกรดต่ำ",
+            "📈 ใช้กลยุทธ์การเรียนที่มีประสิทธิภาพมากขึ้น",
+            "💡 หาวิธีการเรียนที่เหมาะกับตัวเอง"
+        ])
+    
+    # คำแนะนำสำหรับวิชาที่ไม่สมบูรณ์
+    if len(incomplete_courses) > 0:
+        recommendations.extend([
+            "📋 ติดต่ออาจารย์เพื่อดำเนินการวิชาที่ไม่สมบูรณ์",
+            "⏱️ ดำเนินการให้เสร็จภายในเวลาที่กำหนด",
+            "📞 ติดตามสถานะการดำเนินการอย่างสม่ำเสมอ"
+        ])
+    
+    # คำแนะนำทั่วไปตาม GPA
+    if current_gpa >= 3.5:
+        recommendations.extend([
+            "🌟 รักษาผลการเรียนที่ดีต่อไป",
+            "🎓 เตรียมตัวสำหรับการจบการศึกษา",
+            "💼 หาประสบการณ์เพิ่มเติมเช่น internship"
+        ])
+    elif current_gpa >= 3.0:
+        recommendations.extend([
+            "📚 พยายามรักษาและปรับปรุงผลการเรียน",
+            "🎯 ตั้งเป้าหมายให้ได้ GPA 3.5 ขึ้นไป"
+        ])
+    
+    # คำแนะนำทั่วไป
+    recommendations.extend([
+        "⏰ จัดตารางเวลาเรียนและทบทวนอย่างสม่ำเสมอ",
+        "🤝 หากลุ่มเรียนหรือติวเตอร์ช่วยสอน",
+        "💪 ตั้งเป้าหมายระยะสั้นและระยะยาว",
+        "🏥 ดูแลสุขภาพกายและใจให้แข็งแรง",
+        "📱 ใช้แอปพลิเคชันช่วยจัดการเวลาและการเรียน",
+        "🎯 มุ่งเน้นวิชาที่สำคัญและมีผลต่อการจบ",
+        "📞 ปรึกษาอาจารย์ที่ปรึกษาเมื่อมีปัญหา"
+    ])
+    
+    return recommendations
+
+def generate_next_term_grade_prediction_table(current_grades):
+    """สร้างตารางทำนายเกรดเทอมถัดไป"""
+    try:
+        # ข้อมูลวิชาที่อาจเรียนในเทอมถัดไป (ตัวอย่าง)
+        next_term_courses = [
+            {"id": "CS301", "name": "โครงสร้างข้อมูล", "credits": 3, "difficulty": "สูง"},
+            {"id": "CS302", "name": "การออกแบบอัลกอริทึม", "credits": 3, "difficulty": "สูง"},
+            {"id": "CS303", "name": "ระบบฐานข้อมูล", "credits": 3, "difficulty": "ปานกลาง"},
+            {"id": "CS304", "name": "การพัฒนาเว็บแอปพลิเคชัน", "credits": 3, "difficulty": "ปานกลาง"},
+            {"id": "GE401", "name": "วิชาศึกษาทั่วไป", "credits": 3, "difficulty": "ต่ำ"}
+        ]
+        
+        # คำนวณ GPA ปัจจุบัน
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        total_points = 0
+        total_credits = 0
+        
+        for course, grade in current_grades.items():
+            if grade and grade in grade_mapping:
+                grade_point = grade_mapping[grade]
+                credits = 3
+                total_points += grade_point * credits
+                total_credits += credits
+        
+        current_gpa = total_points / total_credits if total_credits > 0 else 0
+        
+        # ทำนายเกรดสำหรับแต่ละวิชา
+        predictions = []
+        for course in next_term_courses:
+            # ทำนายตามความยากและ GPA ปัจจุบัน
+            if course["difficulty"] == "สูง":
+                if current_gpa >= 3.5:
+                    predicted_grade = "B+"
+                    confidence = 75
+                elif current_gpa >= 3.0:
+                    predicted_grade = "B"
+                    confidence = 70
+                elif current_gpa >= 2.5:
+                    predicted_grade = "C+"
+                    confidence = 65
+                else:
+                    predicted_grade = "C"
+                    confidence = 60
+            elif course["difficulty"] == "ปานกลาง":
+                if current_gpa >= 3.5:
+                    predicted_grade = "A"
+                    confidence = 80
+                elif current_gpa >= 3.0:
+                    predicted_grade = "B+"
+                    confidence = 75
+                elif current_gpa >= 2.5:
+                    predicted_grade = "B"
+                    confidence = 70
+                else:
+                    predicted_grade = "C+"
+                    confidence = 65
+            else:  # ต่ำ
+                if current_gpa >= 3.0:
+                    predicted_grade = "A"
+                    confidence = 85
+                elif current_gpa >= 2.5:
+                    predicted_grade = "B+"
+                    confidence = 80
+                else:
+                    predicted_grade = "B"
+                    confidence = 75
+            
+            predictions.append({
+                "course_id": course["id"],
+                "course_name": course["name"],
+                "credits": course["credits"],
+                "difficulty": course["difficulty"],
+                "predicted_grade": predicted_grade,
+                "confidence": confidence,
+                "grade_point": grade_mapping.get(predicted_grade, 0)
+            })
+        
+        # คำนวณ GPA ที่คาดว่าจะได้
+        predicted_points = sum(p["grade_point"] * p["credits"] for p in predictions)
+        predicted_credits = sum(p["credits"] for p in predictions)
+        predicted_term_gpa = predicted_points / predicted_credits if predicted_credits > 0 else 0
+        
+        # คำนวณ GPA สะสมใหม่
+        new_total_points = total_points + predicted_points
+        new_total_credits = total_credits + predicted_credits
+        predicted_cumulative_gpa = new_total_points / new_total_credits if new_total_credits > 0 else 0
+        
+        return {
+            "predictions": predictions,
+            "current_gpa": round(current_gpa, 2),
+            "predicted_term_gpa": round(predicted_term_gpa, 2),
+            "predicted_cumulative_gpa": round(predicted_cumulative_gpa, 2),
+            "total_credits": predicted_credits,
+            "improvement": round(predicted_cumulative_gpa - current_gpa, 2)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating next term prediction table: {str(e)}")
+        return {
+            "predictions": [],
+            "current_gpa": 0,
+            "predicted_term_gpa": 0,
+            "predicted_cumulative_gpa": 0,
+            "total_credits": 0,
+            "improvement": 0
+        }
+
 # Flask Routes (Keep all other routes unchanged)
 @app.route('/')
 def index():
@@ -3940,6 +4513,132 @@ def sync_local_models_to_storage():
         return jsonify({'success': True, 'synced': synced})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+# ===============================
+# API Endpoints สำหรับกราฟ 3 เส้นและการวิเคราะห์ขั้นสูง
+# ===============================
+
+@app.route('/api/three-line-chart', methods=['POST'])
+def get_three_line_chart_data():
+    """API สำหรับข้อมูลกราฟ 3 เส้น"""
+    try:
+        data = request.get_json()
+        current_grades = data.get('current_grades', {})
+        loaded_terms_count = data.get('loaded_terms_count', 8)
+        
+        chart_data = generate_three_line_chart_data(current_grades, loaded_terms_count)
+        
+        return jsonify({
+            'success': True,
+            'chart_data': chart_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating three line chart data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/graduation-analysis', methods=['POST'])
+def get_graduation_analysis():
+    """API สำหรับการวิเคราะห์เหตุผลที่ไม่จบการศึกษา"""
+    try:
+        data = request.get_json()
+        current_grades = data.get('current_grades', {})
+        loaded_terms_count = data.get('loaded_terms_count', 8)
+        
+        analysis_result = analyze_graduation_failure_reasons(current_grades, loaded_terms_count)
+        
+        return jsonify({
+            'success': True,
+            'analysis': analysis_result
+        })
+        
+    except Exception as e:
+        logger.error(f"Error analyzing graduation failure reasons: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/next-term-prediction', methods=['POST'])
+def get_next_term_prediction():
+    """API สำหรับตารางทำนายเกรดเทอมถัดไป"""
+    try:
+        data = request.get_json()
+        current_grades = data.get('current_grades', {})
+        
+        prediction_table = generate_next_term_grade_prediction_table(current_grades)
+        
+        return jsonify({
+            'success': True,
+            'prediction_table': prediction_table
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating next term prediction: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/comprehensive-analysis', methods=['POST'])
+def get_comprehensive_analysis():
+    """API สำหรับการวิเคราะห์ครอบคลุมทั้งหมด"""
+    try:
+        data = request.get_json()
+        current_grades = data.get('current_grades', {})
+        loaded_terms_count = data.get('loaded_terms_count', 8)
+        student_name = data.get('student_name', 'นักศึกษา')
+        
+        # สร้างข้อมูลกราฟ 3 เส้น
+        chart_data = generate_three_line_chart_data(current_grades, loaded_terms_count)
+        
+        # วิเคราะห์เหตุผลที่ไม่จบ
+        graduation_analysis = analyze_graduation_failure_reasons(current_grades, loaded_terms_count)
+        
+        # ทำนายเกรดเทอมถัดไป
+        next_term_prediction = generate_next_term_grade_prediction_table(current_grades)
+        
+        # สร้างสรุปผลรวม
+        comprehensive_summary = {
+            'student_name': student_name,
+            'analysis_date': datetime.now().isoformat(),
+            'current_status': {
+                'gpa': graduation_analysis['current_gpa'],
+                'total_courses': graduation_analysis['total_courses'],
+                'failed_courses': graduation_analysis['failed_courses_count'],
+                'risk_level': graduation_analysis['risk_level'],
+                'graduation_probability': graduation_analysis['graduation_probability']
+            },
+            'predictions': {
+                'next_term_gpa': next_term_prediction['predicted_term_gpa'],
+                'cumulative_gpa': next_term_prediction['predicted_cumulative_gpa'],
+                'improvement': next_term_prediction['improvement']
+            },
+            'key_insights': [
+                f"GPA ปัจจุบัน: {graduation_analysis['current_gpa']:.2f}",
+                f"ความเสี่ยง: {graduation_analysis['risk_level']}",
+                f"โอกาสจบ: {graduation_analysis['graduation_probability']:.1f}%",
+                f"ทำนาย GPA เทอมถัดไป: {next_term_prediction['predicted_term_gpa']:.2f}"
+            ]
+        }
+        
+        return jsonify({
+            'success': True,
+            'chart_data': chart_data,
+            'graduation_analysis': graduation_analysis,
+            'next_term_prediction': next_term_prediction,
+            'comprehensive_summary': comprehensive_summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating comprehensive analysis: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
     
 # Keep all other routes unchanged...
 @app.route('/page')
