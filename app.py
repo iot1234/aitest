@@ -3142,41 +3142,53 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
     """
     try:
         # ข้อมูลพื้นฐาน
-        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        grade_mapping = {
+            'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 
+            'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'I': 0.0
+        }
         total_terms = 8  # สมมติหลักสูตร 8 เทอม
         
         # คำนวณ GPA เป้าหมาย (เส้นเขียว)
         target_gpa = 3.25  # เป้าหมาย GPA ที่ดี
         target_line = [target_gpa] * (total_terms + 2)  # +2 สำหรับทำนายอนาคต
         
-        # คำนวณ GPA ผลจริง (เส้นน้ำเงิน)
+        # คำนวณ GPA ผลจริง (เส้นน้ำเงิน) - ใช้ข้อมูลจริงจากเกรดที่มี
         actual_line = []
         cumulative_points = 0
         cumulative_credits = 0
         
-        # จำลองข้อมูลตามเทอมที่โหลดแล้ว
-        for term in range(1, total_terms + 1):
-            if term <= loaded_terms_count:
-                # คำนวณ GPA จริงจากข้อมูลที่มี
-                term_grades = {}
-                for course_id, grade in current_grades.items():
-                    if grade and grade in grade_mapping:
-                        term_grades[course_id] = grade
-                
-                if term_grades:
-                    # คำนวณ GPA สะสม
-                    for course_id, grade in term_grades.items():
-                        grade_point = grade_mapping.get(grade, 0)
-                        credits = 3  # สมมติ 3 หน่วยกิตต่อวิชา
-                        cumulative_points += grade_point * credits
-                        cumulative_credits += credits
-                    
-                    current_gpa = cumulative_points / cumulative_credits if cumulative_credits > 0 else 0
-                    actual_line.append(round(current_gpa, 2))
+        # คำนวณ GPA จากเกรดที่มี
+        valid_grades = {}
+        for course_id, grade in current_grades.items():
+            if grade and grade in grade_mapping:
+                valid_grades[course_id] = grade
+        
+        if valid_grades:
+            # คำนวณ GPA ปัจจุบัน
+            for course_id, grade in valid_grades.items():
+                grade_point = grade_mapping.get(grade, 0)
+                credits = 3  # สมมติ 3 หน่วยกิตต่อวิชา
+                cumulative_points += grade_point * credits
+                cumulative_credits += credits
+            
+            current_gpa = cumulative_points / cumulative_credits if cumulative_credits > 0 else 0
+            
+            # สร้างข้อมูล GPA ตามเทอม (จำลอง progression)
+            for term in range(1, total_terms + 1):
+                if term <= 4:  # เทอมที่ผ่านมา
+                    # จำลองการพัฒนา GPA
+                    progress_factor = term / 4.0
+                    term_gpa = current_gpa * progress_factor
+                    actual_line.append(round(term_gpa, 2))
                 else:
+                    actual_line.append(None)  # ยังไม่มีข้อมูล
+        else:
+            # ไม่มีเกรด ใส่ค่า 0 สำหรับเทอมแรก
+            for term in range(1, total_terms + 1):
+                if term <= 2:
                     actual_line.append(0)
-            else:
-                actual_line.append(None)  # ยังไม่มีข้อมูล
+                else:
+                    actual_line.append(None)
         
         # คำนวณเส้นทำนาย (เส้นแดงส้ม)
         prediction_line = actual_line.copy()
@@ -3216,7 +3228,7 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
         term_labels.extend(["ทำนาย +1", "ทำนาย +2"])
         
         return {
-            'labels': term_labels,
+            'terms': term_labels,
             'target_line': target_line,
             'actual_line': actual_line + [None, None],  # เพิ่ม None สำหรับทำนาย
             'prediction_line': prediction_line,
@@ -3230,7 +3242,7 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
     except Exception as e:
         logger.error(f"Error generating three line chart data: {str(e)}")
         return {
-            'labels': [],
+            'terms': [],
             'target_line': [],
             'actual_line': [],
             'prediction_line': [],
