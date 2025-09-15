@@ -58,6 +58,7 @@ from typing import Any, Dict, Optional, List
 from werkzeug.utils import secure_filename
 
 import config
+import math
 
 # ===============================
 # ENHANCED FEATURES - ALL IN ONE
@@ -3168,10 +3169,11 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
 
 def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
     """
-    วิเคราะห์เหตุผลที่ไม่จบการศึกษา
+    วิเคราะห์เหตุผลที่ไม่จบการศึกษาอย่างครอบคลุม
     """
     try:
         grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        courses_data = app.config.get('COURSES_DATA', {})
         reasons = []
         risk_factors = []
         
@@ -3181,84 +3183,170 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
                          if grade and grade_mapping.get(grade, 0) == 0]
         low_grade_courses = [course for course, grade in current_grades.items() 
                            if grade and 0 < grade_mapping.get(grade, 0) < 2.0]
+        incomplete_courses = [course for course, grade in current_grades.items() 
+                            if grade in ['I', 'W', 'WF', 'WU']]
         
-        # คำนวณ GPA
+        # คำนวณ GPA และหน่วยกิต
         total_points = 0
         total_credits = 0
+        passed_credits = 0
+        
         for course, grade in current_grades.items():
             if grade and grade in grade_mapping:
                 grade_point = grade_mapping[grade]
-                credits = 3  # สมมติ 3 หน่วยกิตต่อวิชา
+                # ดึงหน่วยกิตจริงจากข้อมูลหลักสูตร
+                credits = courses_data.get(course, {}).get('credits', 3)
                 total_points += grade_point * credits
                 total_credits += credits
+                if grade_point > 0:
+                    passed_credits += credits
         
         current_gpa = total_points / total_credits if total_credits > 0 else 0
         
-        # วิเคราะห์เหตุผล
+        # วิเคราะห์เหตุผลการไม่จบแบบละเอียด
+        
+        # 1. วิชาที่ไม่ผ่าน (เกรด F)
         if len(failed_courses) > 0:
+            failed_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in failed_courses])
             reasons.append({
                 'type': 'critical',
-                'title': 'มีวิชาที่ไม่ผ่าน (เกรด F)',
-                'description': f'มี {len(failed_courses)} วิชาที่ได้เกรด F ต้องเรียนซ้ำ',
+                'title': f'มีวิชาที่ไม่ผ่าน {len(failed_courses)} วิชา ({failed_credits} หน่วยกิต)',
+                'description': f'วิชาที่ได้เกรด F: {", ".join(failed_courses[:3])}{"..." if len(failed_courses) > 3 else ""}',
                 'courses': failed_courses,
-                'impact': 'สูงมาก - ต้องเรียนซ้ำก่อนจบ',
-                'solution': 'ลงทะเบียนเรียนซ้ำในวิชาที่ตกทันที'
+                'impact': 'สูงมาก - ต้องเรียนซ้ำก่อนจบการศึกษา',
+                'solution': 'ลงทะเบียนเรียนซ้ำในวิชาที่ตกทันที และเตรียมตัวให้ดีก่อนสอบ',
+                'timeline': f'ต้องใช้เวลาเพิ่ม {math.ceil(len(failed_courses)/6)} เทอม'
             })
         
+        # 2. GPA ต่ำกว่าเกณฑ์
         if current_gpa < 2.0:
+            gpa_deficit = 2.0 - current_gpa
+            credits_needed = math.ceil(gpa_deficit * total_credits / 2.0)
             reasons.append({
                 'type': 'critical',
-                'title': 'GPA ต่ำกว่าเกณฑ์ขั้นต่ำ',
-                'description': f'GPA ปัจจุบัน {current_gpa:.2f} ต่ำกว่า 2.00',
-                'impact': 'สูงมาก - ไม่สามารถจบได้',
-                'solution': 'ต้องปรับปรุงเกรดให้ได้ GPA เฉลี่ย 2.00 ขึ้นไป'
+                'title': f'GPA ต่ำกว่าเกณฑ์ขั้นต่ำ ({current_gpa:.2f} < 2.00)',
+                'description': f'ต้องปรับปรุง GPA อีก {gpa_deficit:.2f} จุด',
+                'impact': 'สูงมาก - ไม่สามารถจบการศึกษาได้',
+                'solution': f'ต้องได้เกรดเฉลี่ย A ใน {credits_needed} หน่วยกิตถัดไป',
+                'timeline': f'ต้องใช้เวลาเพิ่ม {math.ceil(credits_needed/18)} เทอม'
             })
         
+        # 3. วิชาที่ได้เกรดต่ำ
         if len(low_grade_courses) > 0:
+            low_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in low_grade_courses])
             reasons.append({
                 'type': 'warning',
-                'title': 'มีวิชาที่ได้เกรดต่ำ',
-                'description': f'มี {len(low_grade_courses)} วิชาที่ได้เกรด D+, D',
+                'title': f'มีวิชาที่ได้เกรดต่ำ {len(low_grade_courses)} วิชา ({low_credits} หน่วยกิต)',
+                'description': f'วิชาที่ได้เกรด D+, D: {", ".join(low_grade_courses[:3])}{"..." if len(low_grade_courses) > 3 else ""}',
                 'courses': low_grade_courses,
-                'impact': 'ปานกลาง - ส่งผลต่อ GPA',
-                'solution': 'พิจารณาเรียนซ้ำเพื่อปรับปรุงเกรด'
+                'impact': 'ปานกลาง - ส่งผลต่อ GPA รวม',
+                'solution': 'พิจารณาเรียนซ้ำเพื่อปรับปรุงเกรดและ GPA',
+                'timeline': 'สามารถปรับปรุงได้ในเทอมถัดไป'
             })
         
-        # ประเมินความเสี่ยง
-        if current_gpa >= 3.5:
-            risk_level = 'ต่ำ'
-            risk_color = 'success'
-        elif current_gpa >= 3.0:
-            risk_level = 'ต่ำ-ปานกลาง'
-            risk_color = 'info'
-        elif current_gpa >= 2.5:
-            risk_level = 'ปานกลาง'
-            risk_color = 'warning'
-        elif current_gpa >= 2.0:
-            risk_level = 'สูง'
-            risk_color = 'danger'
-        else:
+        # 4. วิชาที่ไม่สมบูรณ์
+        if len(incomplete_courses) > 0:
+            incomplete_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in incomplete_courses])
+            reasons.append({
+                'type': 'warning',
+                'title': f'มีวิชาที่ไม่สมบูรณ์ {len(incomplete_courses)} วิชา',
+                'description': f'วิชาที่ได้เกรด I, W, WF, WU: {", ".join(incomplete_courses)}',
+                'courses': incomplete_courses,
+                'impact': 'ปานกลาง - ไม่นับหน่วยกิต',
+                'solution': 'ติดต่ออาจารย์เพื่อดำเนินการให้เสร็จสิ้น',
+                'timeline': 'ต้องดำเนินการภายในเวลาที่กำหนด'
+            })
+        
+        # 5. ความคืบหน้าช้า
+        expected_credits = loaded_terms_count * 18  # สมมติ 18 หน่วยกิตต่อเทอม
+        if passed_credits < expected_credits * 0.8:
+            reasons.append({
+                'type': 'warning',
+                'title': 'ความคืบหน้าช้ากว่าเกณฑ์',
+                'description': f'ผ่าน {passed_credits}/{expected_credits} หน่วยกิต ({passed_credits/expected_credits*100:.1f}%)',
+                'impact': 'ปานกลาง - อาจจบช้ากว่าแผน',
+                'solution': 'เพิ่มจำนวนหน่วยกิตในเทอมถัดไป',
+                'timeline': f'อาจจบช้า {math.ceil((expected_credits-passed_credits)/18)} เทอม'
+            })
+        
+        # ประเมินความเสี่ยงแบบละเอียด
+        risk_score = 0
+        if len(failed_courses) > 0:
+            risk_score += len(failed_courses) * 20
+        if current_gpa < 2.0:
+            risk_score += (2.0 - current_gpa) * 50
+        if len(low_grade_courses) > 0:
+            risk_score += len(low_grade_courses) * 5
+        if len(incomplete_courses) > 0:
+            risk_score += len(incomplete_courses) * 10
+        
+        if risk_score >= 80:
             risk_level = 'สูงมาก'
             risk_color = 'danger'
-        
-        # คำนวณโอกาสจบ
-        if len(failed_courses) == 0 and current_gpa >= 2.0:
-            graduation_probability = min(95, 60 + (current_gpa - 2.0) * 35 / 2.0)
-        elif len(failed_courses) > 0 and current_gpa >= 2.0:
-            graduation_probability = max(30, 70 - len(failed_courses) * 10)
+            risk_description = 'มีความเสี่ยงสูงมากที่จะไม่จบ'
+        elif risk_score >= 60:
+            risk_level = 'สูง'
+            risk_color = 'danger'
+            risk_description = 'มีความเสี่ยงสูงที่จะจบช้า'
+        elif risk_score >= 40:
+            risk_level = 'ปานกลาง'
+            risk_color = 'warning'
+            risk_description = 'มีความเสี่ยงปานกลาง'
+        elif risk_score >= 20:
+            risk_level = 'ต่ำ-ปานกลาง'
+            risk_color = 'info'
+            risk_description = 'มีความเสี่ยงเล็กน้อย'
         else:
-            graduation_probability = max(10, 40 - (2.0 - current_gpa) * 20)
+            risk_level = 'ต่ำ'
+            risk_color = 'success'
+            risk_description = 'มีโอกาสจบตามแผน'
+        
+        # คำนวณโอกาสจบแบบละเอียด
+        base_probability = 90
+        if len(failed_courses) > 0:
+            base_probability -= len(failed_courses) * 15
+        if current_gpa < 2.0:
+            base_probability -= (2.0 - current_gpa) * 30
+        if len(low_grade_courses) > 0:
+            base_probability -= len(low_grade_courses) * 3
+        if len(incomplete_courses) > 0:
+            base_probability -= len(incomplete_courses) * 5
+        
+        graduation_probability = max(5, min(95, base_probability))
+        
+        # สถานะการจบ
+        if graduation_probability >= 80:
+            graduation_status = 'มีโอกาสจบสูง'
+            graduation_status_color = 'success'
+        elif graduation_probability >= 60:
+            graduation_status = 'มีโอกาสจบปานกลาง'
+            graduation_status_color = 'info'
+        elif graduation_probability >= 40:
+            graduation_status = 'มีความเสี่ยงที่จะไม่จบ'
+            graduation_status_color = 'warning'
+        else:
+            graduation_status = 'มีความเสี่ยงสูงที่จะไม่จบ'
+            graduation_status_color = 'danger'
         
         return {
             'reasons': reasons,
             'risk_level': risk_level,
             'risk_color': risk_color,
+            'risk_description': risk_description,
+            'risk_score': risk_score,
             'graduation_probability': round(graduation_probability, 1),
+            'graduation_status': graduation_status,
+            'graduation_status_color': graduation_status_color,
             'current_gpa': round(current_gpa, 2),
             'failed_courses_count': len(failed_courses),
             'low_grade_courses_count': len(low_grade_courses),
+            'incomplete_courses_count': len(incomplete_courses),
             'total_courses': total_courses,
-            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses)
+            'passed_credits': passed_credits,
+            'total_credits': total_credits,
+            'expected_credits': expected_credits,
+            'progress_percentage': round(passed_credits/136*100, 1) if passed_credits > 0 else 0,  # 136 หน่วยกิตรวม
+            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses)
         }
         
     except Exception as e:
@@ -3267,43 +3355,93 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
             'reasons': [],
             'risk_level': 'ไม่ทราบ',
             'risk_color': 'secondary',
+            'risk_description': 'ไม่สามารถวิเคราะห์ได้',
+            'risk_score': 0,
             'graduation_probability': 0,
+            'graduation_status': 'ไม่ทราบ',
+            'graduation_status_color': 'secondary',
             'current_gpa': 0,
             'failed_courses_count': 0,
             'low_grade_courses_count': 0,
+            'incomplete_courses_count': 0,
             'total_courses': 0,
+            'passed_credits': 0,
+            'total_credits': 0,
+            'expected_credits': 0,
+            'progress_percentage': 0,
             'recommendations': []
         }
 
-def generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses):
-    """สร้างคำแนะนำสำหรับการปรับปรุง"""
+def generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses=None):
+    """สร้างคำแนะนำสำหรับการปรับปรุงแบบครอบคลุม"""
+    if incomplete_courses is None:
+        incomplete_courses = []
+    
     recommendations = []
     
+    # คำแนะนำเร่งด่วนสำหรับวิชาที่ตก
     if len(failed_courses) > 0:
         recommendations.extend([
             "🔴 เร่งด่วน: ลงทะเบียนเรียนซ้ำในวิชาที่ตกทันที",
             "📚 ศึกษาเนื้อหาให้เข้าใจก่อนเข้าเรียนซ้ำ",
-            "👨‍🏫 ปรึกษาอาจารย์ผู้สอนเพื่อขอคำแนะนำ"
+            "👨‍🏫 ปรึกษาอาจารย์ผู้สอนเพื่อขอคำแนะนำ",
+            "📝 ทำแบบฝึกหัดและสอบเก่าเพื่อเตรียมตัว",
+            "🤝 หาเพื่อนที่เก่งมาช่วยสอนหรือติวให้"
         ])
     
+    # คำแนะนำสำหรับ GPA ต่ำ
     if current_gpa < 2.0:
         recommendations.extend([
             "⚠️ เร่งด่วน: ต้องปรับปรุง GPA ให้ถึง 2.00",
             "📊 คำนวณเกรดที่ต้องได้ในวิชาถัดไป",
-            "🎯 เน้นวิชาที่มีหน่วยกิตสูงเพื่อปรับ GPA"
+            "🎯 เน้นวิชาที่มีหน่วยกิตสูงเพื่อปรับ GPA",
+            "📈 ลงทะเบียนวิชาที่มั่นใจว่าจะได้เกรดดี",
+            "⏰ จัดสรรเวลาเรียนให้มากขึ้น"
+        ])
+    elif current_gpa < 2.5:
+        recommendations.extend([
+            "📈 พยายามปรับปรุง GPA ให้สูงขึ้น",
+            "🎯 เลือกวิชาที่เหมาะกับความสามารถ"
         ])
     
+    # คำแนะนำสำหรับวิชาที่ได้เกรดต่ำ
     if len(low_grade_courses) > 0:
         recommendations.extend([
             "🔄 พิจารณาเรียนซ้ำวิชาที่ได้เกรดต่ำ",
-            "📈 ใช้กลยุทธ์การเรียนที่มีประสิทธิภาพมากขึ้น"
+            "📈 ใช้กลยุทธ์การเรียนที่มีประสิทธิภาพมากขึ้น",
+            "💡 หาวิธีการเรียนที่เหมาะกับตัวเอง"
+        ])
+    
+    # คำแนะนำสำหรับวิชาที่ไม่สมบูรณ์
+    if len(incomplete_courses) > 0:
+        recommendations.extend([
+            "📋 ติดต่ออาจารย์เพื่อดำเนินการวิชาที่ไม่สมบูรณ์",
+            "⏱️ ดำเนินการให้เสร็จภายในเวลาที่กำหนด",
+            "📞 ติดตามสถานะการดำเนินการอย่างสม่ำเสมอ"
+        ])
+    
+    # คำแนะนำทั่วไปตาม GPA
+    if current_gpa >= 3.5:
+        recommendations.extend([
+            "🌟 รักษาผลการเรียนที่ดีต่อไป",
+            "🎓 เตรียมตัวสำหรับการจบการศึกษา",
+            "💼 หาประสบการณ์เพิ่มเติมเช่น internship"
+        ])
+    elif current_gpa >= 3.0:
+        recommendations.extend([
+            "📚 พยายามรักษาและปรับปรุงผลการเรียน",
+            "🎯 ตั้งเป้าหมายให้ได้ GPA 3.5 ขึ้นไป"
         ])
     
     # คำแนะนำทั่วไป
     recommendations.extend([
         "⏰ จัดตารางเวลาเรียนและทบทวนอย่างสม่ำเสมอ",
         "🤝 หากลุ่มเรียนหรือติวเตอร์ช่วยสอน",
-        "💪 ตั้งเป้าหมายระยะสั้นและระยะยาว"
+        "💪 ตั้งเป้าหมายระยะสั้นและระยะยาว",
+        "🏥 ดูแลสุขภาพกายและใจให้แข็งแรง",
+        "📱 ใช้แอปพลิเคชันช่วยจัดการเวลาและการเรียน",
+        "🎯 มุ่งเน้นวิชาที่สำคัญและมีผลต่อการจบ",
+        "📞 ปรึกษาอาจารย์ที่ปรึกษาเมื่อมีปัญหา"
     ])
     
     return recommendations
