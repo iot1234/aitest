@@ -184,9 +184,48 @@
                         </div>
                     </div>
                     
-                   
+                    <!-- Predict Button -->
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-success shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="bi bi-magic text-success" style="font-size: 3rem;"></i>
+                                </div>
+                                <h6 class="card-title">ทำนายผลการเรียน</h6>
+                                <p class="card-text small text-muted">
+                                    ใช้โมเดลที่ฝึกแล้วทำนายผล
+                                </p>
+                                <div class="d-grid">
+                                    <button class="btn btn-success" id="predictBtn" onclick="predictData()" disabled>
+                                        <span id="predictSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                        <i class="bi bi-graph-up-arrow"></i> ทำนายผล
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
-                    
+                    <!-- Analyze Button -->
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-info shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="mb-3">
+                                    <i class="bi bi-bar-chart-line-fill text-info" style="font-size: 3rem;"></i>
+                                </div>
+                                <h6 class="card-title">วิเคราะห์ข้อมูลเชิงลึก</h6>
+                                <p class="card-text small text-muted">
+                                    วิเคราะห์รายวิชาและ Course DNA
+                                </p>
+                                <div class="d-grid">
+                                    <button class="btn btn-info" id="analyzeBtn" onclick="analyzeSubjects()">
+                                        <span id="analyzeSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
+                                        <i class="bi bi-search"></i> วิเคราะห์
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 <!-- Training Progress (shown during training) -->
                 <div id="trainingProgress" class="mt-4 d-none">
