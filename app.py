@@ -24,7 +24,8 @@ else:
 print(f"R2 Access Key present: {bool(os.getenv('CLOUDFLARE_R2_ACCESS_KEY_ID'))}")
 print(f"R2 Secret Key present: {bool(os.getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY'))}")
 
-from advanced_training import AdvancedFeatureEngineer
+from advanced_training import AdvancedFeatureEngineer, ContextAwarePredictor
+from explainable_ai import ExplainablePredictor
 
 from flask import (
     Flask,
@@ -4523,6 +4524,138 @@ def analyze_curriculum():
     except Exception as e:
         logger.error(f"Error during curriculum analysis: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/explain_prediction', methods=['POST'])
+def explain_prediction():
+    """
+    API สำหรับการวิเคราะห์และอธิบายการทำนายอย่างละเอียด
+    รวมถึงคำแนะนำเชิงรุกสำหรับการปรับปรุง
+    """
+    try:
+        data = request.get_json()
+        current_grades = data.get('current_grades', {})
+        loaded_terms_count = data.get('loaded_terms_count', 0)
+        student_name = data.get('student_name', 'นักศึกษา')
+        
+        logger.info(f"Explaining prediction for {student_name}")
+        
+        # ตรวจสอบว่ามี advanced_trainer หรือไม่
+        if not hasattr(app, 'advanced_trainer') or not app.advanced_trainer:
+            return jsonify({
+                'success': False,
+                'error': 'โมเดล AI ยังไม่ได้ถูกโหลด กรุณารอสักครู่แล้วลองใหม่อีกครั้ง'
+            })
+        
+        # สร้าง student_data DataFrame
+        courses_data = app.config.get('COURSES_DATA', [])
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        
+        student_data_rows = []
+        for course_id, grade in current_grades.items():
+            if grade and grade in grade_mapping:
+                course = next((c for c in courses_data if c['id'] == course_id), None)
+                if course:
+                    student_data_rows.append({
+                        'course_code': course_id,
+                        'grade': grade,
+                        'grade_point': grade_mapping[grade],
+                        'credit': course.get('credit', 3),
+                        'semester': 1,
+                        'academic_year': 2024
+                    })
+        
+        if not student_data_rows:
+            return jsonify({
+                'success': False,
+                'error': 'ไม่พบข้อมูลเกรดที่ถูกต้อง'
+            })
+        
+        student_data = pd.DataFrame(student_data_rows)
+        
+        # ทำนายด้วย Context-Aware Predictor พร้อมคำอธิบาย
+        try:
+            if hasattr(app.advanced_trainer, 'predictor'):
+                prediction_result = app.advanced_trainer.predictor.predict_graduation_probability(
+                    student_data, explain=True
+                )
+            else:
+                # Fallback: สร้าง predictor ใหม่
+                predictor = ContextAwarePredictor(
+                    feature_engineer=app.advanced_trainer.feature_engineer,
+                    models=app.advanced_trainer.models if hasattr(app.advanced_trainer, 'models') else {},
+                    scaler=app.advanced_trainer.scaler if hasattr(app.advanced_trainer, 'scaler') else None,
+                    feature_names=app.advanced_trainer.feature_names if hasattr(app.advanced_trainer, 'feature_names') else []
+                )
+                prediction_result = predictor.predict_graduation_probability(student_data, explain=True)
+        except Exception as e:
+            logger.error(f"Error in prediction: {e}")
+            return jsonify({
+                'success': False,
+                'error': f'เกิดข้อผิดพลาดในการทำนาย: {str(e)}'
+            })
+        
+        # ดึงคำอธิบาย
+        explanation = prediction_result.get('explanation')
+        
+        if not explanation:
+            # สร้างคำอธิบายแบบ fallback
+            probability = prediction_result.get('probability', 0.5)
+            will_graduate = probability >= 0.5
+            
+            explanation = {
+                'summary': {
+                    'will_graduate': will_graduate,
+                    'probability': round(probability * 100, 1),
+                    'confidence': round(prediction_result.get('confidence', 0.5) * 100, 1),
+                    'status': 'มีโอกาสจบการศึกษา' if will_graduate else 'มีความเสี่ยงที่จะไม่จบ'
+                },
+                'key_factors': [],
+                'reasons': ['ไม่สามารถสร้างคำอธิบายละเอียดได้ในขณะนี้'],
+                'obstacles': [],
+                'strengths': [],
+                'recommendations': [],
+                'graduation_path': {},
+                'future_projections': {}
+            }
+        
+        # คำนวณข้อมูลเพิ่มเติม
+        total_credits = sum([row['credit'] for row in student_data_rows])
+        gpa = sum([grade_mapping[row['grade']] * row['credit'] for row in student_data_rows]) / total_credits if total_credits > 0 else 0
+        failed_count = sum([1 for row in student_data_rows if grade_mapping[row['grade']] == 0])
+        
+        # สร้างข้อมูลสำหรับแสดงผล
+        response_data = {
+            'success': True,
+            'student_name': student_name,
+            'current_status': {
+                'gpa': round(gpa, 2),
+                'total_credits': total_credits,
+                'courses_taken': len(student_data_rows),
+                'failed_courses': failed_count,
+                'terms_completed': loaded_terms_count
+            },
+            'prediction': {
+                'probability': prediction_result.get('probability', 0.5),
+                'confidence': prediction_result.get('confidence', 0.5),
+                'will_graduate': prediction_result.get('probability', 0.5) >= 0.5
+            },
+            'explanation': explanation,
+            'factors': prediction_result.get('factors', {}),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        logger.info(f"✅ Successfully explained prediction for {student_name}")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error in explain_prediction: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'เกิดข้อผิดพลาด: {str(e)}'
+        })
     
     
 @app.route('/model_status', methods=['GET'])

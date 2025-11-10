@@ -1657,15 +1657,39 @@ CourseRetakeSimulator = type('CourseRetakeSimulator', (), {})
 CourseNameNormalizer = type('CourseNameNormalizer', (), {})
 
 class ContextAwarePredictor:
-    """คลาสสำหรับการทำนายแบบ Context-Aware"""
+    """คลาสสำหรับการทำนายแบบ Context-Aware พร้อม Explainability"""
     
-    def __init__(self, feature_engineer: AdvancedFeatureEngineer):
+    def __init__(self, feature_engineer: AdvancedFeatureEngineer, models: Dict = None, 
+                 scaler: Any = None, feature_names: List[str] = None):
         self.feature_engineer = feature_engineer
+        self.models = models or {}
+        self.scaler = scaler
+        self.feature_names = feature_names or []
+        
+        # Initialize explainer
+        try:
+            from explainable_ai import ExplainablePredictor
+            self.explainer = ExplainablePredictor(
+                models=self.models,
+                feature_names=self.feature_names,
+                course_profiles=feature_engineer.course_profiles if hasattr(feature_engineer, 'course_profiles') else {},
+                courses_data=[]
+            )
+        except Exception as e:
+            logger.warning(f"Could not initialize ExplainablePredictor: {e}")
+            self.explainer = None
     
-    def predict_graduation_probability(self, student_data: pd.DataFrame) -> Dict[str, float]:
+    def predict_graduation_probability(self, student_data: pd.DataFrame, explain: bool = True) -> Dict[str, Any]:
         """
         ทำนายความน่าจะเป็นการจบการศึกษาสำหรับนักศึกษาใหม่
-        ใช้ระบบ Context-Aware
+        ใช้ระบบ Context-Aware พร้อม Explainability
+        
+        Args:
+            student_data: ข้อมูลนักศึกษา
+            explain: ถ้า True จะคืนคำอธิบายละเอียด
+        
+        Returns:
+            Dict ที่มีผลการทำนายและคำอธิบาย (ถ้า explain=True)
         """
         if not hasattr(self.feature_engineer, 'course_profiles') or not self.feature_engineer.course_profiles:
             logger.warning("⚠️ Course profiles not available. Please train the model first.")
@@ -1822,7 +1846,7 @@ class ContextAwarePredictor:
         probability += micro_adjustment
         probability = max(0.05, min(0.95, probability))
         
-        return {
+        result = {
             'probability': probability,
             'confidence': confidence,
             'features_used': len(features),
@@ -1839,4 +1863,15 @@ class ContextAwarePredictor:
                 'micro_adjustment': micro_adjustment
             }
         }
+        
+        # เพิ่มคำอธิบายถ้าต้องการ
+        if explain and self.explainer:
+            try:
+                explanation = self.explainer.explain_prediction(features, result)
+                result['explanation'] = explanation
+            except Exception as e:
+                logger.warning(f"Could not generate explanation: {e}")
+                result['explanation'] = None
+        
+        return result
 
