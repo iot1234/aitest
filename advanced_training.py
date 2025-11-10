@@ -1713,208 +1713,103 @@ class ContextAwarePredictor:
         X = X.select_dtypes(include=[np.number])
         X = X.fillna(0)
         
-        # ทำนายด้วยโมเดล (ถ้ามี)
-        if hasattr(self.feature_engineer, 'model') and self.feature_engineer.model:
-            try:
-                probability = self.feature_engineer.model.predict_proba(X)[0][1]  # ความน่าจะเป็นการจบ
-                confidence = max(probability, 1 - probability)  # ความมั่นใจ
-                
-                return {
-                    'probability': probability,
-                    'confidence': confidence,
-                    'features_used': len(X.columns),
-                    'courses_analyzed': features['Total_Courses']
-                }
-            except Exception as e:
-                logger.error(f"❌ Prediction error: {e}")
+        # ===================================================================
+        # ใช้โมเดล AI จริง (Ensemble Prediction) - ไม่มี Heuristic Fallback
+        # ===================================================================
         
-        # Fallback: ใช้ Advanced Context-Aware Heuristic
-        gpa = features.get('GPAX_so_far', 0)
-        risk_score = features.get('Overall_Risk_Score', 0)
-        performance_vs_avg = features.get('Performance_vs_Course_Avg', 0)
-        killer_course_pass_rate = features.get('Killer_Course_Pass_Rate', 0)
-        consistency_score = features.get('Consistency_Score', 0)
-        improvement_trend = features.get('Improvement_Trend', 0)
-        total_courses = features.get('Total_Courses', 0)
-        above_avg_rate = features.get('Above_Avg_Rate', 0)
-        competitive_advantage = features.get('Competitive_Advantage', 0)
-        fail_rate = features.get('Fail_Rate', 0)
-        grade_median = features.get('Grade_Median', 0)
+        if not self.models or len(self.models) == 0:
+            # ไม่มีโมเดล - แจ้งเตือนและ raise exception
+            logger.error("❌ ไม่พบโมเดล AI! กรุณาเทรนโมเดลก่อนใช้งาน")
+            raise ValueError(
+                "โมเดล AI ยังไม่ถูกเทรน กรุณาเทรนโมเดลก่อนใช้งาน\n"
+                "ไปที่หน้า 'จัดการโมเดล' > 'เทรนโมเดล' > อัปโหลดไฟล์ CSV"
+            )
         
-        # Advanced Multi-Factor Heuristic Algorithm
-        base_probability = 0.5  # เริ่มต้นที่ 50%
+        # ทำนายด้วย Ensemble (เฉลี่ยจากโมเดลทั้งหมด)
+        predictions = []
+        model_confidences = {}
         
-        # Factor 1: GPA Impact (weight: 0.30) - เพิ่มน้ำหนัก
-        if gpa >= 3.8:
-            gpa_factor = 0.35
-        elif gpa >= 3.5:
-            gpa_factor = 0.25
-        elif gpa >= 3.0:
-            gpa_factor = 0.15
-        elif gpa >= 2.5:
-            gpa_factor = 0.05
-        elif gpa >= 2.0:
-            gpa_factor = -0.10
-        elif gpa >= 1.5:
-            gpa_factor = -0.20
-        else:
-            gpa_factor = -0.30
-        
-        # Factor 2: Performance vs Course Average (weight: 0.20)
-        if performance_vs_avg >= 1.3:
-            perf_factor = 0.25
-        elif performance_vs_avg >= 1.1:
-            perf_factor = 0.15
-        elif performance_vs_avg >= 0.9:
-            perf_factor = 0.05
-        elif performance_vs_avg >= 0.7:
-            perf_factor = -0.05
-        elif performance_vs_avg >= 0.5:
-            perf_factor = -0.15
-        else:
-            perf_factor = -0.25
-        
-        # Factor 3: Fail Rate Impact (weight: 0.15) - ใหม่
-        if fail_rate <= 0.05:
-            fail_factor = 0.15
-        elif fail_rate <= 0.10:
-            fail_factor = 0.08
-        elif fail_rate <= 0.20:
-            fail_factor = 0.0
-        elif fail_rate <= 0.30:
-            fail_factor = -0.10
-        else:
-            fail_factor = -0.20
-        
-        # Factor 4: Grade Median (weight: 0.10) - ใหม่
-        if grade_median >= 3.5:
-            median_factor = 0.10
-        elif grade_median >= 3.0:
-            median_factor = 0.05
-        elif grade_median >= 2.5:
-            median_factor = 0.0
-        elif grade_median >= 2.0:
-            median_factor = -0.05
-        else:
-            median_factor = -0.10
-        
-        # Factor 5: Killer Course Performance (weight: 0.10)
-        if killer_course_pass_rate >= 0.8:
-            killer_factor = 0.10
-        elif killer_course_pass_rate >= 0.6:
-            killer_factor = 0.05
-        elif killer_course_pass_rate >= 0.4:
-            killer_factor = 0.0
-        elif killer_course_pass_rate >= 0.2:
-            killer_factor = -0.05
-        else:
-            killer_factor = -0.10
-        
-        # Factor 6: Risk Score (weight: 0.10)
-        if risk_score <= 0.2:
-            risk_factor = 0.10
-        elif risk_score <= 0.4:
-            risk_factor = 0.05
-        elif risk_score <= 0.6:
-            risk_factor = 0.0
-        elif risk_score <= 0.8:
-            risk_factor = -0.05
-        else:
-            risk_factor = -0.10
-        
-        # Factor 7: Consistency and Improvement (weight: 0.05)
-        consistency_factor = min(0.05, max(-0.05, (consistency_score - 0.5) * 0.1))
-        improvement_factor = min(0.05, max(-0.05, improvement_trend * 0.05))
-        
-        # คำนวณความน่าจะเป็นรวม
-        probability = base_probability + gpa_factor + perf_factor + fail_factor + median_factor + killer_factor + risk_factor + consistency_factor + improvement_factor
-        
-        # จำกัดค่าให้อยู่ในช่วง 0.05-0.95
-        probability = max(0.05, min(0.95, probability))
-        
-        # === เพิ่มความหลากหลายจาก student-specific features (แทน micro-adjustment แบบเดิม) ===
-        # ใช้ combination ของหลาย features แทนการใช้ hash อย่างเดียว
-        variance_source = (
-            gpa * 1000 +                                                    # GPA มีผลหลัก
-            fail_rate * 500 +                                               # Fail rate
-            (performance_vs_avg if performance_vs_avg else 0) * 300 +       # Performance vs avg
-            consistency_score * 200 +                                       # Consistency
-            killer_course_pass_rate * 150 +                                 # Killer course
-            total_courses * 10                                              # จำนวนวิชา
-        )
-        
-        # แปลง variance_source เป็น adjustment (-0.05 ถึง +0.05) - เพิ่มจาก ±0.01 เดิม
-        import hashlib
-        variance_hash = int(hashlib.md5(str(variance_source).encode()).hexdigest()[:8], 16)
-        variance_adjustment = ((variance_hash % 101) - 50) / 1000  # ±0.05 (แทน ±0.01 เดิม)
-        probability += variance_adjustment
-        probability = max(0.05, min(0.95, probability))
-        
-        # === คำนวณความเชื่อมั่นแบบใหม่ (สะท้อนจำนวนข้อมูลและความสม่ำเสมอ) ===
-        total_courses_val = features.get('Total_Courses', 0)
-        
-        # Factor 1: Data confidence (ตามจำนวนวิชา - ยิ่งเรียนมากยิ่งมั่นใจ)
-        if total_courses_val >= 30:
-            data_conf = 0.40
-        elif total_courses_val >= 20:
-            data_conf = 0.30
-        elif total_courses_val >= 10:
-            data_conf = 0.20
-        else:
-            data_conf = 0.10
-        
-        # Factor 2: Consistency confidence (ยิ่งผลสม่ำเสมอยิ่งมั่นใจ)
-        if consistency_score >= 0.8:
-            consist_conf = 0.30
-        elif consistency_score >= 0.6:
-            consist_conf = 0.20
-        elif consistency_score >= 0.4:
-            consist_conf = 0.10
-        else:
-            consist_conf = 0.05
-        
-        # Factor 3: Probability confidence (ความชัดเจนของผลทำนาย)
-        distance = abs(probability - 0.5)
-        if distance >= 0.4:
-            prob_conf = 0.30
-        elif distance >= 0.3:
-            prob_conf = 0.20
-        elif distance >= 0.2:
-            prob_conf = 0.15
-        elif distance >= 0.1:
-            prob_conf = 0.10
-        else:
-            prob_conf = 0.05
-        
-        # รวม confidence ทั้งหมด (0.50-0.95)
-        confidence = min(0.95, max(0.50, data_conf + consist_conf + prob_conf))
-        
-        result = {
-            'probability': probability,
-            'confidence': confidence,
-            'features_used': len(features),
-            'courses_analyzed': features.get('Total_Courses', 0),
-            'factors': {
-                'gpa_factor': gpa_factor,
-                'performance_factor': perf_factor,
-                'fail_factor': fail_factor,
-                'median_factor': median_factor,
-                'killer_course_factor': killer_factor,
-                'risk_factor': risk_factor,
-                'consistency_factor': consistency_factor,
-                'improvement_factor': improvement_factor,
-                'micro_adjustment': micro_adjustment
+        try:
+            # 1. Random Forest
+            if 'rf' in self.models:
+                rf_pred = self.models['rf'].predict_proba(X)[0][1]
+                predictions.append(rf_pred)
+                model_confidences['rf'] = rf_pred
+                logger.info(f"🌲 Random Forest prediction: {rf_pred:.3f}")
+            
+            # 2. Gradient Boosting
+            if 'gb' in self.models:
+                gb_pred = self.models['gb'].predict_proba(X)[0][1]
+                predictions.append(gb_pred)
+                model_confidences['gb'] = gb_pred
+                logger.info(f"🚀 Gradient Boosting prediction: {gb_pred:.3f}")
+            
+            # 3. Logistic Regression (ต้องใช้ scaler)
+            if 'lr' in self.models and self.scaler:
+                X_scaled = self.scaler.transform(X)
+                lr_pred = self.models['lr'].predict_proba(X_scaled)[0][1]
+                predictions.append(lr_pred)
+                model_confidences['lr'] = lr_pred
+                logger.info(f"📊 Logistic Regression prediction: {lr_pred:.3f}")
+            
+            # คำนวณ Ensemble (เฉลี่ย)
+            if len(predictions) == 0:
+                raise ValueError("ไม่สามารถทำนายได้ด้วยโมเดลใดๆ")
+            
+            probability = np.mean(predictions)
+            logger.info(f"✅ Ensemble Prediction: {probability:.3f} (ใช้โมเดล AI จริง)")
+            
+            # คำนวณความมั่นใจ (variance ของการทำนาย)
+            if len(predictions) > 1:
+                prediction_std = np.std(predictions)
+                # ยิ่ง std น้อย = โมเดลเห็นพ้อง = มั่นใจมาก
+                confidence = max(0.5, min(0.95, 1.0 - prediction_std))
+            else:
+                # มีโมเดลเดียว - ใช้ความชัดเจนของ probability
+                distance = abs(probability - 0.5)
+                confidence = max(0.5, min(0.95, 0.5 + distance))
+            
+            # ดึง Feature Importance (จาก Random Forest)
+            feature_importance = {}
+            if 'rf' in self.models:
+                importances = self.models['rf'].feature_importances_
+                feature_names = X.columns.tolist()
+                importance_dict = dict(zip(feature_names, importances))
+                # เรียงจากมากไปน้อย (แสดงแค่ 10 อันดับแรก)
+                sorted_importance = dict(sorted(
+                    importance_dict.items(), 
+                    key=lambda x: x[1], 
+                    reverse=True
+                )[:10])
+                feature_importance = sorted_importance
+            
+            result = {
+                'probability': probability,
+                'confidence': confidence,
+                'features_used': len(X.columns),
+                'courses_analyzed': features['Total_Courses'],
+                'prediction_method': 'AI_MODEL',  # บอกว่าใช้โมเดล AI
+                'models_used': list(self.models.keys()),  # ['rf', 'gb', 'lr']
+                'model_confidence': model_confidences,  # {'rf': 0.85, 'gb': 0.82, 'lr': 0.80}
+                'feature_importance': feature_importance,  # Top 10 features
+                'factors': {}  # สำหรับ backward compatibility
             }
-        }
+            
+            # เพิ่มคำอธิบายถ้าต้องการ
+            if explain and self.explainer:
+                try:
+                    explanation = self.explainer.explain_prediction(features, result)
+                    result['explanation'] = explanation
+                except Exception as e:
+                    logger.warning(f"Could not generate explanation: {e}")
+                    result['explanation'] = None
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Prediction error: {e}")
+            raise ValueError(f"เกิดข้อผิดพลาดในการทำนาย: {str(e)}")
         
-        # เพิ่มคำอธิบายถ้าต้องการ
-        if explain and self.explainer:
-            try:
-                explanation = self.explainer.explain_prediction(features, result)
-                result['explanation'] = explanation
-            except Exception as e:
-                logger.warning(f"Could not generate explanation: {e}")
-                result['explanation'] = None
-        
-        return result
+        # === ลบ Heuristic Fallback ทั้งหมดแล้ว ===
+        # ตอนนี้ระบบใช้โมเดล AI จริงเท่านั้น (ไม่มีเงื่อนไข if-else แบบเดิมอีกต่อไป)
 

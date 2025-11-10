@@ -468,6 +468,68 @@
             </div>
         </div>
         
+        <!-- คำอธิบายจากโมเดล AI -->
+        <div class="card mb-4" id="aiExplanationCard" style="display: none;">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="mb-0">
+                    <i class="bi bi-robot"></i> คำอธิบายการทำนายจากโมเดล AI
+                    <span class="badge bg-light text-dark float-end" id="predictionMethodBadge">
+                        <i class="bi bi-cpu"></i> AI Model
+                    </span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- ส่วนที่ 1: วิธีการทำนาย -->
+                <div class="alert alert-info border-0 shadow-sm mb-4" id="predictionMethodSection">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-gear-fill"></i> วิธีการทำนาย
+                    </h6>
+                    <p class="mb-2"><strong>วิธีการ:</strong> <span id="predictionMethod">-</span></p>
+                    <div id="modelsList">
+                        <!-- จะถูกเติมด้วย JavaScript -->
+                    </div>
+                    <hr>
+                    <p class="mb-0">
+                        <strong>🎯 ผลรวม (Ensemble):</strong> 
+                        <span class="badge bg-primary fs-6" id="ensemblePrediction">-</span>
+                    </p>
+                </div>
+
+                <!-- ส่วนที่ 2: Feature Importance -->
+                <div class="mb-4" id="featureImportanceSection">
+                    <h6>
+                        <i class="bi bi-star-fill text-warning"></i> ปัจจัยที่มีผลต่อการทำนาย (Top 10)
+                    </h6>
+                    <p class="text-muted small mb-3">
+                        โมเดล AI วิเคราะห์จากปัจจัยเหล่านี้เพื่อทำนายโอกาสการจบการศึกษา
+                    </p>
+                    <div id="featureImportanceList">
+                        <!-- จะถูกเติมด้วย JavaScript -->
+                    </div>
+                </div>
+
+                <!-- ส่วนที่ 3: คำอธิบายเชิงลึก -->
+                <div class="mb-4" id="deepExplanationSection" style="display: none;">
+                    <h6>
+                        <i class="bi bi-lightbulb-fill text-success"></i> คำอธิบายเชิงลึก
+                    </h6>
+                    <div id="detailedExplanation" class="border-start border-4 border-info ps-3">
+                        <!-- จะถูกเติมด้วย JavaScript -->
+                    </div>
+                </div>
+
+                <!-- ส่วนที่ 4: คำแนะนำจาก AI -->
+                <div id="aiRecommendationsSection" style="display: none;">
+                    <h6>
+                        <i class="bi bi-compass-fill text-primary"></i> คำแนะนำจากระบบ AI
+                    </h6>
+                    <div id="aiRecommendations">
+                        <!-- จะถูกเติมด้วย JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="chart-container">
             <h5 class="mb-3"><i class="bi bi-graph-up"></i> กราฟแสดงผล</h5>
             <div class="row">
@@ -1523,6 +1585,11 @@ function displayAdvancedResults(data) {
             safeUpdate('personalRecommendations', '<p class="text-muted">ไม่มีคำแนะนำเฉพาะ</p>');
         }
         
+        // ✨ แสดงคำอธิบายจากโมเดล AI
+        if (data.prediction_result) {
+            displayAIExplanation(data.prediction_result);
+        }
+        
         // ✨ แสดงกราฟ 3 เส้น (ใช้ข้อมูลจริงจากนักศึกษา)
         if (data.chart_data && data.chart_data.terms && data.chart_data.terms.length > 0) {
             displayThreeLineChart(data.chart_data);
@@ -1544,6 +1611,226 @@ function displayAdvancedResults(data) {
         console.error('Error displaying results:', error);
         showAlert('เกิดข้อผิดพลาดในการแสดงผล', 'danger');
     }
+}
+
+// ✨ ฟังก์ชันแสดงคำอธิบายจากโมเดล AI
+function displayAIExplanation(predictionData) {
+    try {
+        console.log('Displaying AI Explanation:', predictionData);
+        
+        const aiCard = document.getElementById('aiExplanationCard');
+        if (!aiCard) {
+            console.error('AI Explanation card not found');
+            return;
+        }
+        
+        // ตรวจสอบว่ามีข้อมูลจากโมเดล AI หรือไม่
+        if (!predictionData.prediction_method || predictionData.prediction_method !== 'AI_MODEL') {
+            // ไม่ใช่โมเดล AI - ซ่อน card
+            aiCard.style.display = 'none';
+            return;
+        }
+        
+        // แสดง card
+        aiCard.style.display = 'block';
+        
+        // 1. แสดงวิธีการทำนาย
+        const predictionMethod = document.getElementById('predictionMethod');
+        if (predictionMethod) {
+            predictionMethod.textContent = 'โมเดล AI (Ensemble Prediction)';
+        }
+        
+        // 2. แสดงโมเดลที่ใช้
+        const modelsList = document.getElementById('modelsList');
+        if (modelsList && predictionData.model_confidence) {
+            let modelsHtml = '<ul class="list-unstyled mb-0 mt-2">';
+            
+            if (predictionData.model_confidence.rf) {
+                const rfProb = (predictionData.model_confidence.rf * 100).toFixed(1);
+                modelsHtml += `
+                    <li class="mb-1">
+                        <span class="badge bg-success me-2">🌲 Random Forest</span>
+                        <span class="badge bg-light text-dark">${rfProb}%</span>
+                    </li>
+                `;
+            }
+            
+            if (predictionData.model_confidence.gb) {
+                const gbProb = (predictionData.model_confidence.gb * 100).toFixed(1);
+                modelsHtml += `
+                    <li class="mb-1">
+                        <span class="badge bg-primary me-2">🚀 Gradient Boosting</span>
+                        <span class="badge bg-light text-dark">${gbProb}%</span>
+                    </li>
+                `;
+            }
+            
+            if (predictionData.model_confidence.lr) {
+                const lrProb = (predictionData.model_confidence.lr * 100).toFixed(1);
+                modelsHtml += `
+                    <li class="mb-1">
+                        <span class="badge bg-info me-2">📊 Logistic Regression</span>
+                        <span class="badge bg-light text-dark">${lrProb}%</span>
+                    </li>
+                `;
+            }
+            
+            modelsHtml += '</ul>';
+            modelsList.innerHTML = modelsHtml;
+        }
+        
+        // 3. แสดง Ensemble Prediction
+        const ensemblePred = document.getElementById('ensemblePrediction');
+        if (ensemblePred && predictionData.prob_pass) {
+            const probability = (predictionData.prob_pass * 100).toFixed(1);
+            ensemblePred.textContent = `${probability}%`;
+            
+            // เปลี่ยนสีตามความน่าจะเป็น
+            ensemblePred.className = 'badge fs-6';
+            if (probability >= 70) {
+                ensemblePred.classList.add('bg-success');
+            } else if (probability >= 50) {
+                ensemblePred.classList.add('bg-warning');
+            } else {
+                ensemblePred.classList.add('bg-danger');
+            }
+        }
+        
+        // 4. แสดง Feature Importance
+        const featureImportanceList = document.getElementById('featureImportanceList');
+        if (featureImportanceList && predictionData.feature_importance) {
+            const features = Object.entries(predictionData.feature_importance)
+                .slice(0, 10)
+                .sort((a, b) => b[1] - a[1]);
+            
+            if (features.length > 0) {
+                let featuresHtml = '';
+                features.forEach(([name, importance]) => {
+                    const percentage = (importance * 100).toFixed(1);
+                    const barColor = percentage > 15 ? 'bg-danger' : 
+                                   percentage > 10 ? 'bg-warning' : 
+                                   percentage > 5 ? 'bg-info' : 'bg-secondary';
+                    
+                    // แปลชื่อ feature ให้เข้าใจง่าย
+                    const displayName = translateFeatureName(name);
+                    
+                    featuresHtml += `
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-truncate" style="max-width: 70%;">${displayName}</span>
+                                <strong>${percentage}%</strong>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar ${barColor}" 
+                                     role="progressbar" 
+                                     style="width: ${percentage}%"
+                                     aria-valuenow="${percentage}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                featureImportanceList.innerHTML = featuresHtml;
+            } else {
+                featureImportanceList.innerHTML = '<p class="text-muted">ไม่มีข้อมูล Feature Importance</p>';
+            }
+        }
+        
+        // 5. แสดงคำอธิบายเชิงลึก (ถ้ามี)
+        const explanationSection = document.getElementById('deepExplanationSection');
+        const detailedExplanation = document.getElementById('detailedExplanation');
+        
+        if (predictionData.explanation && predictionData.explanation.reasons) {
+            explanationSection.style.display = 'block';
+            const reasons = predictionData.explanation.reasons;
+            
+            let explanationHtml = '';
+            if (Array.isArray(reasons)) {
+                reasons.slice(0, 5).forEach(reason => {
+                    explanationHtml += `<p class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>${reason}</p>`;
+                });
+            } else if (typeof reasons === 'string') {
+                explanationHtml = `<p>${reasons}</p>`;
+            }
+            
+            detailedExplanation.innerHTML = explanationHtml || '<p class="text-muted">ไม่มีคำอธิบายเพิ่มเติม</p>';
+        } else {
+            explanationSection.style.display = 'none';
+        }
+        
+        // 6. แสดงคำแนะนำจาก AI (ถ้ามี)
+        const recSection = document.getElementById('aiRecommendationsSection');
+        const aiRecommendations = document.getElementById('aiRecommendations');
+        
+        if (predictionData.explanation && predictionData.explanation.recommendations) {
+            recSection.style.display = 'block';
+            const recs = predictionData.explanation.recommendations;
+            
+            let recsHtml = '';
+            if (Array.isArray(recs)) {
+                recs.slice(0, 3).forEach((rec, index) => {
+                    const alertClass = index === 0 ? 'alert-primary' : 'alert-info';
+                    
+                    if (typeof rec === 'object') {
+                        recsHtml += `
+                            <div class="alert ${alertClass} border-0 shadow-sm mb-3">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-lightbulb-fill me-2"></i>${rec.title || 'คำแนะนำ'}
+                                </h6>
+                                <p class="mb-2">${rec.description || ''}</p>
+                                ${rec.actions && rec.actions.length > 0 ? `
+                                    <ul class="mb-0">
+                                        ${rec.actions.slice(0, 3).map(action => `<li>${action}</li>`).join('')}
+                                    </ul>
+                                ` : ''}
+                            </div>
+                        `;
+                    } else {
+                        recsHtml += `
+                            <div class="alert ${alertClass} border-0 shadow-sm mb-3">
+                                <p class="mb-0"><i class="bi bi-arrow-right-circle me-2"></i>${rec}</p>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            aiRecommendations.innerHTML = recsHtml || '<p class="text-muted">ไม่มีคำแนะนำจากระบบ</p>';
+        } else {
+            recSection.style.display = 'none';
+        }
+        
+        console.log('✅ AI Explanation displayed successfully');
+        
+    } catch (error) {
+        console.error('Error displaying AI explanation:', error);
+        // ไม่แสดง error ให้ผู้ใช้ เพราะไม่ critical
+    }
+}
+
+// ฟังก์ชันแปลชื่อ feature ให้เข้าใจง่าย
+function translateFeatureName(featureName) {
+    const translations = {
+        'GPAX_so_far': 'เกรดเฉลี่ยสะสม (GPA)',
+        'Total_Courses': 'จำนวนวิชาที่เรียน',
+        'Fail_Rate': 'อัตราการตกวิชา',
+        'Grade_Median': 'เกรดกลาง (Median)',
+        'Performance_vs_Course_Avg': 'ผลการเรียนเทียบกับค่าเฉลี่ยวิชา',
+        'Killer_Course_Pass_Rate': 'อัตราผ่านวิชายาก',
+        'Consistency_Score': 'ความสม่ำเสมอของผลการเรียน',
+        'Improvement_Trend': 'แนวโน้มการพัฒนา',
+        'Overall_Risk_Score': 'คะแนนความเสี่ยงโดยรวม',
+        'Above_Avg_Rate': 'อัตราเกรดเหนือค่าเฉลี่ย',
+        'Competitive_Advantage': 'จุดเด่นการแข่งขัน',
+        'Credits_so_far': 'หน่วยกิตสะสม',
+        'GPA_Trend': 'แนวโน้ม GPA',
+        'Term_Consistency': 'ความสม่ำเสมอรายเทอม'
+    };
+    
+    return translations[featureName] || featureName;
 }
 
 // ✨ ฟังก์ชันแสดงกราฟ 3 เส้น (ใช้ข้อมูลจริง)
