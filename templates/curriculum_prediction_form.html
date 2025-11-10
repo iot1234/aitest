@@ -1523,6 +1523,18 @@ function displayAdvancedResults(data) {
             safeUpdate('personalRecommendations', '<p class="text-muted">ไม่มีคำแนะนำเฉพาะ</p>');
         }
         
+        // ✨ แสดงกราฟ 3 เส้น (ใช้ข้อมูลจริงจากนักศึกษา)
+        if (data.chart_data && data.chart_data.terms && data.chart_data.terms.length > 0) {
+            displayThreeLineChart(data.chart_data);
+            document.getElementById('threeLineChartContainer').style.display = 'block';
+        }
+        
+        // ✨ แสดงการวิเคราะห์เหตุผลที่อาจไม่จบ
+        if (data.graduation_analysis) {
+            displayGraduationAnalysis(data.graduation_analysis);
+            document.getElementById('graduationAnalysisContainer').style.display = 'block';
+        }
+        
         // Scroll to results smoothly
         setTimeout(() => {
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1531,6 +1543,276 @@ function displayAdvancedResults(data) {
     } catch (error) {
         console.error('Error displaying results:', error);
         showAlert('เกิดข้อผิดพลาดในการแสดงผล', 'danger');
+    }
+}
+
+// ✨ ฟังก์ชันแสดงกราฟ 3 เส้น (ใช้ข้อมูลจริง)
+function displayThreeLineChart(chartData) {
+    const ctx = document.getElementById('threeLineChart');
+    if (!ctx) {
+        console.error('threeLineChart canvas not found');
+        return;
+    }
+    
+    try {
+        // ทำลายกราฟเก่าถ้ามี
+        if (window.threeLineChartInstance) {
+            window.threeLineChartInstance.destroy();
+        }
+        
+        // สร้างกราฟใหม่
+        window.threeLineChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.terms,
+                datasets: [
+                    {
+                        label: '🎯 เป้าหมาย GPA',
+                        data: chartData.target_line,
+                        borderColor: chartData.colors.target,
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointBackgroundColor: chartData.colors.target,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    },
+                    {
+                        label: '📊 ผลจริง (GPA สะสม)',
+                        data: chartData.actual_line,
+                        borderColor: chartData.colors.actual,
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointBackgroundColor: chartData.colors.actual,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        spanGaps: false
+                    },
+                    {
+                        label: '🔮 การทำนาย',
+                        data: chartData.prediction_line,
+                        borderColor: chartData.colors.prediction,
+                        backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                        borderWidth: 3,
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.4,
+                        pointBackgroundColor: chartData.colors.prediction,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        spanGaps: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'กราฟการทำนาย GPA (ใช้ข้อมูลจริง)',
+                        font: {
+                            size: 18,
+                            weight: 'bold'
+                        },
+                        padding: 20
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleFont: {
+                            size: 14
+                        },
+                        bodyFont: {
+                            size: 13
+                        },
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y.toFixed(2);
+                                } else {
+                                    label += 'ไม่มีข้อมูล';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'เทอม',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            },
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'GPA',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        min: 0,
+                        max: 4,
+                        ticks: {
+                            stepSize: 0.5,
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            },
+                            font: {
+                                size: 12
+                            }
+                        },
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+        
+        // แสดงสรุปข้อมูล
+        if (chartData.summary) {
+            const summaryHtml = `
+                <div class="alert alert-info mt-3">
+                    <h6><strong>📊 สรุปผลการวิเคราะห์:</strong></h6>
+                    <ul class="mb-0">
+                        <li>GPA ปัจจุบัน: <strong>${chartData.summary.current_gpa.toFixed(2)}</strong></li>
+                        <li>ทำนาย GPA เทอมถัดไป: <strong>${chartData.summary.predicted_next_gpa.toFixed(2)}</strong></li>
+                        <li>เป้าหมาย: <strong>${chartData.summary.target_gpa.toFixed(2)}</strong></li>
+                        <li>สถานะ: <span class="badge ${chartData.summary.on_track ? 'bg-success' : 'bg-warning'}">${chartData.summary.on_track ? 'ไปได้ดี' : 'ต้องปรับปรุง'}</span></li>
+                    </ul>
+                </div>
+            `;
+            const container = document.getElementById('threeLineChartContainer');
+            if (container) {
+                const existingSummary = container.querySelector('.chart-summary');
+                if (existingSummary) {
+                    existingSummary.remove();
+                }
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'chart-summary';
+                summaryDiv.innerHTML = summaryHtml;
+                container.appendChild(summaryDiv);
+            }
+        }
+        
+        console.log('Three-line chart displayed successfully');
+    } catch (error) {
+        console.error('Error displaying three-line chart:', error);
+        showAlert('เกิดข้อผิดพลาดในการแสดงกราฟ', 'warning');
+    }
+}
+
+// ✨ ฟังก์ชันแสดงการวิเคราะห์เหตุผลที่อาจไม่จบ
+function displayGraduationAnalysis(analysis) {
+    try {
+        // อัปเดตสถิติหลัก
+        const safeUpdate = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        };
+        
+        safeUpdate('currentGpaDisplay', analysis.current_gpa.toFixed(2));
+        safeUpdate('graduationProbabilityDisplay', analysis.graduation_probability.toFixed(1) + '%');
+        
+        const riskEl = document.getElementById('riskLevelDisplay');
+        if (riskEl) {
+            riskEl.textContent = analysis.risk_level;
+            riskEl.className = 'text-secondary';
+            if (analysis.risk_level === 'สูง') {
+                riskEl.className = 'text-danger';
+            } else if (analysis.risk_level === 'ปานกลาง') {
+                riskEl.className = 'text-warning';
+            } else if (analysis.risk_level === 'ต่ำ') {
+                riskEl.className = 'text-success';
+            }
+        }
+        
+        // แสดงเหตุผลที่อาจไม่จบ
+        const failureContent = document.getElementById('failureReasonsContent');
+        if (failureContent) {
+            if (analysis.failure_reasons && analysis.failure_reasons.length > 0) {
+                let html = '<ul class="list-unstyled">';
+                analysis.failure_reasons.forEach(reason => {
+                    html += `<li class="mb-2"><i class="bi bi-exclamation-circle text-warning me-2"></i>${reason}</li>`;
+                });
+                html += '</ul>';
+                failureContent.innerHTML = html;
+            } else {
+                failureContent.innerHTML = '<p class="text-success"><i class="bi bi-check-circle me-2"></i>ไม่พบปัญหาที่จะทำให้ไม่จบการศึกษา</p>';
+            }
+        }
+        
+        // แสดงคำแนะนำการปรับปรุง
+        const improvementEl = document.getElementById('improvementRecommendations');
+        if (improvementEl) {
+            if (analysis.improvement_recommendations && analysis.improvement_recommendations.length > 0) {
+                let html = '<ul class="list-unstyled">';
+                analysis.improvement_recommendations.forEach(rec => {
+                    html += `<li class="mb-2"><i class="bi bi-lightbulb text-success me-2"></i>${rec}</li>`;
+                });
+                html += '</ul>';
+                improvementEl.innerHTML = html;
+            } else {
+                improvementEl.innerHTML = '<p class="text-info"><i class="bi bi-info-circle me-2"></i>ผลการเรียนอยู่ในเกณฑ์ดี</p>';
+            }
+        }
+        
+        console.log('Graduation analysis displayed successfully');
+    } catch (error) {
+        console.error('Error displaying graduation analysis:', error);
     }
 }
 

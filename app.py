@@ -3135,110 +3135,142 @@ def update_recommendations_backend(failed_courses_ids, avg_gpa, blocked_courses_
 
 def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
     """
-    สร้างข้อมูลสำหรับกราฟ 3 เส้น:
-    1. เส้นเป้าหมาย (Target Line - สีเขียว): GPA ที่ควรจะเป็น
-    2. เส้นผลจริง (Actual Line - สีน้ำเงิน): ผลจริงที่ผ่านมา
-    3. เส้นทำนาย (Prediction Line - สีแดงส้ม): การทำนายเทอมถัดไป
+    สร้างข้อมูลสำหรับกราฟ 3 เส้น โดยใช้ข้อมูลจริงจากนักศึกษา:
+    1. เส้นเป้าหมาย (Target Line - สีเขียว): GPA ที่ควรจะเป็นเพื่อจบการศึกษา
+    2. เส้นผลจริง (Actual Line - สีน้ำเงิน): GPA สะสมจริงตามเทอม
+    3. เส้นทำนาย (Prediction Line - สีส้ม): การทำนายเทอมถัดไป
     """
     try:
         # ข้อมูลพื้นฐาน
-        grade_mapping = {
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {
             'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 
             'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'I': 0.0
-        }
+        })
+        courses_data = app.config.get('COURSES_DATA', [])
+        all_terms_data = app.config.get('ALL_TERMS_DATA', [])
         
-        # ใช้จำนวนเทอมจริงที่โหลดมา
-        total_terms = max(loaded_terms_count, 4)  # อย่างน้อย 4 เทอม
+        # จำนวนเทอมทั้งหมดในหลักสูตร (8 เทอมปกติ)
+        total_terms = len(all_terms_data)
         
-        # คำนวณ GPA เป้าหมายจากโมเดล (เส้นเขียว)
-        target_gpa = 3.25  # ค่าเริ่มต้น
-        
-        # ใช้โมเดล AI คำนวณเป้าหมายที่เหมาะสม
-        if hasattr(app, 'advanced_trainer') and app.advanced_trainer:
-            try:
-                # ใช้โมเดลทำนายเป้าหมาย GPA ที่เหมาะสม
-                prediction_result = app.advanced_trainer.predict_graduation(current_grades)
-                optimal_gpa = prediction_result.get('optimal_gpa', 3.25)
-                target_gpa = max(3.0, min(4.0, optimal_gpa))  # จำกัดระหว่าง 3.0-4.0
-            except:
-                target_gpa = 3.25
-        
+        # === 1. คำนวณเส้นเป้าหมาย (Target Line) ===
+        # GPA เป้าหมาย = 3.0 (เกณฑ์ปลอดภัยสำหรับจบการศึกษา)
+        target_gpa = 3.0
         target_line = [target_gpa] * (total_terms + 2)  # +2 สำหรับทำนายอนาคต
         
-        # คำนวณ GPA ผลจริง (เส้นน้ำเงิน) - ใช้ข้อมูลจริงจากเกรดที่มี
+        # === 2. คำนวณเส้นผลจริง (Actual Line) - จาก GPA สะสมจริงตามเทอม ===
         actual_line = []
+        term_gpa_list = []
+        
+        # จัดกลุ่มวิชาตามเทอม
+        courses_by_term = {}
+        for term_idx, term_data in enumerate(all_terms_data):
+            if term_idx >= loaded_terms_count:
+                break
+            courses_by_term[term_idx] = term_data['ids']
+        
+        # คำนวณ GPA สะสมจริงตามเทอม
         cumulative_points = 0
         cumulative_credits = 0
         
-        # คำนวณ GPA จากเกรดที่มี
-        valid_grades = {}
-        for course_id, grade in current_grades.items():
-            if grade and grade in grade_mapping:
-                valid_grades[course_id] = grade
-        
-        if valid_grades:
-            # คำนวณ GPA ปัจจุบัน
-            for course_id, grade in valid_grades.items():
-                grade_point = grade_mapping.get(grade, 0)
-                credits = 3  # สมมติ 3 หน่วยกิตต่อวิชา
-                cumulative_points += grade_point * credits
-                cumulative_credits += credits
+        for term_idx in range(loaded_terms_count):
+            term_courses = courses_by_term.get(term_idx, [])
+            term_points = 0
+            term_credits = 0
             
-            current_gpa = cumulative_points / cumulative_credits if cumulative_credits > 0 else 0
+            for course_id in term_courses:
+                grade = current_grades.get(course_id, '')
+                if grade and grade in grade_mapping:
+                    # หาหน่วยกิตจริงของวิชา
+                    course = next((c for c in courses_data if c['id'] == course_id), None)
+                    credit = course['credit'] if course else 3
+                    grade_point = grade_mapping[grade]
+                    
+                    # คำนวณเฉพาะวิชาที่ไม่ใช่ W, I
+                    if grade not in ['W', 'I']:
+                        term_points += grade_point * credit
+                        term_credits += credit
             
-            # สร้างข้อมูล GPA ตามเทอม (จำลอง progression)
-            for term in range(1, total_terms + 1):
-                if term <= loaded_terms_count:  # เทอมที่มีข้อมูลจริง
-                    # จำลองการพัฒนา GPA
-                    progress_factor = term / loaded_terms_count
-                    term_gpa = current_gpa * progress_factor
-                    actual_line.append(round(term_gpa, 2))
-                else:
-                    actual_line.append(None)  # ยังไม่มีข้อมูล
-        else:
-            # ไม่มีเกรด ใส่ค่า 0 สำหรับเทอมแรก
-            for term in range(1, total_terms + 1):
-                if term <= 2:
-                    actual_line.append(0)
-                else:
-                    actual_line.append(None)
+            # เพิ่มคะแนนสะสม
+            cumulative_points += term_points
+            cumulative_credits += term_credits
+            
+            # คำนวณ GPA สะสมณ จุดนี้
+            term_cumulative_gpa = cumulative_points / cumulative_credits if cumulative_credits > 0 else 0
+            actual_line.append(round(term_cumulative_gpa, 2))
+            term_gpa_list.append(round(term_cumulative_gpa, 2))
         
-        # คำนวณเส้นทำนาย (เส้นแดงส้ม)
+        # เติม None สำหรับเทอมที่ยังไม่ได้เรียน
+        for term_idx in range(loaded_terms_count, total_terms):
+            actual_line.append(None)
+        
+        # === 3. คำนวณเส้นทำนาย (Prediction Line) ===
         prediction_line = actual_line.copy()
         
-        # ทำนายเทอมถัดไป
-        if len([x for x in actual_line if x is not None]) > 0:
-            current_actual_gpa = [x for x in actual_line if x is not None][-1]
+        # ทำนาย GPA เทอมถัดไป
+        if len(term_gpa_list) > 0:
+            current_gpa = term_gpa_list[-1]
             
             # ใช้โมเดล AI ทำนาย (ถ้ามี)
             if hasattr(app, 'advanced_trainer') and app.advanced_trainer:
                 try:
+                    # ใช้โมเดล AI ทำนายจริง
                     prediction_result = app.advanced_trainer.predict_graduation(current_grades)
-                    predicted_gpa = prediction_result.get('predicted_gpa', current_actual_gpa)
-                except:
-                    predicted_gpa = current_actual_gpa
+                    predicted_gpa_next_term = prediction_result.get('predicted_gpa', current_gpa)
+                    
+                    # จำกัดค่าให้สมเหตุสมผล
+                    predicted_gpa_next_term = max(0, min(4.0, predicted_gpa_next_term))
+                except Exception as e:
+                    logger.warning(f"AI prediction failed, using statistical method: {e}")
+                    # Fallback: ใช้แนวโน้มทางสถิติ
+                    if len(term_gpa_list) >= 2:
+                        # คำนวณ trend จาก 2 เทอมล่าสุด
+                        trend = term_gpa_list[-1] - term_gpa_list[-2]
+                        predicted_gpa_next_term = current_gpa + (trend * 0.5)  # ลด impact ของ trend
+                    else:
+                        predicted_gpa_next_term = current_gpa
             else:
-                # การทำนายแบบง่าย
-                if current_actual_gpa >= 3.0:
-                    predicted_gpa = min(4.0, current_actual_gpa + 0.1)
-                elif current_actual_gpa >= 2.5:
-                    predicted_gpa = current_actual_gpa + 0.05
-                elif current_actual_gpa >= 2.0:
-                    predicted_gpa = max(2.0, current_actual_gpa - 0.05)
+                # ใช้วิธีทางสถิติ
+                if len(term_gpa_list) >= 2:
+                    trend = term_gpa_list[-1] - term_gpa_list[-2]
+                    predicted_gpa_next_term = current_gpa + (trend * 0.5)
                 else:
-                    predicted_gpa = max(1.5, current_actual_gpa - 0.1)
+                    predicted_gpa_next_term = current_gpa
+            
+            # จำกัดค่าทำนายให้อยู่ในช่วงที่เป็นไปได้
+            predicted_gpa_next_term = max(1.5, min(4.0, predicted_gpa_next_term))
             
             # เติมข้อมูลทำนายสำหรับเทอมที่เหลือ
             for i in range(len(prediction_line)):
                 if prediction_line[i] is None:
-                    prediction_line[i] = round(predicted_gpa, 2)
+                    # ทำนายว่า GPA จะค่อยๆ ดีขึ้นหรือคงที่
+                    if predicted_gpa_next_term > current_gpa:
+                        improvement_rate = (predicted_gpa_next_term - current_gpa) * 0.8
+                        prediction_line[i] = round(min(4.0, current_gpa + improvement_rate), 2)
+                    else:
+                        prediction_line[i] = round(predicted_gpa_next_term, 2)
             
             # เพิ่มทำนายอนาคต 2 เทอม
-            prediction_line.extend([round(predicted_gpa, 2), round(predicted_gpa, 2)])
+            prediction_line.extend([round(predicted_gpa_next_term, 2)] * 2)
+        else:
+            # ไม่มีข้อมูล ใส่ค่าเริ่มต้น
+            prediction_line = [None] * total_terms
+            prediction_line.extend([None, None])
         
         # สร้างป้ายกำกับเทอม
-        term_labels = [f"เทอม {i}" for i in range(1, total_terms + 1)]
+        term_labels = []
+        for i, term_data in enumerate(all_terms_data):
+            term_labels.append(f"ปี {term_data['year']} เทอม {term_data['term']}")
         term_labels.extend(["ทำนาย +1", "ทำนาย +2"])
+        
+        # สรุปข้อมูลสำคัญ
+        summary = {
+            'current_gpa': term_gpa_list[-1] if term_gpa_list else 0,
+            'predicted_next_gpa': round(predicted_gpa_next_term, 2) if term_gpa_list else 0,
+            'target_gpa': target_gpa,
+            'terms_completed': loaded_terms_count,
+            'total_terms': total_terms,
+            'on_track': (term_gpa_list[-1] >= target_gpa) if term_gpa_list else False
+        }
         
         return {
             'terms': term_labels,
@@ -3248,12 +3280,15 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
             'colors': {
                 'target': '#28a745',      # สีเขียว
                 'actual': '#007bff',      # สีน้ำเงิน
-                'prediction': '#fd7e14'   # สีแดงส้ม
-            }
+                'prediction': '#fd7e14'   # สีส้ม
+            },
+            'summary': summary
         }
         
     except Exception as e:
         logger.error(f"Error generating three line chart data: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             'terms': [],
             'target_line': [],
@@ -3263,6 +3298,14 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
                 'target': '#28a745',
                 'actual': '#007bff',
                 'prediction': '#fd7e14'
+            },
+            'summary': {
+                'current_gpa': 0,
+                'predicted_next_gpa': 0,
+                'target_gpa': 3.0,
+                'terms_completed': 0,
+                'total_terms': 8,
+                'on_track': False
             }
         }
 
@@ -4456,6 +4499,24 @@ def analyze_curriculum():
                 logger.error(f"Error during prediction: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
+        
+        # ✨ เพิ่มข้อมูลกราฟ 3 เส้น (ใช้ข้อมูลจริงจากนักศึกษา)
+        try:
+            chart_data = generate_three_line_chart_data(current_grades, loaded_terms_count)
+            response_data['chart_data'] = chart_data
+            logger.info(f"Added chart data with {len(chart_data.get('terms', []))} terms")
+        except Exception as e:
+            logger.error(f"Error generating chart data: {str(e)}")
+            response_data['chart_data'] = None
+        
+        # ✨ เพิ่มการวิเคราะห์เหตุผลที่อาจไม่จบ
+        try:
+            graduation_analysis = analyze_graduation_failure_reasons(current_grades, loaded_terms_count)
+            response_data['graduation_analysis'] = graduation_analysis
+            logger.info(f"Added graduation analysis with risk level: {graduation_analysis.get('risk_level', 'N/A')}")
+        except Exception as e:
+            logger.error(f"Error in graduation analysis: {str(e)}")
+            response_data['graduation_analysis'] = None
         
         return jsonify(response_data)
         
