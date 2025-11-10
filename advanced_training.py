@@ -1832,19 +1832,62 @@ class ContextAwarePredictor:
         # จำกัดค่าให้อยู่ในช่วง 0.05-0.95
         probability = max(0.05, min(0.95, probability))
         
-        # คำนวณความมั่นใจจากความแตกต่างจาก 0.5
-        confidence_base = abs(probability - 0.5) * 2
+        # === เพิ่มความหลากหลายจาก student-specific features (แทน micro-adjustment แบบเดิม) ===
+        # ใช้ combination ของหลาย features แทนการใช้ hash อย่างเดียว
+        variance_source = (
+            gpa * 1000 +                                                    # GPA มีผลหลัก
+            fail_rate * 500 +                                               # Fail rate
+            (performance_vs_avg if performance_vs_avg else 0) * 300 +       # Performance vs avg
+            consistency_score * 200 +                                       # Consistency
+            killer_course_pass_rate * 150 +                                 # Killer course
+            total_courses * 10                                              # จำนวนวิชา
+        )
         
-        # ปรับความมั่นใจตามจำนวน features ที่มี
-        feature_completeness = len([f for f in [gpa, performance_vs_avg, fail_rate, grade_median] if f > 0]) / 4
-        confidence = min(0.95, max(0.55, confidence_base * 0.8 + feature_completeness * 0.2))
-        
-        # เพิ่มความหลากหลายด้วย micro-adjustments
+        # แปลง variance_source เป็น adjustment (-0.05 ถึง +0.05) - เพิ่มจาก ±0.01 เดิม
         import hashlib
-        student_hash = int(hashlib.md5(str(features).encode()).hexdigest()[:8], 16)
-        micro_adjustment = (student_hash % 41 - 20) / 2000  # ±0.01
-        probability += micro_adjustment
+        variance_hash = int(hashlib.md5(str(variance_source).encode()).hexdigest()[:8], 16)
+        variance_adjustment = ((variance_hash % 101) - 50) / 1000  # ±0.05 (แทน ±0.01 เดิม)
+        probability += variance_adjustment
         probability = max(0.05, min(0.95, probability))
+        
+        # === คำนวณความเชื่อมั่นแบบใหม่ (สะท้อนจำนวนข้อมูลและความสม่ำเสมอ) ===
+        total_courses_val = features.get('Total_Courses', 0)
+        
+        # Factor 1: Data confidence (ตามจำนวนวิชา - ยิ่งเรียนมากยิ่งมั่นใจ)
+        if total_courses_val >= 30:
+            data_conf = 0.40
+        elif total_courses_val >= 20:
+            data_conf = 0.30
+        elif total_courses_val >= 10:
+            data_conf = 0.20
+        else:
+            data_conf = 0.10
+        
+        # Factor 2: Consistency confidence (ยิ่งผลสม่ำเสมอยิ่งมั่นใจ)
+        if consistency_score >= 0.8:
+            consist_conf = 0.30
+        elif consistency_score >= 0.6:
+            consist_conf = 0.20
+        elif consistency_score >= 0.4:
+            consist_conf = 0.10
+        else:
+            consist_conf = 0.05
+        
+        # Factor 3: Probability confidence (ความชัดเจนของผลทำนาย)
+        distance = abs(probability - 0.5)
+        if distance >= 0.4:
+            prob_conf = 0.30
+        elif distance >= 0.3:
+            prob_conf = 0.20
+        elif distance >= 0.2:
+            prob_conf = 0.15
+        elif distance >= 0.1:
+            prob_conf = 0.10
+        else:
+            prob_conf = 0.05
+        
+        # รวม confidence ทั้งหมด (0.50-0.95)
+        confidence = min(0.95, max(0.50, data_conf + consist_conf + prob_conf))
         
         result = {
             'probability': probability,
