@@ -289,6 +289,154 @@
             font-size: 1.5rem;
         }
     }
+      
+      .gemini-panel {
+          background: white;
+          border-radius: 20px;
+          padding: 25px;
+          margin-bottom: 25px;
+          box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+          border: 1px solid rgba(99,102,241,0.15);
+      }
+      
+      .gemini-section-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 1.5rem;
+          font-weight: 700;
+      }
+      
+      .gemini-section-title .badge {
+          font-size: 0.75rem;
+      }
+      
+      .gemini-action-card {
+          background: #f3f5ff;
+          border-radius: 15px;
+          padding: 20px;
+          height: 100%;
+          border: 1px dashed rgba(99,102,241,0.3);
+      }
+      
+      .gemini-action-card h5 {
+          font-weight: 700;
+          color: #4f46e5;
+      }
+      
+      .gemini-action-card input[type="file"] {
+          border: 2px dashed rgba(99,102,241,0.4);
+          border-radius: 12px;
+          padding: 30px 20px;
+          background: white;
+          width: 100%;
+          text-align: center;
+      }
+      
+      .gemini-action-card .btn {
+          width: 100%;
+      }
+      
+      .gemini-result-card {
+          background: #0f172a;
+          color: white;
+          border-radius: 20px;
+          padding: 30px;
+          margin-top: 25px;
+          position: relative;
+          overflow: hidden;
+      }
+      
+      .gemini-result-card::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(circle at top right, rgba(99,102,241,0.4), transparent 50%);
+          opacity: 0.7;
+          pointer-events: none;
+      }
+      
+      .gemini-result-card .markdown-body {
+          background: rgba(15,23,42,0.7);
+          border-radius: 15px;
+          padding: 20px;
+          margin-top: 15px;
+          position: relative;
+          z-index: 1;
+      }
+      
+      .markdown-body h1,
+      .markdown-body h2,
+      .markdown-body h3,
+      .markdown-body h4 {
+          color: #f8fafc;
+      }
+      
+      .markdown-body p,
+      .markdown-body li {
+          color: #e2e8f0;
+      }
+      
+      .gemini-metrics {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 15px;
+          margin-top: 20px;
+      }
+      
+      .gemini-metric-card {
+          background: rgba(255,255,255,0.1);
+          border-radius: 12px;
+          padding: 15px;
+          backdrop-filter: blur(10px);
+      }
+      
+      .gemini-metric-card .label {
+          font-size: 0.85rem;
+          color: #cbd5f5;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+      }
+      
+      .gemini-metric-card .value {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: white;
+      }
+      
+      .gemini-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(255,255,255,0.08);
+          padding: 8px 14px;
+          border-radius: 999px;
+          margin-right: 10px;
+          color: #cbd5f5;
+      }
+      
+      .gemini-recommendations li {
+          margin-bottom: 8px;
+      }
+      
+      .gemini-chart-container {
+          background: rgba(255,255,255,0.08);
+          border-radius: 15px;
+          padding: 15px;
+          margin-top: 20px;
+      }
+      
+      .gemini-loading {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          color: #4f46e5;
+      }
+      
+      .gemini-loading .spinner-border {
+          width: 1.5rem;
+          height: 1.5rem;
+      }
 </style>
 {% endblock %}
 
@@ -392,6 +540,76 @@
             </div>
         </div>
     </div>
+
+      <div class="gemini-panel">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+              <div class="gemini-section-title">
+                  <i class="bi bi-gem"></i> Gemini Copilot
+                  <span class="badge bg-primary-subtle text-primary-emphasis">Google AI</span>
+              </div>
+              <span id="geminiStatusBadge" class="badge bg-success-subtle text-success-emphasis">
+                  พร้อมใช้งาน
+              </span>
+          </div>
+          <p class="text-muted mb-4">
+              ใช้ Gemini วิเคราะห์ข้อมูลเกรดทั้งจากไฟล์ CSV/Excel และข้อมูลที่คุณกรอก เพื่อหาแนวโน้มและคำแนะนำเชิงปฏิบัติ
+          </p>
+          <div class="row g-3">
+              <div class="col-lg-6">
+                  <div class="gemini-action-card h-100">
+                      <h5><i class="bi bi-file-earmark-bar-graph"></i> วิเคราะห์ไฟล์รายงานเกรด</h5>
+                      <p class="text-muted">อัปโหลดไฟล์ CSV หรือ Excel เพื่อให้ Gemini สรุปภาพรวม</p>
+                      <input type="file" id="geminiCsvInput" accept=".csv,.xlsx,.xls">
+                      <input type="text" class="form-control mt-3" id="geminiFileGoalInput" placeholder="อยากให้ Gemini โฟกัสเรื่องใด (ไม่บังคับ)">
+                      <button class="btn btn-primary mt-3" id="geminiAnalyzeFileBtn">
+                          <i class="bi bi-stars"></i> วิเคราะห์ไฟล์ด้วย Gemini
+                      </button>
+                  </div>
+              </div>
+              <div class="col-lg-6">
+                  <div class="gemini-action-card h-100">
+                      <h5><i class="bi bi-person-lines-fill"></i> วิเคราะห์ข้อมูลที่กรอก</h5>
+                      <p class="text-muted">ใช้ผลเกรดที่กรอกในระบบเพื่อให้ Gemini ทำนายและแนะนำ</p>
+                      <textarea class="form-control" rows="3" id="geminiLiveGoalInput" placeholder="เช่น อยากรู้โอกาสตกวิชาแกน หรืออยากได้แผนเพิ่ม GPA"></textarea>
+                      <button class="btn btn-dark mt-3" id="geminiLiveAnalyzeBtn">
+                          <i class="bi bi-robot"></i> ให้ Gemini วิเคราะห์ผลลัพธ์
+                      </button>
+                  </div>
+              </div>
+          </div>
+          <div id="geminiLoadingState" class="gemini-loading mt-3 d-none">
+              <div class="spinner-border text-primary" role="status"></div>
+              <span>Gemini กำลังประมวลผลข้อมูลของคุณ...</span>
+          </div>
+          <div id="geminiResultCard" class="gemini-result-card d-none mt-4">
+              <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center position-relative z-1">
+                  <div>
+                      <div class="gemini-chip">
+                          <i class="bi bi-activity"></i>
+                          <span id="geminiOutcomeLabel">-</span>
+                      </div>
+                      <div class="gemini-chip">
+                          <i class="bi bi-shield-lock"></i>
+                          <span id="geminiRiskLevel">-</span>
+                      </div>
+                  </div>
+                  <button class="btn btn-outline-light btn-sm" id="geminiClearBtn">
+                      <i class="bi bi-x-circle"></i> ล้างผล
+                  </button>
+              </div>
+              <div class="gemini-metrics position-relative z-1" id="geminiKeyMetrics"></div>
+              <div class="markdown-body position-relative z-1" id="geminiMarkdownResult">
+                  <p class="text-muted mb-0">ผลจาก Gemini จะแสดงในส่วนนี้</p>
+              </div>
+              <div class="gemini-recommendations position-relative z-1 mt-3">
+                  <h6 class="text-uppercase text-muted">คำแนะนำ</h6>
+                  <ul class="list-unstyled mb-0" id="geminiRecommendationsList"></ul>
+              </div>
+              <div class="gemini-chart-container d-none position-relative z-1" id="geminiChartContainer">
+                  <canvas id="geminiChartCanvas" height="200"></canvas>
+              </div>
+          </div>
+      </div>
 
     <div id="termsContainer"></div>
 
@@ -772,6 +990,9 @@ let courseGrades = {};
 let charts = {};
 let isInitialized = false;
 let currentAnalysisController = null; // *** FIXED *** For cancelling requests
+let geminiEnabled = false;
+let geminiChartInstance = null;
+const GEMINI_CHART_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#0ea5e9', '#f472b6'];
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async function() {
@@ -809,6 +1030,8 @@ async function loadConfigFromAPI() {
             coursesData = data.COURSES_DATA || [];
             allTermsData = data.ALL_TERMS_DATA || [];
             gradeMapping = data.GRADE_MAPPING || data.gradeMapping || {};
+            geminiEnabled = Boolean(data.GEMINI_ENABLED);
+            updateGeminiButtonState();
             
             console.log('Configuration loaded:', {
                 courses: coursesData.length,
@@ -963,7 +1186,10 @@ function setupEventListeners() {
         'exportPdfBtn': () => exportResults('pdf'),
         'exportExcelBtn': () => exportResults('excel'),
         'printResultsBtn': printResults,
-        'cancelLoadingBtn': cancelCurrentAnalysis // *** FIXED *** Cancel button
+          'cancelLoadingBtn': cancelCurrentAnalysis, // *** FIXED *** Cancel button
+          'geminiAnalyzeFileBtn': analyzeCsvWithGemini,
+          'geminiLiveAnalyzeBtn': analyzeLiveGradesWithGemini,
+          'geminiClearBtn': clearGeminiResult
     };
     
     for (const [btnId, handler] of Object.entries(btnMappings)) {
@@ -2752,6 +2978,264 @@ window.appState = {
     loadedTermsCount,
     charts
 };
+
+// ==========================================
+// Gemini AI Integration Functions
+// ==========================================
+
+function updateGeminiButtonState() {
+    const statusBadge = document.getElementById('geminiStatusBadge');
+    const fileBtn = document.getElementById('geminiAnalyzeFileBtn');
+    const liveBtn = document.getElementById('geminiLiveAnalyzeBtn');
+    
+    if (geminiEnabled) {
+        if (statusBadge) {
+            statusBadge.textContent = 'พร้อมใช้งาน';
+            statusBadge.className = 'badge bg-success-subtle text-success-emphasis';
+        }
+        if (fileBtn) fileBtn.disabled = false;
+        if (liveBtn) liveBtn.disabled = false;
+    } else {
+        if (statusBadge) {
+            statusBadge.textContent = 'ไม่พร้อมใช้งาน';
+            statusBadge.className = 'badge bg-danger-subtle text-danger-emphasis';
+        }
+        if (fileBtn) fileBtn.disabled = true;
+        if (liveBtn) liveBtn.disabled = true;
+    }
+}
+
+function toggleGeminiLoading(show) {
+    const loadingEl = document.getElementById('geminiLoadingState');
+    if (loadingEl) {
+        if (show) {
+            loadingEl.classList.remove('d-none');
+        } else {
+            loadingEl.classList.add('d-none');
+        }
+    }
+}
+
+function renderGeminiMarkdown(markdownText) {
+    if (!markdownText) return '';
+    try {
+        if (typeof marked !== 'undefined') {
+            const html = marked.parse(markdownText);
+            if (typeof DOMPurify !== 'undefined') {
+                return DOMPurify.sanitize(html);
+            }
+            return html;
+        }
+        return markdownText.replace(/\n/g, '<br>');
+    } catch (e) {
+        console.error('Markdown rendering error:', e);
+        return markdownText.replace(/\n/g, '<br>');
+    }
+}
+
+function displayGeminiResult(result) {
+    const resultCard = document.getElementById('geminiResultCard');
+    if (!resultCard) return;
+    
+    resultCard.classList.remove('d-none');
+    
+    const gemini = result.gemini || result;
+    const outcome = gemini.outcome_summary || {};
+    const risk = gemini.risk_level || 'ไม่ทราบ';
+    
+    const outcomeLabel = document.getElementById('geminiOutcomeLabel');
+    if (outcomeLabel) {
+        outcomeLabel.textContent = outcome.status || 'ไม่ทราบ';
+    }
+    
+    const riskLabel = document.getElementById('geminiRiskLevel');
+    if (riskLabel) {
+        riskLabel.textContent = `ความเสี่ยง: ${risk}`;
+    }
+    
+    const markdownEl = document.getElementById('geminiMarkdownResult');
+    if (markdownEl && gemini.analysis_markdown) {
+        markdownEl.innerHTML = renderGeminiMarkdown(gemini.analysis_markdown);
+    }
+    
+    const metricsEl = document.getElementById('geminiKeyMetrics');
+    if (metricsEl && gemini.key_metrics && Array.isArray(gemini.key_metrics)) {
+        metricsEl.innerHTML = gemini.key_metrics.map(m => `
+            <div class="gemini-metric-card">
+                <div class="label">${m.label || ''}</div>
+                <div class="value">${m.value || '-'}</div>
+            </div>
+        `).join('');
+    }
+    
+    const recsEl = document.getElementById('geminiRecommendationsList');
+    if (recsEl && gemini.recommendations && Array.isArray(gemini.recommendations)) {
+        recsEl.innerHTML = gemini.recommendations.map(r => `<li>${r}</li>`).join('');
+    }
+    
+    if (gemini.chart && gemini.chart.labels && gemini.chart.series) {
+        renderGeminiChart(gemini.chart);
+    }
+}
+
+function renderGeminiChart(chartData) {
+    const container = document.getElementById('geminiChartContainer');
+    const canvas = document.getElementById('geminiChartCanvas');
+    if (!container || !canvas) return;
+    
+    container.classList.remove('d-none');
+    
+    if (geminiChartInstance) {
+        geminiChartInstance.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
+    const datasets = chartData.series.map((s, idx) => ({
+        label: s.name || `Series ${idx + 1}`,
+        data: s.data || [],
+        borderColor: GEMINI_CHART_COLORS[idx % GEMINI_CHART_COLORS.length],
+        backgroundColor: GEMINI_CHART_COLORS[idx % GEMINI_CHART_COLORS.length] + '40',
+        tension: 0.4
+    }));
+    
+    geminiChartInstance = new Chart(ctx, {
+        type: chartData.type || 'line',
+        data: {
+            labels: chartData.labels || [],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: chartData.title || 'กราฟจาก Gemini'
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            }
+        }
+    });
+}
+
+function clearGeminiResult() {
+    const resultCard = document.getElementById('geminiResultCard');
+    if (resultCard) resultCard.classList.add('d-none');
+    
+    if (geminiChartInstance) {
+        geminiChartInstance.destroy();
+        geminiChartInstance = null;
+    }
+    
+    const chartContainer = document.getElementById('geminiChartContainer');
+    if (chartContainer) chartContainer.classList.add('d-none');
+}
+
+async function analyzeCsvWithGemini() {
+    if (!geminiEnabled) {
+        showAlert('Gemini ยังไม่พร้อมใช้งาน กรุณาตรวจสอบ API Key', 'warning');
+        return;
+    }
+    
+    const fileInput = document.getElementById('geminiCsvInput');
+    const goalInput = document.getElementById('geminiFileGoalInput');
+    
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        showAlert('กรุณาเลือกไฟล์ CSV หรือ Excel', 'warning');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    if (goalInput && goalInput.value) {
+        formData.append('analysis_goal', goalInput.value);
+    }
+    
+    toggleGeminiLoading(true);
+    clearGeminiResult();
+    
+    try {
+        const response = await fetch('/api/gemini/analyze_file', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            displayGeminiResult(result);
+            showAlert('วิเคราะห์ไฟล์ด้วย Gemini สำเร็จ', 'success');
+        } else {
+            throw new Error(result.error || 'Unknown error');
+        }
+    } catch (error) {
+        console.error('Gemini file analysis error:', error);
+        showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+    } finally {
+        toggleGeminiLoading(false);
+    }
+}
+
+async function analyzeLiveGradesWithGemini() {
+    if (!geminiEnabled) {
+        showAlert('Gemini ยังไม่พร้อมใช้งาน กรุณาตรวจสอบ API Key', 'warning');
+        return;
+    }
+    
+    if (Object.keys(courseGrades).length === 0) {
+        showAlert('กรุณากรอกเกรดอย่างน้อย 1 วิชาก่อน', 'warning');
+        return;
+    }
+    
+    const goalInput = document.getElementById('geminiLiveGoalInput');
+    const studentName = document.getElementById('studentName')?.value || 'นักศึกษา';
+    
+    const payload = {
+        course_grades: courseGrades,
+        student_name: studentName,
+        loaded_terms_count: loadedTermsCount
+    };
+    
+    if (goalInput && goalInput.value) {
+        payload.analysis_goal = goalInput.value;
+    }
+    
+    toggleGeminiLoading(true);
+    clearGeminiResult();
+    
+    try {
+        const response = await fetch('/api/gemini/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        if (result.success) {
+            displayGeminiResult(result);
+            showAlert('วิเคราะห์ข้อมูลด้วย Gemini สำเร็จ', 'success');
+        } else {
+            throw new Error(result.error || 'Unknown error');
+        }
+    } catch (error) {
+        console.error('Gemini live analysis error:', error);
+        showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+    } finally {
+        toggleGeminiLoading(false);
+    }
+}
 
 console.log('Fixed curriculum prediction form loaded successfully');
 console.log('Type window.debugInfo() in console for debug information');
