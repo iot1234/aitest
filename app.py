@@ -54,6 +54,7 @@ from imblearn.over_sampling import SMOTE
 import tempfile
 import json
 import re
+import copy
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from typing import Any, Dict, Optional, List
@@ -1168,6 +1169,30 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 # gemini-1.5-flash and gemini-1.5-pro require different API access
 GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-pro')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
+
+
+def _build_gemini_model_candidates(primary_name: str) -> List[str]:
+    """Collect preferred + fallback Gemini model names with preserved order."""
+    candidates: List[str] = []
+
+    def _add(name: Optional[str]):
+        if name and name not in candidates:
+            candidates.append(name)
+
+    _add(primary_name)
+
+    fallback_env = os.environ.get('GEMINI_MODEL_FALLBACKS', '')
+    if fallback_env:
+        for item in fallback_env.split(','):
+            _add(item.strip())
+
+    for default_name in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-pro']:
+        _add(default_name)
+
+    return candidates
+
+
+GEMINI_MODEL_CANDIDATES = _build_gemini_model_candidates(GEMINI_MODEL_NAME)
 gemini_client_ready = False
 
 if genai and GEMINI_API_KEY:
@@ -3868,6 +3893,22 @@ def is_gemini_available() -> bool:
     return bool(genai and gemini_client_ready)
 
 
+def _should_retry_with_fallback(exc: Exception) -> bool:
+    """
+    ตรวจสอบว่า error นี้ควรลอง fallback model หรือไม่
+    ใช้สำหรับกรณี model ไม่อยู่ใน region หรือไม่รองรับ generateContent
+    """
+    message = str(exc).lower()
+    fallback_indicators = [
+        'not found',
+        '404',
+        'not supported',
+        'unsupported',
+        'does not exist'
+    ]
+    return any(indicator in message for indicator in fallback_indicators)
+
+
 def _to_native_value(value):
     """แปลงค่า numpy/pandas ให้เป็น Python ปกติ"""
     if pd.isna(value):
@@ -4058,83 +4099,77 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
     """
     if not is_gemini_available():
         raise RuntimeError("Gemini API is not configured")
-    
-    try:
-        # ถ้ามี detailed_prompt ให้ใช้แทน
-        if 'detailed_prompt' in payload:
-            user_prompt = payload['detailed_prompt']
-            logger.info("📝 Using detailed prompt for Gemini analysis")
-        else:
-            # ใช้ prompt ธรรมดา
-            prompt_payload = {
-                'task': task_name,
-                'payload': payload
-            }
-            user_prompt = json.dumps(prompt_payload, ensure_ascii=False)
-        
-        generation_config = {
-            "temperature": 0.3,  # เพิ่มเล็กน้อยเพื่อให้มีความหลากหลาย
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 4096,
-            "response_mime_type": "application/json"
+
+    # ถ้ามี detailed_prompt ให้ใช้แทน
+    if 'detailed_prompt' in payload:
+        user_prompt = payload['detailed_prompt']
+        logger.info("📝 Using detailed prompt for Gemini analysis")
+    else:
+        prompt_payload = {
+            'task': task_name,
+            'payload': payload
         }
-        
-        schema = GEMINI_RESPONSE_SCHEMAS.get(schema_key)
-        if schema:
-            generation_config["response_schema"] = schema
-            logger.info(f"📋 Using schema: {schema_key}")
-        else:
-            logger.warning(f"⚠️ Schema '{schema_key}' not found, using default")
-        
+        user_prompt = json.dumps(prompt_payload, ensure_ascii=False)
+
+    base_generation_config = {
+        "temperature": 0.3,
+        "top_p": 0.95,
+        "top_k": 40,
+        "max_output_tokens": 4096,
+        "response_mime_type": "application/json"
+    }
+
+    schema = GEMINI_RESPONSE_SCHEMAS.get(schema_key)
+    if schema:
+        base_generation_config["response_schema"] = schema
+        logger.info(f"📋 Using schema: {schema_key}")
+    else:
+        logger.warning(f"⚠️ Schema '{schema_key}' not found, using default")
+
+    def _execute_with_model(model_name: str):
+        generation_config = copy.deepcopy(base_generation_config)
         model = genai.GenerativeModel(
-            GEMINI_MODEL_NAME,
+            model_name,
             system_instruction=GEMINI_SYSTEM_PROMPT,
             generation_config=generation_config
         )
-        
-        logger.info(f"📤 Sending request to Gemini (task: {task_name}, model: {GEMINI_MODEL_NAME})...")
+
+        logger.info(f"📤 Sending request to Gemini (task: {task_name}, model: {model_name})...")
         logger.debug(f"Prompt length: {len(user_prompt)} characters")
-        
-        # เรียกใช้ Gemini API
+
         response = model.generate_content(user_prompt)
-        
-        # ดึง response text
         response_text = None
-        
-        # วิธีที่ 1: ใช้ response.text
+
         if hasattr(response, 'text') and response.text:
             response_text = response.text
             logger.debug("Got response from response.text")
-        
-        # วิธีที่ 2: ใช้ candidates
+
         if not response_text and hasattr(response, 'candidates') and response.candidates:
             try:
                 candidate = response.candidates[0]
                 if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
                     parts = candidate.content.parts
-                    if parts and len(parts) > 0:
-                        if hasattr(parts[0], 'text'):
-                            response_text = parts[0].text
-                        elif isinstance(parts[0], dict) and 'text' in parts[0]:
-                            response_text = parts[0]['text']
+                    if parts:
+                        first_part = parts[0]
+                        if hasattr(first_part, 'text'):
+                            response_text = first_part.text
+                        elif isinstance(first_part, dict) and 'text' in first_part:
+                            response_text = first_part['text']
                         logger.debug("Got response from candidates[0].content.parts[0]")
             except Exception as e:
                 logger.warning(f"Error extracting from candidates: {e}")
-        
-        # วิธีที่ 3: ใช้ __str__ หรือ repr
+
         if not response_text:
             try:
                 response_str = str(response)
                 if response_str and response_str != 'None':
-                    # ลอง parse JSON จาก string
                     json_match = re.search(r'\{.*\}', response_str, re.DOTALL)
                     if json_match:
                         response_text = json_match.group(0)
                         logger.debug("Got response from string extraction")
             except Exception as e:
                 logger.warning(f"Error extracting from string: {e}")
-        
+
         if not response_text:
             error_msg = "Empty response from Gemini"
             logger.error(f"❌ {error_msg}")
@@ -4142,11 +4177,10 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
             logger.debug(f"Response type: {type(response)}")
             logger.debug(f"Response dir: {dir(response)}")
             raise ValueError(error_msg)
-        
+
         logger.debug(f"Response text length: {len(response_text)} characters")
         logger.debug(f"Response preview: {response_text[:200]}...")
-        
-        # Parse JSON response
+
         try:
             result = json.loads(response_text)
             logger.info("✅ Gemini analysis completed successfully")
@@ -4154,29 +4188,39 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
         except json.JSONDecodeError as json_err:
             logger.error(f"❌ Failed to parse JSON response: {json_err}")
             logger.error(f"Response text: {response_text[:500]}")
-            # ลองแก้ไข JSON ถ้าเป็นไปได้
             try:
-                # ลบ markdown code blocks ถ้ามี
                 cleaned_text = response_text.strip()
                 if cleaned_text.startswith('```'):
-                    # ลบ ```json และ ``` ที่เริ่มต้นและสิ้นสุด
                     cleaned_text = re.sub(r'^```(?:json)?\s*', '', cleaned_text)
                     cleaned_text = re.sub(r'\s*```$', '', cleaned_text)
                 result = json.loads(cleaned_text)
                 logger.info("✅ Successfully parsed JSON after cleaning")
                 return result
-            except:
+            except Exception:
                 raise ValueError(f"Invalid JSON response from Gemini: {str(json_err)}")
-        
-    except ValueError as ve:
-        # Re-raise ValueError เพื่อให้ caller จัดการ
-        raise
-    except Exception as exc:
-        logger.error(f"❌ Gemini request failed: {exc}")
-        import traceback
-        logger.error(traceback.format_exc())
-        # Re-raise exception แทนการ return fallback เพื่อให้ caller จัดการ
-        raise RuntimeError(f"Gemini API error: {str(exc)}") from exc
+
+    last_error = None
+    tried_models: List[str] = []
+
+    for model_name in GEMINI_MODEL_CANDIDATES:
+        tried_models.append(model_name)
+        try:
+            return _execute_with_model(model_name)
+        except ValueError:
+            raise
+        except Exception as exc:
+            last_error = exc
+            if _should_retry_with_fallback(exc) and model_name != GEMINI_MODEL_CANDIDATES[-1]:
+                logger.warning(f"⚠️ Gemini model '{model_name}' unavailable ({exc}); trying fallback...")
+                continue
+            logger.error(f"❌ Gemini request failed on model '{model_name}': {exc}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise RuntimeError(f"Gemini API error ({model_name}): {str(exc)}") from exc
+
+    raise RuntimeError(
+        f"Gemini API error after trying models {', '.join(tried_models)}: {last_error}"
+    )
 
 # Flask Routes (Keep all other routes unchanged)
 @app.route('/')
