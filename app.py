@@ -4470,33 +4470,44 @@ def gemini_analyze_file_route():
 def gemini_predict_route():
     """ให้ Gemini วิเคราะห์ข้อมูลเกรดที่ผู้ใช้กรอกแบบสด"""
     if not is_gemini_available():
+        logger.warning("Gemini API not available - missing API key")
         return jsonify({'success': False, 'error': 'ยังไม่ได้ตั้งค่า Gemini API Key'}), 503
     
-    payload = request.get_json(silent=True) or {}
-    course_grades = payload.get('course_grades') or payload.get('grades') or {}
-    student_name = payload.get('student_name', 'นักศึกษา')
-    analysis_goal = payload.get('analysis_goal', '').strip()
-    loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
-    model_filename = payload.get('model_filename')
-    training_analysis = None
-    model_metadata = None
-    
-    if model_filename:
-        try:
-            stored_model = storage.load_model(model_filename)
-            if stored_model:
-                training_analysis = stored_model.get('gemini_training_analysis')
-                model_metadata = {
-                    'model_filename': model_filename,
-                    'data_format': stored_model.get('data_format'),
-                    'training_type': stored_model.get('training_type'),
-                    'performance_metrics': stored_model.get('performance_metrics')
-                }
-        except Exception as model_exc:
-            logger.warning(f"Unable to load model for Gemini context: {model_exc}")
-    
-    if not isinstance(course_grades, dict) or len(course_grades) == 0:
-        return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
+    try:
+        payload = request.get_json(silent=True) or {}
+        logger.info(f"Received Gemini prediction request: {list(payload.keys())}")
+        
+        course_grades = payload.get('course_grades') or payload.get('grades') or {}
+        student_name = payload.get('student_name', 'นักศึกษา')
+        analysis_goal = payload.get('analysis_goal', '').strip()
+        loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
+        model_filename = payload.get('model_filename')
+        training_analysis = None
+        model_metadata = None
+        
+        logger.info(f"Processing prediction for {student_name} with {len(course_grades)} course grades")
+        
+        if model_filename:
+            try:
+                stored_model = storage.load_model(model_filename)
+                if stored_model:
+                    training_analysis = stored_model.get('gemini_training_analysis')
+                    model_metadata = {
+                        'model_filename': model_filename,
+                        'data_format': stored_model.get('data_format'),
+                        'training_type': stored_model.get('training_type'),
+                        'performance_metrics': stored_model.get('performance_metrics')
+                    }
+                    logger.info(f"Loaded model context: {model_filename}")
+            except Exception as model_exc:
+                logger.warning(f"Unable to load model for Gemini context: {model_exc}")
+        
+        if not isinstance(course_grades, dict) or len(course_grades) == 0:
+            logger.warning("No course grades provided")
+            return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
+    except Exception as parse_error:
+        logger.error(f"Error parsing request: {parse_error}")
+        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาดในการอ่านข้อมูล: {str(parse_error)}'}), 400
     
     # กรองเฉพาะเกรดที่ไม่ว่าง
     cleaned_grades = {

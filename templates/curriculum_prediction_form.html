@@ -1648,28 +1648,50 @@ function handleCurriculumAnalysisSuccess(result) {
 }
 
 async function fetchGeminiPrediction(payload, signal) {
-    const response = await fetch('/api/gemini/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal
-    });
-    
-    let result = null;
     try {
-        result = await response.json();
-    } catch (parseError) {
-        throw new Error('ไม่สามารถอ่านผลจาก Gemini ได้');
+        console.log('Calling Gemini API with payload:', payload);
+        const response = await fetch('/api/gemini/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal
+        });
+        
+        let result = null;
+        try {
+            result = await response.json();
+            console.log('Gemini API response:', result);
+        } catch (parseError) {
+            console.error('Failed to parse Gemini response:', parseError);
+            const text = await response.text();
+            throw new Error(`ไม่สามารถอ่านผลจาก Gemini ได้: ${text.substring(0, 200)}`);
+        }
+        
+        if (!response.ok) {
+            const errorMsg = result?.error || result?.details || `HTTP ${response.status}`;
+            console.error('Gemini API error:', errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        if (!result.success) {
+            const errorMsg = result.error || result.details || 'Gemini ไม่สามารถวิเคราะห์ได้';
+            console.error('Gemini returned unsuccessful result:', errorMsg);
+            throw new Error(errorMsg);
+        }
+        
+        if (!result.gemini) {
+            console.warn('Gemini response missing gemini field');
+            throw new Error('ไม่ได้รับผลการวิเคราะห์จาก Gemini');
+        }
+        
+        return result;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error;
+        }
+        console.error('fetchGeminiPrediction error:', error);
+        throw error;
     }
-    
-    if (!response.ok) {
-        throw new Error(result?.error || `HTTP ${response.status}`);
-    }
-    if (!result.success) {
-        throw new Error(result.error || 'Gemini error');
-    }
-    
-    return result;
 }
 
 // *** FIXED *** Analyze and predict with AI - Enhanced error handling
@@ -1771,13 +1793,6 @@ async function analyzeWithGemini(studentName, modelFilename) {
     }
     
     const goalInput = document.getElementById('geminiModeGoalInput');
-    const analysisPayload = {
-        student_name: studentName,
-        current_grades: courseGrades,
-        loaded_terms_count: loadedTermsCount,
-        model_filename: modelFilename,
-        repeated_courses_in_this_term_ids: []
-    };
     const geminiPayload = {
         student_name: studentName,
         course_grades: courseGrades,
@@ -1798,26 +1813,22 @@ async function analyzeWithGemini(studentName, modelFilename) {
     if (analyzeBtn) analyzeBtn.disabled = true;
     
     try {
-        const analysisResult = await fetchCurriculumAnalysis(analysisPayload, currentAnalysisController.signal);
-        handleCurriculumAnalysisSuccess(analysisResult);
+        // เรียก Gemini โดยตรงโดยไม่ต้องรอ curriculum analysis
+        const geminiResult = await fetchGeminiPrediction(geminiPayload, currentAnalysisController.signal);
         
-        try {
-            const geminiResult = await fetchGeminiPrediction(geminiPayload, currentAnalysisController.signal);
+        if (geminiResult && geminiResult.success) {
             displayGeminiResult(geminiResult);
             showAlert('✨ วิเคราะห์ด้วย Gemini สำเร็จ', 'success');
-        } catch (geminiError) {
-            if (geminiError.name === 'AbortError') {
-                throw geminiError;
-            }
-            console.error('Gemini analysis error:', geminiError);
-            showAlert('เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini: ' + geminiError.message, 'warning');
+        } else {
+            throw new Error(geminiResult?.error || 'ไม่ได้รับผลลัพธ์จาก Gemini');
         }
     } catch (error) {
         if (error.name === 'AbortError') {
             showAlert('ยกเลิกการวิเคราะห์ด้วย Gemini แล้ว', 'info');
         } else {
             console.error('Gemini mode error:', error);
-            showAlert('เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini: ' + error.message, 'danger');
+            const errorMsg = error.message || 'เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini';
+            showAlert(errorMsg, 'danger');
         }
     } finally {
         hideCustomLoadingModal();

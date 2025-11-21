@@ -9,6 +9,7 @@
 
 import numpy as np
 import pandas as pd
+import math
 from typing import Dict, List, Tuple, Any, Optional
 import logging
 
@@ -925,4 +926,3 @@ class ExplainablePredictor:
 
 
 # สำหรับ import ภายนอก
-import math
