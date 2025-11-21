@@ -61,6 +61,11 @@ from werkzeug.utils import secure_filename
 import config
 import math
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 # ===============================
 # ENHANCED FEATURES - ALL IN ONE
 # ===============================
@@ -1150,8 +1155,30 @@ if not env_check_result['all_present']:
     logger.error("=" * 70)
 
 # Create Flask app
+ACTIVE_CONFIG = config.get_config()
 app = Flask(__name__)
-app.config.from_object(config.get_config())
+app.config.from_object(ACTIVE_CONFIG)
+
+COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COURSES_DATA', [])}
+GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
+
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
+GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
+gemini_client_ready = False
+
+if genai and GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_client_ready = True
+        logger.info(f"✅ Gemini API initialized with model {GEMINI_MODEL_NAME}")
+    except Exception as gemini_init_error:
+        gemini_client_ready = False
+        logger.error(f"❌ Failed to initialize Gemini API: {gemini_init_error}")
+elif not GEMINI_API_KEY:
+    logger.info("ℹ️ GEMINI_API_KEY not found. Gemini routes will be disabled.")
+else:
+    logger.warning("⚠️ google-generativeai package not available. Install to enable Gemini features.")
 
 # ==========================================
 # สร้างโฟลเดอร์ที่จำเป็นทันที
@@ -3696,6 +3723,230 @@ def generate_next_term_grade_prediction_table(current_grades):
             "improvement": 0
         }
 
+# ==========================================
+# Gemini AI Integration Helpers
+# ==========================================
+GEMINI_SYSTEM_PROMPT = (
+    "คุณคือที่ปรึกษาด้านการศึกษาที่เชี่ยวชาญการวิเคราะห์ข้อมูลเกรด "
+    "ให้คำอธิบายเป็นภาษาไทย ใช้น้ำเสียงมืออาชีพ กระชับ และแนะนำเชิงปฏิบัติ "
+    "ถ้าข้อมูลไม่เพียงพอให้ระบุอย่างชัดเจน หลีกเลี่ยงการเดา"
+)
+
+GEMINI_RESPONSE_SCHEMAS = {
+    "insights": {
+        "type": "object",
+        "properties": {
+            "analysis_markdown": {"type": "string"},
+            "risk_level": {"type": "string"},
+            "outcome_summary": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                    "confidence": {"type": "number"},
+                    "description": {"type": "string"}
+                },
+                "required": ["status"]
+            },
+            "key_metrics": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string"},
+                        "value": {"type": "string"},
+                        "trend": {"type": "string"}
+                    }
+                }
+            },
+            "recommendations": {
+                "type": "array",
+                "items": {"type": "string"}
+            },
+            "chart": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "type": {"type": "string"},
+                    "labels": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    },
+                    "series": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "data": {
+                                    "type": "array",
+                                    "items": {"type": "number"}
+                                }
+                            },
+                            "required": ["name", "data"]
+                        }
+                    }
+                }
+            }
+        },
+        "required": ["analysis_markdown"]
+    }
+}
+
+
+def is_gemini_available() -> bool:
+    return bool(genai and gemini_client_ready)
+
+
+def _to_native_value(value):
+    """แปลงค่า numpy/pandas ให้เป็น Python ปกติ"""
+    if pd.isna(value):
+        return None
+    if isinstance(value, (np.generic, np.bool_)):
+        return value.item()
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return [_to_native_value(v) for v in value]
+    return value
+
+
+def summarize_dataframe_for_gemini(df, max_columns=20, max_samples=10):
+    summary = {
+        'row_count': int(df.shape[0]),
+        'column_count': int(df.shape[1]),
+        'columns': []
+    }
+    
+    for column in df.columns[:max_columns]:
+        series = df[column]
+        column_summary = {
+            'name': str(column),
+            'dtype': str(series.dtype),
+            'missing': int(series.isna().sum()),
+            'unique': int(series.nunique(dropna=True))
+        }
+        
+        if pd.api.types.is_numeric_dtype(series):
+            non_na = series.dropna()
+            if not non_na.empty:
+                column_summary.update({
+                    'min': _to_native_value(non_na.min()),
+                    'max': _to_native_value(non_na.max()),
+                    'mean': _to_native_value(non_na.mean()),
+                    'median': _to_native_value(non_na.median()),
+                    'std': _to_native_value(non_na.std())
+                })
+        else:
+            top_values = (
+                series.dropna()
+                .astype(str)
+                .value_counts()
+                .head(5)
+                .index
+                .tolist()
+            )
+            column_summary['top_values'] = top_values
+        
+        summary['columns'].append(column_summary)
+    
+    sample_rows = []
+    for _, row in df.head(max_samples).iterrows():
+        sample = {}
+        for column in df.columns[:max_columns]:
+            sample[column] = _to_native_value(row[column])
+        sample_rows.append(sample)
+    
+    return summary, sample_rows
+
+
+def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_count: int):
+    distribution = Counter(course_grades.values())
+    numeric_scores = []
+    course_details = []
+    total_credits = 0
+    
+    for course_id, grade in course_grades.items():
+        info = COURSE_LOOKUP.get(course_id, {})
+        credits = info.get('credit', 3)
+        total_credits += credits
+        
+        grade_point = GRADE_POINT_MAP.get(grade)
+        if grade_point is not None:
+            numeric_scores.append(float(grade_point))
+        
+        course_details.append({
+            'course_id': course_id,
+            'course_name': info.get('thaiName') or info.get('name'),
+            'credit': credits,
+            'grade': grade
+        })
+    
+    estimated_gpa = float(np.mean(numeric_scores)) if numeric_scores else None
+    
+    return {
+        'total_courses': len(course_grades),
+        'estimated_gpa': estimated_gpa,
+        'grade_distribution': dict(distribution),
+        'course_details': course_details,
+        'loaded_terms_count': loaded_terms_count,
+        'total_credits_recorded': total_credits
+    }
+
+
+def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: str = 'insights'):
+    if not is_gemini_available():
+        raise RuntimeError("Gemini API is not configured")
+    
+    try:
+        prompt_payload = {
+            'task': task_name,
+            'payload': payload
+        }
+        user_prompt = json.dumps(prompt_payload, ensure_ascii=False)
+        
+        generation_config = {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "top_k": 40,
+            "max_output_tokens": 2048,
+            "response_mime_type": "application/json"
+        }
+        
+        schema = GEMINI_RESPONSE_SCHEMAS.get(schema_key)
+        if schema:
+            generation_config["response_schema"] = schema
+        
+        model = genai.GenerativeModel(
+            GEMINI_MODEL_NAME,
+            system_instruction=GEMINI_SYSTEM_PROMPT,
+            generation_config=generation_config
+        )
+        response = model.generate_content(user_prompt)
+        
+        response_text = getattr(response, 'text', None)
+        if not response_text and getattr(response, 'candidates', None):
+            parts = response.candidates[0].content.parts
+            if parts:
+                response_text = parts[0].text
+        
+        if not response_text:
+            raise ValueError("Empty response from Gemini")
+        
+        return json.loads(response_text)
+    except Exception as exc:
+        logger.error(f"Gemini request failed: {exc}")
+        # ส่ง fallback ข้อมูลที่ยังแสดงผลได้
+        return {
+            "analysis_markdown": "ไม่สามารถดึงผลจาก Gemini ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง",
+            "risk_level": "ไม่ทราบ",
+            "outcome_summary": {
+                "status": "ไม่ทราบ",
+                "confidence": 0.0,
+                "description": "เกิดข้อผิดพลาดระหว่างเชื่อมต่อ Gemini"
+            },
+            "key_metrics": [],
+            "recommendations": [],
+            "chart": None
+        }
+
 # Flask Routes (Keep all other routes unchanged)
 @app.route('/')
 def index():
@@ -3879,12 +4130,113 @@ def get_config_for_frontend():
             'ALL_TERMS_DATA': app.config.get('ALL_TERMS_DATA', []),
             'GRADE_MAPPING': app.config.get('DATA_CONFIG', {}).get('grade_mapping', {}),
             'MESSAGES': app.config.get('MESSAGES', {}),
-            'DATA_CONFIG_RISK_LEVELS': app.config.get('DATA_CONFIG', {}).get('risk_levels', {})
+            'DATA_CONFIG_RISK_LEVELS': app.config.get('DATA_CONFIG', {}).get('risk_levels', {}),
+            'GEMINI_ENABLED': is_gemini_available()
         }
         return jsonify(config_data)
     except Exception as e:
         logger.error(f"Error loading config data: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/gemini/analyze_file', methods=['POST'])
+def gemini_analyze_file_route():
+    """วิเคราะห์ไฟล์ CSV/XLSX ด้วย Gemini"""
+    if not is_gemini_available():
+        return jsonify({'success': False, 'error': 'ยังไม่ได้ตั้งค่า Gemini API Key'}), 503
+    
+    uploaded_file = request.files.get('file')
+    analysis_goal = request.form.get('analysis_goal', '').strip()
+    
+    if uploaded_file is None or uploaded_file.filename == '':
+        return jsonify({'success': False, 'error': 'กรุณาเลือกไฟล์ CSV หรือ Excel'}), 400
+    
+    try:
+        file_bytes = uploaded_file.read()
+        if not file_bytes:
+            return jsonify({'success': False, 'error': 'ไฟล์ว่างเปล่า'}), 400
+        
+        max_bytes = int(GEMINI_MAX_FILE_SIZE_MB * 1024 * 1024)
+        if len(file_bytes) > max_bytes:
+            return jsonify({
+                'success': False,
+                'error': f'ไฟล์มีขนาดใหญ่เกิน {GEMINI_MAX_FILE_SIZE_MB} MB'
+            }), 400
+        
+        buffer = BytesIO(file_bytes)
+        filename = uploaded_file.filename.lower()
+        
+        if filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(buffer)
+        else:
+            buffer.seek(0)
+            df = pd.read_csv(buffer)
+        
+        summary, samples = summarize_dataframe_for_gemini(df)
+        payload = {
+            'analysis_goal': analysis_goal or 'วิเคราะห์ภาพรวมของข้อมูลเกรดในไฟล์',
+            'dataset_summary': summary,
+            'sample_rows': samples
+        }
+        gemini_output = call_gemini_structured('csv_dataset_analysis', payload)
+        
+        return jsonify({
+            'success': True,
+            'source': 'file',
+            'dataset_summary': summary,
+            'sample_rows': samples,
+            'gemini': gemini_output
+        })
+    except Exception as exc:
+        logger.error(f"Gemini file analysis error: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+
+@app.route('/api/gemini/predict', methods=['POST'])
+def gemini_predict_route():
+    """ให้ Gemini วิเคราะห์ข้อมูลเกรดที่ผู้ใช้กรอกแบบสด"""
+    if not is_gemini_available():
+        return jsonify({'success': False, 'error': 'ยังไม่ได้ตั้งค่า Gemini API Key'}), 503
+    
+    payload = request.get_json(silent=True) or {}
+    course_grades = payload.get('course_grades') or payload.get('grades') or {}
+    student_name = payload.get('student_name', 'นักศึกษา')
+    analysis_goal = payload.get('analysis_goal', '').strip()
+    loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
+    
+    if not isinstance(course_grades, dict) or len(course_grades) == 0:
+        return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
+    
+    # กรองเฉพาะเกรดที่ไม่ว่าง
+    cleaned_grades = {
+        str(course_id): grade
+        for course_id, grade in course_grades.items()
+        if grade
+    }
+    
+    if len(cleaned_grades) == 0:
+        return jsonify({'success': False, 'error': 'ไม่พบเกรดที่สามารถนำมาวิเคราะห์ได้'}), 400
+    
+    try:
+        grade_summary = summarize_grades_for_gemini(cleaned_grades, loaded_terms_count)
+        grade_summary['student_name'] = student_name
+        
+        prompt_payload = {
+            'student_name': student_name,
+            'analysis_goal': analysis_goal or 'วิเคราะห์แนวโน้มการจบการศึกษาและคำแนะนำเร่งด่วน',
+            'grade_summary': grade_summary
+        }
+        
+        gemini_output = call_gemini_structured('live_grade_prediction', prompt_payload)
+        
+        return jsonify({
+            'success': True,
+            'source': 'live_grades',
+            'analysis': grade_summary,
+            'gemini': gemini_output
+        })
+    except Exception as exc:
+        logger.error(f"Gemini prediction error: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 400
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
