@@ -242,6 +242,22 @@
                     </div>
                 </div>
 
+                <div class="mb-3">
+                    <label class="form-label"><i class="bi bi-gear"></i> เลือกวิธีการวิเคราะห์</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="analysisMethod" id="methodNormal" value="normal" checked>
+                        <label class="form-check-label" for="methodNormal">
+                            <i class="bi bi-cpu"></i> วิเคราะห์ด้วยโมเดล AI ปกติ
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="analysisMethod" id="methodGemini" value="gemini">
+                        <label class="form-check-label" for="methodGemini">
+                            <i class="bi bi-stars"></i> วิเคราะห์ด้วยโมเดล Gemini
+                        </label>
+                    </div>
+                </div>
+
                 <div class="d-grid">
                     <button type="submit" class="btn btn-primary btn-lg" id="predictBtn" disabled>
                         <span id="predictSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
@@ -531,8 +547,8 @@ function getProgressBarColor(gpa) {
 
 async function handleAdvancedPrediction(event) {
     event.preventDefault();
-    showLoading('กำลังวิเคราะห์หลักสูตร...');
     
+    const analysisMethod = document.querySelector('input[name="analysisMethod"]:checked').value;
     const studentName = document.getElementById('studentName').value || 'นักศึกษา';
     const modelFilename = document.getElementById('modelSelect').value;
     const currentYear = parseInt(document.getElementById('currentYear').value);
@@ -549,25 +565,79 @@ async function handleAdvancedPrediction(event) {
         }
     });
     
+    if (Object.keys(grades).length === 0) {
+        showAlert('กรุณากรอกเกรดอย่างน้อย 1 วิชา', 'warning');
+        return;
+    }
+    
     try {
-        const response = await fetch('/api/analyze_curriculum', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                student_name: studentName,
-                current_grades: grades,
-                loaded_terms_count: loadedTermsCount,
-                model_filename: modelFilename
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            displayAdvancedResults(result);
-            showAlert('วิเคราะห์หลักสูตรสำเร็จ!', 'success');
+        if (analysisMethod === 'gemini') {
+            // ใช้ Gemini สำหรับวิเคราะห์
+            showLoading('กำลังวิเคราะห์ด้วย Gemini...');
+            
+            const response = await fetch('/api/gemini/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_name: studentName,
+                    course_grades: grades,
+                    loaded_terms_count: loadedTermsCount,
+                    model_filename: modelFilename,
+                    analysis_goal: 'วิเคราะห์แนวโน้มการจบการศึกษาและให้คำแนะนำ'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // แปลงผลลัพธ์จาก Gemini ให้เข้ากับ format เดิม
+                const geminiResult = {
+                    success: true,
+                    student_name: studentName,
+                    avg_gpa: result.analysis?.estimated_gpa || 0,
+                    completion_rate: 0,
+                    graduation_status: result.gemini?.outcome_summary?.status || 'ไม่ทราบ',
+                    prediction_result: {
+                        prediction: result.gemini?.outcome_summary?.status || 'ไม่ทราบ',
+                        confidence: result.gemini?.outcome_summary?.confidence || 0.5,
+                        risk_level: result.gemini?.risk_level || 'ไม่ทราบ'
+                    },
+                    failed_courses: [],
+                    blocked_courses_details: [],
+                    recommendations: result.gemini?.recommendations || [],
+                    gemini_analysis: result.gemini,
+                    analysis_method: 'gemini'
+                };
+                
+                displayAdvancedResults(geminiResult);
+                showAlert('วิเคราะห์ด้วย Gemini สำเร็จ!', 'success');
+            } else {
+                showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
+            }
         } else {
-            showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
+            // ใช้โมเดล AI ปกติ
+            showLoading('กำลังวิเคราะห์หลักสูตร...');
+            
+            const response = await fetch('/api/analyze_curriculum', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_name: studentName,
+                    current_grades: grades,
+                    loaded_terms_count: loadedTermsCount,
+                    model_filename: modelFilename
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                result.analysis_method = 'normal';
+                displayAdvancedResults(result);
+                showAlert('วิเคราะห์หลักสูตรสำเร็จ!', 'success');
+            } else {
+                showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
+            }
         }
     } catch (error) {
         console.error('Analysis error:', error);
@@ -584,11 +654,11 @@ function displayAdvancedResults(data) {
     
     // Update basic info
     document.getElementById('resultsStudentName').textContent = data.student_name;
-    document.getElementById('resultsCurrentGPA').textContent = data.avg_gpa.toFixed(2);
-    document.getElementById('resultsGraduationStatus').textContent = data.graduation_status;
+    document.getElementById('resultsCurrentGPA').textContent = data.avg_gpa ? data.avg_gpa.toFixed(2) : '0.00';
+    document.getElementById('resultsGraduationStatus').textContent = data.graduation_status || 'ไม่ทราบ';
     
     // Update progress ring
-    updateProgressRingForResults(data.completion_rate);
+    updateProgressRingForResults(data.completion_rate || 0);
     
     // Update prediction if available
     if (data.prediction_result) {
@@ -597,11 +667,16 @@ function displayAdvancedResults(data) {
             (data.prediction_result.confidence * 100).toFixed(1) + '%)';
         
         const riskBadge = document.getElementById('resultsRiskLevel');
-        riskBadge.textContent = data.prediction_result.risk_level;
+        riskBadge.textContent = data.prediction_result.risk_level || 'ไม่ทราบ';
         riskBadge.className = 'badge bg-' + getRiskColor(data.prediction_result.risk_level);
     } else {
         document.getElementById('resultsPrediction').textContent = 'ไม่มีข้อมูล';
         document.getElementById('resultsRiskLevel').textContent = 'ไม่ระบุ';
+    }
+    
+    // แสดงผลการวิเคราะห์จาก Gemini ถ้ามี
+    if (data.analysis_method === 'gemini' && data.gemini_analysis) {
+        displayGeminiAnalysis(data.gemini_analysis);
     }
     
     // Failed Courses
@@ -674,9 +749,61 @@ function getRiskColor(riskLevel) {
     const riskColors = {
         'ต่ำ': 'success',
         'ปานกลาง': 'warning',
-        'สูง': 'danger'
+        'สูง': 'danger',
+        'very_low': 'success',
+        'low': 'success',
+        'moderate': 'warning',
+        'high': 'danger',
+        'very_high': 'danger'
     };
     return riskColors[riskLevel] || 'secondary';
+}
+
+function displayGeminiAnalysis(geminiData) {
+    // เพิ่มส่วนแสดงผลการวิเคราะห์จาก Gemini
+    let geminiHtml = '<div class="card mt-4 border-primary">';
+    geminiHtml += '<div class="card-header bg-primary text-white">';
+    geminiHtml += '<i class="bi bi-stars"></i> การวิเคราะห์จาก Gemini AI';
+    geminiHtml += '</div>';
+    geminiHtml += '<div class="card-body">';
+    
+    if (geminiData.analysis_markdown) {
+        geminiHtml += '<div class="mb-3">';
+        geminiHtml += '<h6>สรุปการวิเคราะห์:</h6>';
+        geminiHtml += '<div class="p-3 bg-light rounded">';
+        geminiHtml += geminiData.analysis_markdown.replace(/\n/g, '<br>');
+        geminiHtml += '</div>';
+        geminiHtml += '</div>';
+    }
+    
+    if (geminiData.key_metrics && geminiData.key_metrics.length > 0) {
+        geminiHtml += '<div class="mb-3">';
+        geminiHtml += '<h6>ตัวชี้วัดสำคัญ:</h6>';
+        geminiHtml += '<ul class="list-group">';
+        geminiData.key_metrics.forEach(function(metric) {
+            geminiHtml += '<li class="list-group-item d-flex justify-content-between align-items-center">';
+            geminiHtml += '<span>' + metric.label + '</span>';
+            geminiHtml += '<span class="badge bg-primary rounded-pill">' + metric.value + '</span>';
+            geminiHtml += '</li>';
+        });
+        geminiHtml += '</ul>';
+        geminiHtml += '</div>';
+    }
+    
+    geminiHtml += '</div>';
+    geminiHtml += '</div>';
+    
+    // เพิ่มเข้าไปใน resultsSection
+    const resultsSection = document.getElementById('resultsSection');
+    const existingGemini = resultsSection.querySelector('.gemini-analysis-section');
+    if (existingGemini) {
+        existingGemini.remove();
+    }
+    
+    const geminiDiv = document.createElement('div');
+    geminiDiv.className = 'gemini-analysis-section';
+    geminiDiv.innerHTML = geminiHtml;
+    resultsSection.appendChild(geminiDiv);
 }
 </script>
 {% endblock %}

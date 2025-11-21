@@ -3964,54 +3964,116 @@ def run_gemini_training_analysis(
     analysis_goal: Optional[str],
     training_context: Dict[str, Any]
 ) -> Optional[Dict[str, Any]]:
-    """ขอให้ Gemini วิเคราะห์ข้อมูลฝึกโมเดลไปพร้อมกับการเทรนแบบปกติ"""
+    """
+    ให้ Gemini อ่านไฟล์เทรนและวิเคราะห์ตาม prompt ที่กำหนด
+    แล้วส่งค่ากลับมาเพื่อใช้ในการเทรนโมเดล
+    """
     if not is_gemini_available():
         logger.debug("Gemini not available; skip training-time analysis")
         return None
     
     try:
-        summary, samples = summarize_dataframe_for_gemini(df)
-        goal_text = (analysis_goal or '').strip() or 'วิเคราะห์คุณภาพข้อมูลและความเสี่ยงของชุดฝึกโมเดล'
+        logger.info("🤖 Starting Gemini training analysis...")
+        
+        # สรุปข้อมูลไฟล์เทรน
+        summary, samples = summarize_dataframe_for_gemini(df, max_columns=30, max_samples=20)
+        
+        # สร้าง prompt สำหรับ Gemini
+        goal_text = (analysis_goal or '').strip() or 'วิเคราะห์คุณภาพข้อมูล ตรวจสอบความสมบูรณ์ของข้อมูล และระบุปัญหาที่อาจส่งผลต่อการเทรนโมเดล'
+        
+        # สร้าง prompt ที่ละเอียดขึ้น
+        training_prompt = f"""
+คุณได้รับข้อมูลไฟล์เทรนสำหรับระบบทำนายการจบการศึกษาของนักศึกษา
+
+**วัตถุประสงค์การวิเคราะห์:**
+{goal_text}
+
+**ข้อมูลไฟล์เทรน:**
+- จำนวนแถว: {summary['row_count']} แถว
+- จำนวนคอลัมน์: {summary['column_count']} คอลัมน์
+- รายละเอียดคอลัมน์: {json.dumps(summary['columns'], ensure_ascii=False, indent=2)}
+
+**ตัวอย่างข้อมูล (20 แถวแรก):**
+{json.dumps(samples, ensure_ascii=False, indent=2)}
+
+**บริบทการเทรน:**
+- รูปแบบข้อมูล: {training_context.get('data_format', 'ไม่ระบุ')}
+- ประเภทการเทรน: {training_context.get('training_type', 'ไม่ระบุ')}
+- ใช้ Advanced Pipeline: {training_context.get('use_advanced_pipeline', False)}
+- จำนวนตัวอย่างที่เตรียมแล้ว: {training_context.get('prepared_samples', 0)}
+- จำนวน features: {training_context.get('feature_count', 0)}
+- การกระจายของ label: {json.dumps(training_context.get('label_distribution', {}), ensure_ascii=False)}
+
+**คำถามที่ต้องการให้วิเคราะห์:**
+1. คุณภาพข้อมูล: ข้อมูลมีความสมบูรณ์เพียงพอหรือไม่ มี missing values หรือข้อมูลผิดปกติหรือไม่?
+2. ความสมดุลของข้อมูล: การกระจายของ label (จบ/ไม่จบ) สมดุลหรือไม่?
+3. ปัญหาที่อาจเกิดขึ้น: มีปัญหาอะไรที่อาจส่งผลต่อการเทรนโมเดลหรือไม่?
+4. คำแนะนำ: มีคำแนะนำอะไรสำหรับการปรับปรุงข้อมูลหรือการเทรนโมเดลหรือไม่?
+5. ความเสี่ยง: มีความเสี่ยงอะไรที่ควรระวังหรือไม่?
+
+กรุณาวิเคราะห์และให้คำตอบตามโครงสร้างที่กำหนด
+"""
+        
         payload = {
             'analysis_goal': goal_text,
             'dataset_summary': summary,
             'sample_rows': samples,
-            'training_context': training_context
+            'training_context': training_context,
+            'detailed_prompt': training_prompt
         }
+        
+        logger.info("📤 Sending training data to Gemini for analysis...")
         gemini_output = call_gemini_structured('training_dataset_analysis', payload)
+        
+        logger.info("✅ Gemini training analysis completed")
+        
         return {
             'analysis_goal': goal_text,
             'dataset_summary': summary,
             'sample_rows': samples,
             'training_context': training_context,
             'gemini': gemini_output,
-            'generated_at': datetime.now().isoformat()
+            'generated_at': datetime.now().isoformat(),
+            'analysis_type': 'training_file_analysis'
         }
     except Exception as exc:
         logger.warning(f"Gemini training analysis failed: {exc}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             'analysis_goal': analysis_goal,
             'training_context': training_context,
-            'error': str(exc)
+            'error': str(exc),
+            'generated_at': datetime.now().isoformat()
         }
 
 
 def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: str = 'insights'):
+    """
+    เรียกใช้ Gemini API เพื่อวิเคราะห์ข้อมูล
+    รองรับทั้ง prompt ธรรมดาและ detailed prompt
+    """
     if not is_gemini_available():
         raise RuntimeError("Gemini API is not configured")
     
     try:
-        prompt_payload = {
-            'task': task_name,
-            'payload': payload
-        }
-        user_prompt = json.dumps(prompt_payload, ensure_ascii=False)
+        # ถ้ามี detailed_prompt ให้ใช้แทน
+        if 'detailed_prompt' in payload:
+            user_prompt = payload['detailed_prompt']
+            logger.info("📝 Using detailed prompt for Gemini analysis")
+        else:
+            # ใช้ prompt ธรรมดา
+            prompt_payload = {
+                'task': task_name,
+                'payload': payload
+            }
+            user_prompt = json.dumps(prompt_payload, ensure_ascii=False)
         
         generation_config = {
             "temperature": 0.2,
             "top_p": 0.9,
             "top_k": 40,
-            "max_output_tokens": 2048,
+            "max_output_tokens": 4096,  # เพิ่มเป็น 4096 สำหรับ prompt ที่ละเอียดขึ้น
             "response_mime_type": "application/json"
         }
         
@@ -4024,6 +4086,8 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
             system_instruction=GEMINI_SYSTEM_PROMPT,
             generation_config=generation_config
         )
+        
+        logger.info(f"📤 Sending request to Gemini (task: {task_name})...")
         response = model.generate_content(user_prompt)
         
         response_text = getattr(response, 'text', None)
@@ -4035,17 +4099,22 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
         if not response_text:
             raise ValueError("Empty response from Gemini")
         
-        return json.loads(response_text)
+        result = json.loads(response_text)
+        logger.info("✅ Gemini analysis completed successfully")
+        return result
+        
     except Exception as exc:
-        logger.error(f"Gemini request failed: {exc}")
+        logger.error(f"❌ Gemini request failed: {exc}")
+        import traceback
+        logger.error(traceback.format_exc())
         # ส่ง fallback ข้อมูลที่ยังแสดงผลได้
         return {
-            "analysis_markdown": "ไม่สามารถดึงผลจาก Gemini ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง",
+            "analysis_markdown": f"ไม่สามารถดึงผลจาก Gemini ได้ในขณะนี้: {str(exc)} กรุณาลองใหม่อีกครั้ง",
             "risk_level": "ไม่ทราบ",
             "outcome_summary": {
                 "status": "ไม่ทราบ",
                 "confidence": 0.0,
-                "description": "เกิดข้อผิดพลาดระหว่างเชื่อมต่อ Gemini"
+                "description": f"เกิดข้อผิดพลาดระหว่างเชื่อมต่อ Gemini: {str(exc)}"
             },
             "key_metrics": [],
             "recommendations": [],
@@ -4676,7 +4745,10 @@ def analyze_subjects():
 
 @app.route('/api/analyze_curriculum', methods=['POST'])
 def analyze_curriculum():
-    """Analyzes curriculum progress with prerequisites."""
+    """
+    วิเคราะห์หลักสูตรและทำนายการจบการศึกษา
+    ระบบจะส่งค่าเกรดเข้าไปวิเคราะห์และทำนาย
+    """
     try:
         data = request.get_json()
         current_grades = data.get('current_grades', {})
@@ -4685,7 +4757,8 @@ def analyze_curriculum():
         model_filename = data.get('model_filename')
         student_name = data.get('student_name', 'นักศึกษา')
 
-        logger.info(f"Analyzing curriculum for {student_name} with {len(current_grades)} grades")
+        logger.info(f"🔮 Analyzing curriculum for {student_name} with {len(current_grades)} grades")
+        logger.info(f"📊 Grade values sent for analysis: {list(current_grades.keys())[:10]}...")  # Log first 10 courses
         
         # Get configuration
         courses_data = app.config['COURSES_DATA']
