@@ -2224,9 +2224,11 @@ def train_model():
     """Handles model training with the uploaded file."""
     try:
         logger.info("🚀 Starting ADVANCED model training process...")
-        data = request.get_json()
+        data = request.get_json() or {}
         filename = data.get('filename')
         use_advanced = data.get('use_advanced_training', True)  # Default to advanced
+        enable_gemini_analysis = data.get('enable_gemini_analysis', True)
+        gemini_analysis_goal = data.get('gemini_analysis_goal')
 
         if not filename:
             logger.warning("No filename provided for training")
@@ -2293,6 +2295,34 @@ def train_model():
                 trainer.save_model(model_path)
                 
                 logger.info(f"💾 Model saved to: {model_path}")
+
+                tan1_gemini_analysis = None
+                if enable_gemini_analysis and is_gemini_available():
+                    try:
+                        training_context = {
+                            'data_format': data_format,
+                            'training_type': 'advanced',
+                            'use_advanced_pipeline': True,
+                            'rows_in_file': len(df),
+                            'columns_in_file': len(df.columns),
+                            'prepared_samples': len(X),
+                            'feature_count': X.shape[1] if hasattr(X, 'shape') else 0,
+                            'label_distribution': y.value_counts().to_dict() if hasattr(y, 'value_counts') else {},
+                            'course_profiles_count': len(course_profiles) if course_profiles else 0,
+                            'model_metrics': {
+                                name: {
+                                    'accuracy': res.get('accuracy'),
+                                    'f1_score': res.get('f1_score')
+                                } for name, res in results.items()
+                            },
+                            'timestamp': datetime.now().isoformat(),
+                            'source_file': filename
+                        }
+                        tan1_gemini_analysis = run_gemini_training_analysis(df, gemini_analysis_goal, training_context)
+                    except Exception as tan_exc:
+                        logger.warning(f"Gemini analysis for TAN1 skipped: {tan_exc}")
+                elif enable_gemini_analysis and not is_gemini_available():
+                    logger.info("Gemini analysis requested but API key is missing (TAN1 flow)")
                 
                 return jsonify({
                     'success': True,
@@ -2301,7 +2331,8 @@ def train_model():
                     'results': {name: {'accuracy': result['accuracy'], 'f1_score': result['f1_score']} 
                               for name, result in results.items()},
                     'training_samples': len(X),
-                    'features': X.shape[1] if len(X) > 0 else 0
+                    'features': X.shape[1] if len(X) > 0 else 0,
+                    'gemini_analysis': tan1_gemini_analysis
                 })
             else:
                 # ใช้ AdvancedFeatureEngineer สำหรับข้อมูลรูปแบบเก่า
@@ -2333,6 +2364,9 @@ def train_model():
             y = processed_df['graduated']
             course_profiles = None
 
+        course_profiles_count = len(course_profiles) if course_profiles else 0
+        gemini_training_analysis = None
+
         min_students_for_training = app.config['DATA_CONFIG']['min_students_for_training']
         if len(X) < min_students_for_training:
             return jsonify({'success': False, 
@@ -2357,6 +2391,37 @@ def train_model():
                 ).sort_values(ascending=False)
                 feature_importances = importances.head(10).to_dict()
 
+        if enable_gemini_analysis and is_gemini_available():
+            try:
+                training_context = {
+                    'data_format': data_format,
+                    'training_type': training_type,
+                    'use_advanced_pipeline': bool(use_advanced),
+                    'rows_in_file': len(df),
+                    'columns_in_file': len(df.columns),
+                    'prepared_samples': len(X),
+                    'feature_count': int(X.shape[1]) if hasattr(X, 'shape') else len(model_result.get('feature_columns', [])),
+                    'label_distribution': y.value_counts().to_dict(),
+                    'course_profiles_count': course_profiles_count,
+                    'model_metrics': {
+                        'accuracy': model_result['accuracy'],
+                        'precision': model_result['precision'],
+                        'recall': model_result['recall'],
+                        'f1_score': model_result['f1_score']
+                    },
+                    'timestamp': datetime.now().isoformat(),
+                    'source_file': filename
+                }
+                gemini_training_analysis = run_gemini_training_analysis(
+                    df,
+                    gemini_analysis_goal,
+                    training_context
+                )
+            except Exception as gem_exc:
+                logger.warning(f"Gemini analysis skipped due to error: {gem_exc}")
+        elif enable_gemini_analysis and not is_gemini_available():
+            logger.info("Skipping Gemini training analysis because API is not configured")
+
         # สร้างชื่อไฟล์โมเดล
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         training_type = 'advanced' if use_advanced else 'standard'
@@ -2371,25 +2436,26 @@ def train_model():
             'training_type': training_type,
             'course_profiles': course_profiles,  # บันทึก course DNA
             'created_at': datetime.now().isoformat(),
-            'training_data_info': {
-                'rows': len(X),
-                'features': X.shape[1],
-                'graduated_count': int(y.sum()),
-                'not_graduated_count': int(len(y) - y.sum()),
-                'source_file': filename
-            },
-            'performance_metrics': {
-                'accuracy': model_result['accuracy'],
-                'precision': model_result['precision'],
-                'recall': model_result['recall'],
-                'f1_score': model_result['f1_score']
-            },
-            'feature_importances': feature_importances,
-            'hyperparameters': {
-                'best_rf_params': model_result.get('best_rf_params', {}),
-                'best_gb_params': model_result.get('best_gb_params', {}),
-                'best_lr_params': model_result.get('best_lr_params', {})
-            }
+          'training_data_info': {
+              'rows': len(X),
+              'features': X.shape[1],
+              'graduated_count': int(y.sum()),
+              'not_graduated_count': int(len(y) - y.sum()),
+              'source_file': filename
+          },
+          'performance_metrics': {
+              'accuracy': model_result['accuracy'],
+              'precision': model_result['precision'],
+              'recall': model_result['recall'],
+              'f1_score': model_result['f1_score']
+          },
+          'feature_importances': feature_importances,
+          'gemini_training_analysis': gemini_training_analysis,
+          'hyperparameters': {
+              'best_rf_params': model_result.get('best_rf_params', {}),
+              'best_gb_params': model_result.get('best_gb_params', {}),
+              'best_lr_params': model_result.get('best_lr_params', {})
+          }
         }
 
         # บันทึกโมเดล
@@ -2411,12 +2477,14 @@ def train_model():
             'precision': model_result['precision'],
             'recall': model_result['recall'],
             'f1_score': model_result['f1_score'],
-            'training_samples': len(X),
-            'validation_samples': model_result.get('validation_samples', 0),
-            'features_count': X.shape[1],
-            'data_format': data_format,
-            'feature_importances': feature_importances,
-            'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
+          'training_samples': len(X),
+          'validation_samples': model_result.get('validation_samples', 0),
+          'features_count': X.shape[1],
+          'data_format': data_format,
+          'feature_importances': feature_importances,
+          'course_profiles_count': course_profiles_count,
+          'gemini_analysis': gemini_training_analysis,
+          'storage_provider': 'cloudflare_r2' if not storage.use_local else 'local'
         })
 
     except Exception as e:
@@ -3891,6 +3959,43 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
     }
 
 
+def run_gemini_training_analysis(
+    df: pd.DataFrame,
+    analysis_goal: Optional[str],
+    training_context: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """ขอให้ Gemini วิเคราะห์ข้อมูลฝึกโมเดลไปพร้อมกับการเทรนแบบปกติ"""
+    if not is_gemini_available():
+        logger.debug("Gemini not available; skip training-time analysis")
+        return None
+    
+    try:
+        summary, samples = summarize_dataframe_for_gemini(df)
+        goal_text = (analysis_goal or '').strip() or 'วิเคราะห์คุณภาพข้อมูลและความเสี่ยงของชุดฝึกโมเดล'
+        payload = {
+            'analysis_goal': goal_text,
+            'dataset_summary': summary,
+            'sample_rows': samples,
+            'training_context': training_context
+        }
+        gemini_output = call_gemini_structured('training_dataset_analysis', payload)
+        return {
+            'analysis_goal': goal_text,
+            'dataset_summary': summary,
+            'sample_rows': samples,
+            'training_context': training_context,
+            'gemini': gemini_output,
+            'generated_at': datetime.now().isoformat()
+        }
+    except Exception as exc:
+        logger.warning(f"Gemini training analysis failed: {exc}")
+        return {
+            'analysis_goal': analysis_goal,
+            'training_context': training_context,
+            'error': str(exc)
+        }
+
+
 def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: str = 'insights'):
     if not is_gemini_available():
         raise RuntimeError("Gemini API is not configured")
@@ -4202,6 +4307,23 @@ def gemini_predict_route():
     student_name = payload.get('student_name', 'นักศึกษา')
     analysis_goal = payload.get('analysis_goal', '').strip()
     loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
+    model_filename = payload.get('model_filename')
+    training_analysis = None
+    model_metadata = None
+    
+    if model_filename:
+        try:
+            stored_model = storage.load_model(model_filename)
+            if stored_model:
+                training_analysis = stored_model.get('gemini_training_analysis')
+                model_metadata = {
+                    'model_filename': model_filename,
+                    'data_format': stored_model.get('data_format'),
+                    'training_type': stored_model.get('training_type'),
+                    'performance_metrics': stored_model.get('performance_metrics')
+                }
+        except Exception as model_exc:
+            logger.warning(f"Unable to load model for Gemini context: {model_exc}")
     
     if not isinstance(course_grades, dict) or len(course_grades) == 0:
         return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
@@ -4232,7 +4354,9 @@ def gemini_predict_route():
             'success': True,
             'source': 'live_grades',
             'analysis': grade_summary,
-            'gemini': gemini_output
+            'gemini': gemini_output,
+            'training_analysis': training_analysis,
+            'model_metadata': model_metadata
         })
     except Exception as exc:
         logger.error(f"Gemini prediction error: {exc}")
