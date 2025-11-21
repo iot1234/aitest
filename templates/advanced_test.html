@@ -590,6 +590,12 @@ async function handleAdvancedPrediction(event) {
             const result = await response.json();
             
             if (result.success) {
+                // ตรวจสอบว่ามี gemini output หรือไม่
+                if (!result.gemini) {
+                    showAlert('ไม่ได้รับผลการวิเคราะห์จาก Gemini กรุณาลองใหม่อีกครั้ง', 'warning');
+                    return;
+                }
+                
                 // แปลงผลลัพธ์จาก Gemini ให้เข้ากับ format เดิม
                 const geminiResult = {
                     success: true,
@@ -612,7 +618,15 @@ async function handleAdvancedPrediction(event) {
                 displayAdvancedResults(geminiResult);
                 showAlert('วิเคราะห์ด้วย Gemini สำเร็จ!', 'success');
             } else {
-                showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
+                // แสดง error message ที่ละเอียดขึ้น
+                let errorMsg = result.error || 'Unknown error';
+                if (result.details) {
+                    errorMsg += ' (' + result.details + ')';
+                }
+                if (result.suggestion) {
+                    errorMsg += '\nคำแนะนำ: ' + result.suggestion;
+                }
+                showAlert('เกิดข้อผิดพลาด: ' + errorMsg, 'danger');
             }
         } else {
             // ใช้โมเดล AI ปกติ

@@ -53,6 +53,7 @@ from collections import Counter
 from imblearn.over_sampling import SMOTE
 import tempfile
 import json
+import re
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from typing import Any, Dict, Optional, List
@@ -4070,16 +4071,19 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
             user_prompt = json.dumps(prompt_payload, ensure_ascii=False)
         
         generation_config = {
-            "temperature": 0.2,
-            "top_p": 0.9,
+            "temperature": 0.3,  # เพิ่มเล็กน้อยเพื่อให้มีความหลากหลาย
+            "top_p": 0.95,
             "top_k": 40,
-            "max_output_tokens": 4096,  # เพิ่มเป็น 4096 สำหรับ prompt ที่ละเอียดขึ้น
+            "max_output_tokens": 4096,
             "response_mime_type": "application/json"
         }
         
         schema = GEMINI_RESPONSE_SCHEMAS.get(schema_key)
         if schema:
             generation_config["response_schema"] = schema
+            logger.info(f"📋 Using schema: {schema_key}")
+        else:
+            logger.warning(f"⚠️ Schema '{schema_key}' not found, using default")
         
         model = genai.GenerativeModel(
             GEMINI_MODEL_NAME,
@@ -4087,39 +4091,90 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
             generation_config=generation_config
         )
         
-        logger.info(f"📤 Sending request to Gemini (task: {task_name})...")
+        logger.info(f"📤 Sending request to Gemini (task: {task_name}, model: {GEMINI_MODEL_NAME})...")
+        logger.debug(f"Prompt length: {len(user_prompt)} characters")
+        
+        # เรียกใช้ Gemini API
         response = model.generate_content(user_prompt)
         
-        response_text = getattr(response, 'text', None)
-        if not response_text and getattr(response, 'candidates', None):
-            parts = response.candidates[0].content.parts
-            if parts:
-                response_text = parts[0].text
+        # ดึง response text
+        response_text = None
+        
+        # วิธีที่ 1: ใช้ response.text
+        if hasattr(response, 'text') and response.text:
+            response_text = response.text
+            logger.debug("Got response from response.text")
+        
+        # วิธีที่ 2: ใช้ candidates
+        if not response_text and hasattr(response, 'candidates') and response.candidates:
+            try:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    parts = candidate.content.parts
+                    if parts and len(parts) > 0:
+                        if hasattr(parts[0], 'text'):
+                            response_text = parts[0].text
+                        elif isinstance(parts[0], dict) and 'text' in parts[0]:
+                            response_text = parts[0]['text']
+                        logger.debug("Got response from candidates[0].content.parts[0]")
+            except Exception as e:
+                logger.warning(f"Error extracting from candidates: {e}")
+        
+        # วิธีที่ 3: ใช้ __str__ หรือ repr
+        if not response_text:
+            try:
+                response_str = str(response)
+                if response_str and response_str != 'None':
+                    # ลอง parse JSON จาก string
+                    json_match = re.search(r'\{.*\}', response_str, re.DOTALL)
+                    if json_match:
+                        response_text = json_match.group(0)
+                        logger.debug("Got response from string extraction")
+            except Exception as e:
+                logger.warning(f"Error extracting from string: {e}")
         
         if not response_text:
-            raise ValueError("Empty response from Gemini")
+            error_msg = "Empty response from Gemini"
+            logger.error(f"❌ {error_msg}")
+            logger.debug(f"Response object: {response}")
+            logger.debug(f"Response type: {type(response)}")
+            logger.debug(f"Response dir: {dir(response)}")
+            raise ValueError(error_msg)
         
-        result = json.loads(response_text)
-        logger.info("✅ Gemini analysis completed successfully")
-        return result
+        logger.debug(f"Response text length: {len(response_text)} characters")
+        logger.debug(f"Response preview: {response_text[:200]}...")
         
+        # Parse JSON response
+        try:
+            result = json.loads(response_text)
+            logger.info("✅ Gemini analysis completed successfully")
+            return result
+        except json.JSONDecodeError as json_err:
+            logger.error(f"❌ Failed to parse JSON response: {json_err}")
+            logger.error(f"Response text: {response_text[:500]}")
+            # ลองแก้ไข JSON ถ้าเป็นไปได้
+            try:
+                # ลบ markdown code blocks ถ้ามี
+                cleaned_text = response_text.strip()
+                if cleaned_text.startswith('```'):
+                    # ลบ ```json และ ``` ที่เริ่มต้นและสิ้นสุด
+                    cleaned_text = re.sub(r'^```(?:json)?\s*', '', cleaned_text)
+                    cleaned_text = re.sub(r'\s*```$', '', cleaned_text)
+                result = json.loads(cleaned_text)
+                logger.info("✅ Successfully parsed JSON after cleaning")
+                return result
+            except:
+                raise ValueError(f"Invalid JSON response from Gemini: {str(json_err)}")
+        
+    except ValueError as ve:
+        # Re-raise ValueError เพื่อให้ caller จัดการ
+        raise
     except Exception as exc:
         logger.error(f"❌ Gemini request failed: {exc}")
         import traceback
         logger.error(traceback.format_exc())
-        # ส่ง fallback ข้อมูลที่ยังแสดงผลได้
-        return {
-            "analysis_markdown": f"ไม่สามารถดึงผลจาก Gemini ได้ในขณะนี้: {str(exc)} กรุณาลองใหม่อีกครั้ง",
-            "risk_level": "ไม่ทราบ",
-            "outcome_summary": {
-                "status": "ไม่ทราบ",
-                "confidence": 0.0,
-                "description": f"เกิดข้อผิดพลาดระหว่างเชื่อมต่อ Gemini: {str(exc)}"
-            },
-            "key_metrics": [],
-            "recommendations": [],
-            "chart": None
-        }
+        # Re-raise exception แทนการ return fallback เพื่อให้ caller จัดการ
+        raise RuntimeError(f"Gemini API error: {str(exc)}") from exc
 
 # Flask Routes (Keep all other routes unchanged)
 @app.route('/')
@@ -4408,16 +4463,67 @@ def gemini_predict_route():
         return jsonify({'success': False, 'error': 'ไม่พบเกรดที่สามารถนำมาวิเคราะห์ได้'}), 400
     
     try:
+        logger.info(f"🔮 Starting Gemini prediction for {student_name} with {len(cleaned_grades)} courses")
+        
         grade_summary = summarize_grades_for_gemini(cleaned_grades, loaded_terms_count)
         grade_summary['student_name'] = student_name
         
+        # สร้าง prompt ที่ละเอียดสำหรับ Gemini
+        analysis_goal_text = analysis_goal or 'วิเคราะห์แนวโน้มการจบการศึกษาและให้คำแนะนำเร่งด่วน'
+        
+        detailed_prompt = f"""
+คุณได้รับข้อมูลเกรดของนักศึกษาเพื่อวิเคราะห์แนวโน้มการจบการศึกษา
+
+**ข้อมูลนักศึกษา:**
+- ชื่อ: {student_name}
+- จำนวนวิชาที่เรียนแล้ว: {grade_summary.get('total_courses', 0)} วิชา
+- จำนวนเทอมที่เรียน: {loaded_terms_count} เทอม
+- GPA โดยประมาณ: {grade_summary.get('estimated_gpa', 0):.2f}
+- หน่วยกิตที่เรียนแล้ว: {grade_summary.get('total_credits_recorded', 0)} หน่วยกิต
+
+**การกระจายเกรด:**
+{json.dumps(grade_summary.get('grade_distribution', {}), ensure_ascii=False, indent=2)}
+
+**รายละเอียดวิชา:**
+{json.dumps(grade_summary.get('course_details', [])[:20], ensure_ascii=False, indent=2)}
+
+**วัตถุประสงค์การวิเคราะห์:**
+{analysis_goal_text}
+
+**คำถามที่ต้องการให้วิเคราะห์:**
+1. แนวโน้มการจบการศึกษา: นักศึกษามีแนวโน้มจะจบการศึกษาหรือไม่? (ระบุความมั่นใจเป็นเปอร์เซ็นต์)
+2. ระดับความเสี่ยง: นักศึกษามีความเสี่ยงต่อการไม่จบการศึกษาหรือไม่? (ต่ำ/ปานกลาง/สูง)
+3. ปัจจัยสำคัญ: ปัจจัยอะไรที่ส่งผลต่อการจบการศึกษามากที่สุด?
+4. คำแนะนำ: มีคำแนะนำอะไรสำหรับนักศึกษาเพื่อให้จบการศึกษาตามกำหนด?
+
+กรุณาวิเคราะห์และให้คำตอบตามโครงสร้างที่กำหนด โดยให้:
+- analysis_markdown: สรุปการวิเคราะห์เป็นภาษาไทย (อย่างน้อย 200 คำ)
+- risk_level: ระดับความเสี่ยง (very_low, low, moderate, high, very_high)
+- outcome_summary: สรุปผลการทำนาย (status, confidence 0-1, description)
+- key_metrics: ตัวชี้วัดสำคัญ (อย่างน้อย 3 ตัว)
+- recommendations: คำแนะนำ (อย่างน้อย 3 ข้อ)
+"""
+        
         prompt_payload = {
             'student_name': student_name,
-            'analysis_goal': analysis_goal or 'วิเคราะห์แนวโน้มการจบการศึกษาและคำแนะนำเร่งด่วน',
-            'grade_summary': grade_summary
+            'analysis_goal': analysis_goal_text,
+            'grade_summary': grade_summary,
+            'detailed_prompt': detailed_prompt  # เพิ่ม detailed_prompt
         }
         
-        gemini_output = call_gemini_structured('live_grade_prediction', prompt_payload)
+        logger.info("📤 Calling Gemini API for prediction...")
+        try:
+            gemini_output = call_gemini_structured('live_grade_prediction', prompt_payload, schema_key='insights')
+            logger.info("✅ Gemini prediction completed successfully")
+        except (ValueError, RuntimeError) as gemini_error:
+            # ถ้า Gemini API ล้มเหลว ให้ส่ง error message ที่ชัดเจน
+            logger.error(f"❌ Gemini API error: {gemini_error}")
+            return jsonify({
+                'success': False,
+                'error': f'ไม่สามารถเชื่อมต่อกับ Gemini API ได้: {str(gemini_error)}',
+                'details': str(gemini_error),
+                'suggestion': 'กรุณาตรวจสอบว่า GEMINI_API_KEY ถูกตั้งค่าถูกต้องและลองใหม่อีกครั้ง'
+            }), 400
         
         return jsonify({
             'success': True,
@@ -4428,8 +4534,14 @@ def gemini_predict_route():
             'model_metadata': model_metadata
         })
     except Exception as exc:
-        logger.error(f"Gemini prediction error: {exc}")
-        return jsonify({'success': False, 'error': str(exc)}), 400
+        logger.error(f"❌ Gemini prediction error: {exc}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False, 
+            'error': f'เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini: {str(exc)}',
+            'details': str(exc)
+        }), 400
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
