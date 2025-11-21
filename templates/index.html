@@ -1083,6 +1083,11 @@ function displayPredictionResults(results, summary) {
     // Create chart
     setTimeout(() => {
         const ctx = document.getElementById('predictionChart').getContext('2d');
+        // ทำลายกราฟเก่าถ้ามี
+        const existingChart = Chart.getChart('predictionChart');
+        if (existingChart) {
+            existingChart.destroy();
+        }
         new Chart(ctx, {
             type: 'doughnut',
             data: {

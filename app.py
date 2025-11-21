@@ -1164,7 +1164,9 @@ COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COUR
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
+# Use gemini-pro which is more stable and widely available
+# gemini-1.5-flash and gemini-1.5-pro require different API access
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-pro')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
 gemini_client_ready = False
 
