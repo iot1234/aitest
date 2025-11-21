@@ -233,9 +233,12 @@ Content-Type: application/json
     "key_metrics": {
       "type": "array",
       "items": {
-        "label": str,
-        "value": str,
-        "trend": str  # up, down, stable
+        "type": "object",
+        "properties": {
+          "label": {"type": "string"},
+          "value": {"type": "string"},
+          "trend": {"type": "string"}  # up, down, stable
+        }
       }
     },
     "recommendations": {
@@ -398,8 +401,12 @@ tail -f app_startup.log | grep -i gemini
 3. ทดสอบ API Key
 ```python
 import google.generativeai as genai
+import os
+
+# ใช้ model name จาก environment หรือ default
+model_name = os.getenv('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
 genai.configure(api_key="YOUR_KEY")
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel(model_name)
 response = model.generate_content("Test")
 print(response.text)
 ```
