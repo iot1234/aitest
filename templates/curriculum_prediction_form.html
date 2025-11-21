@@ -1603,6 +1603,75 @@ function saveCurrentState() {
     showAlert('บันทึกสถานะเรียบร้อย', 'success');
 }
 
+async function fetchCurriculumAnalysis(payload, signal) {
+    const response = await fetch('/api/analyze_curriculum', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal
+    });
+    
+    let result = null;
+    try {
+        result = await response.json();
+    } catch (parseError) {
+        throw new Error('ไม่สามารถอ่านผลการวิเคราะห์จากเซิร์ฟเวอร์ได้');
+    }
+    
+    if (!response.ok) {
+        throw new Error(result?.error || `HTTP ${response.status}`);
+    }
+    if (!result.success) {
+        throw new Error(result.error || 'Analysis failed');
+    }
+    
+    return result;
+}
+
+function handleCurriculumAnalysisSuccess(result) {
+    displayAdvancedResults(result);
+    
+    const resultsSection = document.getElementById('resultsSection');
+    if (resultsSection) {
+        resultsSection.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    if (result.prediction_result) {
+        const pred = result.prediction_result;
+        showAlert(
+            `✅ AI ทำนายว่า: ${pred.prediction} (ความมั่นใจ ${(pred.confidence * 100).toFixed(1)}%)`,
+            'success'
+        );
+    } else {
+        showAlert('✅ วิเคราะห์หลักสูตรเสร็จสิ้น', 'success');
+    }
+}
+
+async function fetchGeminiPrediction(payload, signal) {
+    const response = await fetch('/api/gemini/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal
+    });
+    
+    let result = null;
+    try {
+        result = await response.json();
+    } catch (parseError) {
+        throw new Error('ไม่สามารถอ่านผลจาก Gemini ได้');
+    }
+    
+    if (!response.ok) {
+        throw new Error(result?.error || `HTTP ${response.status}`);
+    }
+    if (!result.success) {
+        throw new Error(result.error || 'Gemini error');
+    }
+    
+    return result;
+}
+
 // *** FIXED *** Analyze and predict with AI - Enhanced error handling
 async function analyzeAndPredict() {
     const studentName = document.getElementById('studentName').value || 'นักศึกษา';
@@ -1655,48 +1724,18 @@ async function analyzeAndPredict() {
         analyzeBtn.disabled = true;
     }
     
+    const analysisPayload = {
+        student_name: studentName,
+        current_grades: courseGrades,
+        loaded_terms_count: loadedTermsCount,
+        model_filename: modelFilename,
+        repeated_courses_in_this_term_ids: []
+    };
+    
     try {
-        const response = await fetch('/api/analyze_curriculum', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                student_name: studentName,
-                current_grades: courseGrades,
-                loaded_terms_count: loadedTermsCount,
-                model_filename: modelFilename,
-                repeated_courses_in_this_term_ids: []
-            }),
-            signal: currentAnalysisController.signal // *** FIXED *** Add abort signal
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
+        const result = await fetchCurriculumAnalysis(analysisPayload, currentAnalysisController.signal);
         console.log('Received response:', result);
-        
-        if (result.success) {
-            // แสดงผลทั้งการวิเคราะห์และการทำนาย AI
-            displayAdvancedResults(result);
-            
-            // เลื่อนหน้าไปที่ผลลัพธ์
-            const resultsSection = document.getElementById('resultsSection');
-            if (resultsSection) {
-                resultsSection.scrollIntoView({ behavior: 'smooth' });
-            }
-            
-            // แสดง success message
-            if (result.prediction_result) {
-                const pred = result.prediction_result;
-                showAlert(`✅ AI ทำนายว่า: ${pred.prediction} (ความมั่นใจ ${(pred.confidence * 100).toFixed(1)}%)`, 'success');
-            } else {
-                showAlert('✅ วิเคราะห์หลักสูตรเสร็จสิ้น', 'success');
-            }
-        } else {
-            showAlert('❌ เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
-            console.error('Prediction failed:', result);
-        }
+        handleCurriculumAnalysisSuccess(result);
     } catch (error) {
         if (error.name === 'AbortError') {
             console.log('Analysis cancelled by user');
@@ -1732,18 +1771,26 @@ async function analyzeWithGemini(studentName, modelFilename) {
     }
     
     const goalInput = document.getElementById('geminiModeGoalInput');
-    const payload = {
+    const analysisPayload = {
+        student_name: studentName,
+        current_grades: courseGrades,
+        loaded_terms_count: loadedTermsCount,
+        model_filename: modelFilename,
+        repeated_courses_in_this_term_ids: []
+    };
+    const geminiPayload = {
         student_name: studentName,
         course_grades: courseGrades,
         loaded_terms_count: loadedTermsCount
     };
     if (goalInput && goalInput.value.trim()) {
-        payload.analysis_goal = goalInput.value.trim();
+        geminiPayload.analysis_goal = goalInput.value.trim();
     }
     if (modelFilename) {
-        payload.model_filename = modelFilename;
+        geminiPayload.model_filename = modelFilename;
     }
     
+    clearGeminiResult();
     showCustomLoadingModal('กำลังให้ Gemini วิเคราะห์ข้อมูลนักศึกษา...');
     currentAnalysisController = new AbortController();
     
@@ -1751,31 +1798,25 @@ async function analyzeWithGemini(studentName, modelFilename) {
     if (analyzeBtn) analyzeBtn.disabled = true;
     
     try {
-        const response = await fetch('/api/gemini/predict', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: currentAnalysisController.signal
-        });
+        const analysisResult = await fetchCurriculumAnalysis(analysisPayload, currentAnalysisController.signal);
+        handleCurriculumAnalysisSuccess(analysisResult);
         
-        if (!response.ok) {
-            const errorPayload = await response.json().catch(() => ({}));
-            throw new Error(errorPayload.error || `HTTP ${response.status}`);
-        }
-        
-        const result = await response.json();
-        if (result.success) {
-            displayGeminiModeResults(result);
-            displayGeminiResult(result);
+        try {
+            const geminiResult = await fetchGeminiPrediction(geminiPayload, currentAnalysisController.signal);
+            displayGeminiResult(geminiResult);
             showAlert('✨ วิเคราะห์ด้วย Gemini สำเร็จ', 'success');
-        } else {
-            throw new Error(result.error || 'Unknown Gemini error');
+        } catch (geminiError) {
+            if (geminiError.name === 'AbortError') {
+                throw geminiError;
+            }
+            console.error('Gemini analysis error:', geminiError);
+            showAlert('เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini: ' + geminiError.message, 'warning');
         }
     } catch (error) {
         if (error.name === 'AbortError') {
             showAlert('ยกเลิกการวิเคราะห์ด้วย Gemini แล้ว', 'info');
         } else {
-            console.error('Gemini analysis error:', error);
+            console.error('Gemini mode error:', error);
             showAlert('เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini: ' + error.message, 'danger');
         }
     } finally {
@@ -1986,143 +2027,6 @@ function displayAdvancedResults(data) {
     } catch (error) {
         console.error('Error displaying results:', error);
         showAlert('เกิดข้อผิดพลาดในการแสดงผล', 'danger');
-    }
-}
-
-function displayGeminiModeResults(result) {
-    try {
-        const resultsSection = document.getElementById('resultsSection');
-        if (!resultsSection) return;
-        resultsSection.classList.remove('d-none');
-        
-        const gemini = result.gemini || {};
-        const summary = result.analysis || {};
-        
-        const aiCard = document.getElementById('aiExplanationCard');
-        if (aiCard) aiCard.style.display = 'none';
-        
-        const threeLineChartContainer = document.getElementById('threeLineChartContainer');
-        if (threeLineChartContainer) threeLineChartContainer.style.display = 'none';
-        const graduationAnalysisContainer = document.getElementById('graduationAnalysisContainer');
-        if (graduationAnalysisContainer) graduationAnalysisContainer.style.display = 'none';
-        const nextTermPredictionContainer = document.getElementById('nextTermPredictionContainer');
-        if (nextTermPredictionContainer) nextTermPredictionContainer.style.display = 'none';
-        
-        const mainPrediction = document.getElementById('mainPrediction');
-        const outcome = gemini.outcome_summary || {};
-        const riskLevel = gemini.risk_level || 'ไม่ระบุ';
-        if (mainPrediction) {
-            mainPrediction.innerHTML = `
-                <div class="alert alert-dark p-4">
-                    <div class="d-flex justify-content-between flex-wrap">
-                        <h2 class="mb-2 mb-md-0">
-                            <i class="bi bi-gem"></i> ${outcome.status || 'Gemini Insight'}
-                        </h2>
-                        <span class="badge bg-${riskLevel === 'ต่ำ' ? 'success' : riskLevel === 'สูง' ? 'danger' : 'warning'} fs-6">
-                            ความเสี่ยง: ${riskLevel}
-                        </span>
-                    </div>
-                    <p class="mb-0 mt-2">${outcome.description || 'Gemini วิเคราะห์ข้อมูลจากชุดเกรดของคุณแล้ว'}</p>
-                    ${gemini.analysis_markdown ? `<div class="markdown-body mt-3">${renderGeminiMarkdown(gemini.analysis_markdown)}</div>` : ''}
-                </div>
-            `;
-        }
-        
-        const studyStatus = document.getElementById('studyStatus');
-        if (studyStatus) {
-            studyStatus.innerHTML = `
-                <p><strong>นักศึกษา:</strong> ${summary.student_name || 'ไม่ระบุ'}</p>
-                <p><strong>GPA โดยประมาณ:</strong> ${summary.estimated_gpa ? summary.estimated_gpa.toFixed(2) : 'N/A'}</p>
-                <p><strong>จำนวนวิชาที่มีเกรด:</strong> ${summary.total_courses || 0}</p>
-                <p><strong>หน่วยกิตที่บันทึก:</strong> ${summary.total_credits_recorded || 0}</p>
-                <p><strong>เทอมที่โหลด:</strong> ${summary.loaded_terms_count || 0}</p>
-            `;
-        }
-        
-        const probabilityDetails = document.getElementById('probabilityDetails');
-        if (probabilityDetails) {
-            const distribution = summary.grade_distribution || {};
-            const labels = Object.keys(distribution);
-            const values = Object.values(distribution);
-            if (labels.length > 0) {
-                probabilityDetails.innerHTML = `
-                    <div class="text-center">
-                        <canvas id="probabilityChart" width="200" height="200"></canvas>
-                    </div>
-                `;
-                setTimeout(() => {
-                    const ctx = document.getElementById('probabilityChart').getContext('2d');
-                    new Chart(ctx, {
-                        type: 'doughnut',
-                        data: {
-                            labels,
-                            datasets: [{
-                                data: values,
-                                backgroundColor: ['#22c55e', '#3b82f6', '#f97316', '#ef4444', '#6366f1', '#14b8a6']
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { position: 'bottom' }
-                            }
-                        }
-                    });
-                }, 50);
-            } else {
-                probabilityDetails.innerHTML = '<p class="text-muted mb-0">ยังไม่มีข้อมูลเพียงพอสำหรับสร้างกราฟการกระจายเกรด</p>';
-            }
-        }
-        
-        const failingCourses = (summary.course_details || []).filter(course => {
-            const grade = (course.grade || '').toUpperCase();
-            return ['F', 'W', 'I', 'NP'].includes(grade);
-        });
-        const problemCourses = document.getElementById('problemCourses');
-        if (problemCourses) {
-            if (failingCourses.length > 0) {
-                problemCourses.innerHTML = `
-                    <ul class="list-unstyled mb-0">
-                        ${failingCourses.map(course => `
-                            <li class="mb-2">
-                                <i class="bi bi-x-circle text-danger me-2"></i>
-                                ${course.course_name || course.course_id} (${course.grade})
-                            </li>
-                        `).join('')}
-                    </ul>
-                `;
-            } else {
-                problemCourses.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle"></i> ไม่มีวิชาที่ต้องแก้ไขเร่งด่วน</p>';
-            }
-        }
-        
-        const blockedCoursesDetail = document.getElementById('blockedCoursesDetail');
-        if (blockedCoursesDetail) {
-            blockedCoursesDetail.innerHTML = '<p class="text-muted mb-0">ใช้ Normal Mode เพื่อดูวิชาที่ถูกบล็อกตามโครงสร้างหลักสูตร</p>';
-        }
-        
-        const recommendationsContainer = document.getElementById('personalRecommendations');
-        if (recommendationsContainer) {
-            if (gemini.recommendations && gemini.recommendations.length > 0) {
-                recommendationsContainer.innerHTML = gemini.recommendations.map(rec => `
-                    <div class="recommendation-card recommendation-${rec.includes('ด่วน') ? 'urgent' : 'warning'}">
-                        <i class="bi bi-stars me-2"></i>${rec}
-                    </div>
-                `).join('');
-            } else {
-                recommendationsContainer.innerHTML = '<p class="text-muted mb-0">Gemini ไม่มีคำแนะนำเพิ่มเติม</p>';
-            }
-        }
-        
-        displayGeminiTrainingInsights(result.training_analysis, result.model_metadata);
-        
-        setTimeout(() => {
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-    } catch (error) {
-        console.error('Error displaying Gemini mode results:', error);
-        showAlert('เกิดข้อผิดพลาดในการแสดงผลจาก Gemini', 'danger');
     }
 }
 
@@ -3381,11 +3285,12 @@ function displayGeminiResult(result) {
     const resultCard = document.getElementById('geminiResultCard');
     if (!resultCard) return;
     
-    resultCard.classList.remove('d-none');
-    
     const gemini = result.gemini || result;
+    const summary = result.analysis || {};
     const outcome = gemini.outcome_summary || {};
     const risk = gemini.risk_level || 'ไม่ทราบ';
+    
+    resultCard.classList.remove('d-none');
     
     const outcomeLabel = document.getElementById('geminiOutcomeLabel');
     if (outcomeLabel) {
@@ -3398,34 +3303,90 @@ function displayGeminiResult(result) {
     }
     
     const markdownEl = document.getElementById('geminiMarkdownResult');
-    if (markdownEl && gemini.analysis_markdown) {
-        markdownEl.innerHTML = renderGeminiMarkdown(gemini.analysis_markdown);
+    if (markdownEl) {
+        if (gemini.analysis_markdown) {
+            markdownEl.innerHTML = renderGeminiMarkdown(gemini.analysis_markdown);
+        } else if (outcome.description) {
+            markdownEl.innerHTML = `<p class="mb-0">${outcome.description}</p>`;
+        } else if (summary.student_name || summary.total_courses) {
+            markdownEl.innerHTML = `
+                <p class="mb-1"><strong>นักศึกษา:</strong> ${summary.student_name || 'ไม่ระบุ'}</p>
+                <p class="mb-1"><strong>GPA โดยประมาณ:</strong> ${summary.estimated_gpa != null ? summary.estimated_gpa.toFixed(2) : 'N/A'}</p>
+                <p class="mb-0"><strong>วิชาที่มีเกรด:</strong> ${summary.total_courses ?? 0}</p>
+            `;
+        } else {
+            markdownEl.innerHTML = '<p class="text-muted mb-0">Gemini ไม่ได้ส่งข้อความเพิ่มเติม</p>';
+        }
     }
     
     const metricsEl = document.getElementById('geminiKeyMetrics');
-    if (metricsEl && gemini.key_metrics && Array.isArray(gemini.key_metrics)) {
-        metricsEl.innerHTML = gemini.key_metrics.map(m => `
-            <div class="gemini-metric-card">
-                <div class="label">${m.label || ''}</div>
-                <div class="value">${m.value || '-'}</div>
-            </div>
-        `).join('');
+    if (metricsEl) {
+        const metrics = (Array.isArray(gemini.key_metrics) && gemini.key_metrics.length > 0)
+            ? gemini.key_metrics
+            : [
+                summary.estimated_gpa != null ? { label: 'GPA โดยประมาณ', value: summary.estimated_gpa.toFixed(2) } : null,
+                summary.total_courses != null ? { label: 'วิชาที่มีเกรด', value: summary.total_courses } : null,
+                summary.total_credits_recorded != null ? { label: 'หน่วยกิตที่บันทึก', value: summary.total_credits_recorded } : null,
+                summary.loaded_terms_count != null ? { label: 'เทอมที่โหลด', value: summary.loaded_terms_count } : null
+            ].filter(Boolean);
+        
+        if (metrics.length > 0) {
+            metricsEl.innerHTML = metrics.map(m => `
+                <div class="gemini-metric-card">
+                    <div class="label">${m.label || ''}</div>
+                    <div class="value">${m.value ?? '-'}</div>
+                </div>
+            `).join('');
+        } else {
+            metricsEl.innerHTML = '<p class="text-muted mb-0">ไม่มีตัวชี้วัดที่พร้อมแสดง</p>';
+        }
     }
     
     const recsEl = document.getElementById('geminiRecommendationsList');
-    if (recsEl && gemini.recommendations && Array.isArray(gemini.recommendations)) {
-        recsEl.innerHTML = gemini.recommendations.map(r => `<li>${r}</li>`).join('');
+    if (recsEl) {
+        if (gemini.recommendations && Array.isArray(gemini.recommendations) && gemini.recommendations.length > 0) {
+            recsEl.innerHTML = gemini.recommendations.map(r => `<li>${r}</li>`).join('');
+        } else {
+            recsEl.innerHTML = '<li class="text-muted">Gemini ไม่มีคำแนะนำเพิ่มเติม</li>';
+        }
     }
     
-    if (gemini.chart && gemini.chart.labels && gemini.chart.series) {
-        renderGeminiChart(gemini.chart);
+    let chartPayload = (gemini.chart && gemini.chart.labels && gemini.chart.series && gemini.chart.series.length > 0)
+        ? gemini.chart
+        : null;
+    if (!chartPayload && summary.grade_distribution) {
+        const labels = Object.keys(summary.grade_distribution);
+        const values = Object.values(summary.grade_distribution);
+        if (labels.length > 0) {
+            chartPayload = {
+                type: 'doughnut',
+                title: 'การกระจายเกรดจากข้อมูลที่กรอก',
+                labels,
+                series: [{
+                    name: 'จำนวนวิชา',
+                    data: values
+                }]
+            };
+        }
     }
+    
+    if (chartPayload) {
+        renderGeminiChart(chartPayload);
+    } else {
+        const chartContainer = document.getElementById('geminiChartContainer');
+        if (chartContainer) chartContainer.classList.add('d-none');
+    }
+    
+    displayGeminiTrainingInsights(result.training_analysis, result.model_metadata);
 }
 
 function renderGeminiChart(chartData) {
     const container = document.getElementById('geminiChartContainer');
     const canvas = document.getElementById('geminiChartCanvas');
-    if (!container || !canvas) return;
+    if (!container || !canvas || !chartData || !chartData.series || chartData.series.length === 0) {
+        if (container) container.classList.add('d-none');
+        return;
+    }
     
     container.classList.remove('d-none');
     
@@ -3434,19 +3395,41 @@ function renderGeminiChart(chartData) {
     }
     
     const ctx = canvas.getContext('2d');
-    const datasets = chartData.series.map((s, idx) => ({
-        label: s.name || `Series ${idx + 1}`,
-        data: s.data || [],
-        borderColor: GEMINI_CHART_COLORS[idx % GEMINI_CHART_COLORS.length],
-        backgroundColor: GEMINI_CHART_COLORS[idx % GEMINI_CHART_COLORS.length] + '40',
-        tension: 0.4
-    }));
+    const chartType = chartData.type || 'line';
+    let datasets = [];
+    
+    if (['doughnut', 'pie'].includes(chartType)) {
+        const series = chartData.series[0] || {};
+        const colors = (chartData.labels || []).map((_, idx) => GEMINI_CHART_COLORS[idx % GEMINI_CHART_COLORS.length]);
+        datasets = [{
+            label: series.name || 'Gemini',
+            data: series.data || [],
+            backgroundColor: colors
+        }];
+    } else {
+        datasets = chartData.series.map((s, idx) => {
+            const color = GEMINI_CHART_COLORS[idx % GEMINI_CHART_COLORS.length];
+            return {
+                label: s.name || `Series ${idx + 1}`,
+                data: s.data || [],
+                borderColor: color,
+                backgroundColor: chartType === 'bar' ? color + '80' : color + '40',
+                tension: chartType === 'line' ? 0.4 : 0.2,
+                fill: chartType === 'line' ? false : true
+            };
+        });
+    }
+    
+    if (datasets.length === 0) {
+        container.classList.add('d-none');
+        return;
+    }
     
     geminiChartInstance = new Chart(ctx, {
-        type: chartData.type || 'line',
+        type: chartType,
         data: {
             labels: chartData.labels || [],
-            datasets: datasets
+            datasets
         },
         options: {
             responsive: true,
@@ -3469,6 +3452,22 @@ function clearGeminiResult() {
     const resultCard = document.getElementById('geminiResultCard');
     if (resultCard) resultCard.classList.add('d-none');
     
+    const outcomeLabel = document.getElementById('geminiOutcomeLabel');
+    if (outcomeLabel) outcomeLabel.textContent = '-';
+    const riskLabel = document.getElementById('geminiRiskLevel');
+    if (riskLabel) riskLabel.textContent = '-';
+    
+    const markdownEl = document.getElementById('geminiMarkdownResult');
+    if (markdownEl) {
+        markdownEl.innerHTML = '<p class="text-muted mb-0">ผลจาก Gemini จะแสดงในส่วนนี้</p>';
+    }
+    
+    const metricsEl = document.getElementById('geminiKeyMetrics');
+    if (metricsEl) metricsEl.innerHTML = '';
+    
+    const recsEl = document.getElementById('geminiRecommendationsList');
+    if (recsEl) recsEl.innerHTML = '';
+    
     if (geminiChartInstance) {
         geminiChartInstance.destroy();
         geminiChartInstance = null;
@@ -3476,6 +3475,9 @@ function clearGeminiResult() {
     
     const chartContainer = document.getElementById('geminiChartContainer');
     if (chartContainer) chartContainer.classList.add('d-none');
+    
+    const trainingCard = document.getElementById('geminiTrainingInsightsCard');
+    if (trainingCard) trainingCard.classList.add('d-none');
 }
 
 async function analyzeCsvWithGemini() {
@@ -3540,6 +3542,7 @@ async function analyzeLiveGradesWithGemini() {
     
     const goalInput = document.getElementById('geminiLiveGoalInput');
     const studentName = document.getElementById('studentName')?.value || 'นักศึกษา';
+    const modelSelect = document.getElementById('modelSelect');
     
     const payload = {
         course_grades: courseGrades,
@@ -3549,6 +3552,9 @@ async function analyzeLiveGradesWithGemini() {
     
     if (goalInput && goalInput.value) {
         payload.analysis_goal = goalInput.value;
+    }
+    if (modelSelect && modelSelect.value) {
+        payload.model_filename = modelSelect.value;
     }
     
     toggleGeminiLoading(true);
