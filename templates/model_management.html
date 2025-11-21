@@ -335,6 +335,11 @@ function displayModels(models) {
 function createPerformanceChart(canvasId, performance) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
+    // ทำลายกราฟเก่าถ้ามี
+    const existingChart = Chart.getChart(canvasId);
+    if (existingChart) {
+        existingChart.destroy();
+    }
     new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -403,7 +408,14 @@ async function compareSelectedModels() {
 
 function displayComparisonChart(models) {
     const ctx = document.getElementById('comparisonChart');
-    if (comparisonChart) comparisonChart.destroy();
+    // ทำลายกราฟเก่าถ้ามี - ใช้ทั้ง Chart.getChart() และ instance
+    const existingChart = Chart.getChart('comparisonChart');
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    if (comparisonChart) {
+        comparisonChart.destroy();
+    }
     
     const datasets = models.map((model, index) => ({
         label: model.filename.replace('.joblib', ''),

@@ -1937,6 +1937,12 @@ function displayAdvancedResults(data) {
                 try {
                     const ctx = document.getElementById('probabilityChart');
                     if (ctx && typeof Chart !== 'undefined') {
+                        // ทำลายกราฟเก่าถ้ามี
+                        const existingChart = Chart.getChart('probabilityChart');
+                        if (existingChart) {
+                            existingChart.destroy();
+                        }
+                        
                         new Chart(ctx, {
                             type: 'doughnut',
                             data: {
@@ -2314,7 +2320,13 @@ function displayThreeLineChart(chartData) {
     }
     
     try {
-        // ทำลายกราฟเก่าถ้ามี
+        // ทำลายกราฟเก่าถ้ามี - ใช้ Chart.getChart() สำหรับ Chart.js 3.x+
+        const existingChart = Chart.getChart('threeLineChart');
+        if (existingChart) {
+            existingChart.destroy();
+        }
+        
+        // ทำลาย instance เก่าด้วย
         if (window.threeLineChartInstance) {
             window.threeLineChartInstance.destroy();
         }
@@ -2919,7 +2931,12 @@ window.addEventListener('beforeunload', function() {
 async function createThreeLineChart(chartData) {
     const ctx = document.getElementById('threeLineChart').getContext('2d');
     
-    // ทำลายกราฟเก่าถ้ามี
+    // ทำลายกราฟเก่าถ้ามี - ใช้ Chart.getChart() สำหรับ Chart.js 3.x+
+    const existingChart = Chart.getChart('threeLineChart');
+    if (existingChart) {
+        existingChart.destroy();
+    }
+    
     if (charts.threeLineChart) {
         charts.threeLineChart.destroy();
     }
@@ -3389,6 +3406,12 @@ function renderGeminiChart(chartData) {
     }
     
     container.classList.remove('d-none');
+    
+    // ทำลายกราฟเก่าถ้ามี - ใช้ Chart.getChart()
+    const existingChart = Chart.getChart('geminiChartCanvas');
+    if (existingChart) {
+        existingChart.destroy();
+    }
     
     if (geminiChartInstance) {
         geminiChartInstance.destroy();
