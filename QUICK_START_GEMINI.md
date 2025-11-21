@@ -109,7 +109,7 @@ python app.py
 ### Q5: Response ช้า ทำอย่างไร?
 **A:** 
 1. ลดขนาดข้อมูลที่ส่ง
-2. ใช้ `gemini-1.5-flash` แทน `pro`
+2. ใช้ `gemini-1.5-flash` แทน `gemini-1.5-pro` (flash เร็วกว่า)
 3. ใช้ Normal AI สำหรับทดสอบเบื้องต้น
 
 ---

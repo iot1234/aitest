@@ -159,7 +159,7 @@ Content-Type: application/json
 ### Core Functions
 
 #### 1. `run_gemini_training_analysis(df, analysis_goal, training_context)`
-**Location:** `app.py` line 3963-4049
+**Location:** `app.py` (search for "run_gemini_training_analysis")
 
 **Purpose:** วิเคราะห์ไฟล์เทรนด้วย Gemini
 
@@ -182,7 +182,7 @@ Content-Type: application/json
 ```
 
 #### 2. `gemini_predict_route()`
-**Location:** `app.py` line 4424-4560
+**Location:** `app.py` (search for "@app.route('/api/gemini/predict')")
 
 **Purpose:** ทำนายด้วย Gemini
 
@@ -198,7 +198,7 @@ Content-Type: application/json
 ```
 
 #### 3. `call_gemini_structured(task_name, payload, schema_key)`
-**Location:** `app.py` line 4052-4135
+**Location:** `app.py` (search for "def call_gemini_structured")
 
 **Purpose:** Core function สำหรับเรียก Gemini API
 
