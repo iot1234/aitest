@@ -1165,13 +1165,13 @@ COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COUR
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-# Use gemini-1.5-flash-latest which is fast and widely available
-# Updated to use latest model naming convention (gemini-pro is deprecated as of November 2024)
+# Use gemini-1.5-flash which is fast and widely available
+# Updated to use stable model naming convention (models with -latest suffix are deprecated)
 # Reference: https://ai.google.dev/gemini-api/docs/models/gemini
-GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-1.5-flash-latest')
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
 # Default fallback models for high availability (in order of preference)
-GEMINI_DEFAULT_FALLBACKS = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-1.0-pro-latest']
+GEMINI_DEFAULT_FALLBACKS = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']
 
 
 def _build_gemini_model_candidates(primary_name: str) -> List[str]:
