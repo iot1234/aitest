@@ -1219,24 +1219,41 @@ else:
 # ==========================================
 
 def retry_on_quota_error(max_retries=3, initial_delay=20):
-    """Decorator สำหรับ retry เมื่อเจอ quota error"""
+    """Decorator สำหรับ retry เมื่อเจอ quota error
+    
+    Args:
+        max_retries: จำนวนครั้งทั้งหมดในการลอง (รวมครั้งแรก)
+        initial_delay: เวลารอเริ่มต้น (วินาที)
+    """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             delay = initial_delay
+            last_exception = None
+            
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
+                    last_exception = e
                     error_msg = str(e)
-                    if '429' in error_msg or 'quota' in error_msg.lower() or 'resource exhausted' in error_msg.lower():
-                        if attempt < max_retries - 1:
-                            logger.warning(f"Quota exceeded, retrying in {delay}s (attempt {attempt+1}/{max_retries})")
-                            time.sleep(delay)
-                            delay *= 2  # Exponential backoff
-                            continue
-                    raise e
-            return None
+                    is_quota_error = ('429' in error_msg or 
+                                     'quota' in error_msg.lower() or 
+                                     'resource exhausted' in error_msg.lower())
+                    
+                    if is_quota_error and attempt < max_retries - 1:
+                        logger.warning(f"Quota exceeded, retrying in {delay}s (attempt {attempt+1}/{max_retries})")
+                        time.sleep(delay)
+                        delay *= 2  # Exponential backoff
+                        continue
+                    
+                    # ถ้าไม่ใช่ quota error หรือหมดจำนวน retry แล้ว ให้ raise
+                    raise
+            
+            # ถ้าไม่มี exception ให้ raise exception สุดท้าย (กรณี edge case)
+            if last_exception:
+                raise last_exception
+                
         return wrapper
     return decorator
 
@@ -1259,7 +1276,8 @@ class RateLimiter:
             return True, None
         else:
             wait_time = (self.requests[0] + self.time_window - now).total_seconds()
-            return False, int(wait_time)
+            # ป้องกัน negative wait time
+            return False, max(1, int(wait_time))
 
 
 # สร้าง rate limiter instance
@@ -4161,9 +4179,9 @@ def run_gemini_training_analysis(
         }
 
 
-@retry_on_quota_error(max_retries=2, initial_delay=20)
+@retry_on_quota_error(max_retries=3, initial_delay=20)
 def call_gemini_with_retry(prompt_or_payload, task_type='prediction_analysis'):
-    """เรียก Gemini พร้อมระบบ retry"""
+    """เรียก Gemini พร้อมระบบ retry (ลองทั้งหมด 3 ครั้ง)"""
     # ถ้าเป็น string ให้สร้าง payload ด้วย detailed_prompt
     if isinstance(prompt_or_payload, str):
         payload = {'detailed_prompt': prompt_or_payload}
@@ -4669,16 +4687,8 @@ def gemini_predict_route():
         
         logger.info("📤 Calling Gemini API for prediction...")
         try:
-            # ใช้ function ที่มี retry แทน
+            # ใช้ function ที่มี retry แทน (ลองทั้งหมด 3 ครั้ง)
             gemini_output = call_gemini_with_retry(prompt_payload, 'live_grade_prediction')
-            
-            if not gemini_output:
-                return jsonify({
-                    'success': False,
-                    'error': '⚠️ Gemini API ไม่สามารถตอบสนองได้',
-                    'suggestion': 'อาจเกิดจากโควต้าหมด กรุณาลองใหม่ในอีกสักครู่'
-                }), 503
-            
             logger.info("✅ Gemini prediction completed successfully")
         except (ValueError, RuntimeError) as gemini_error:
             # ถ้า Gemini API ล้มเหลว ให้ส่ง error message ที่ชัดเจน
