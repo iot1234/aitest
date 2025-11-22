@@ -338,43 +338,54 @@
       }
       
       .gemini-result-card {
-          background: #0f172a;
-          color: white;
+          background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+          color: #ffffff;
           border-radius: 20px;
           padding: 30px;
           margin-top: 25px;
           position: relative;
           overflow: hidden;
+          border: 2px solid rgba(99,102,241,0.3);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
       }
       
       .gemini-result-card::after {
           content: '';
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at top right, rgba(99,102,241,0.4), transparent 50%);
-          opacity: 0.7;
+          background: radial-gradient(circle at top right, rgba(99,102,241,0.2), transparent 50%);
+          opacity: 0.5;
           pointer-events: none;
       }
       
       .gemini-result-card .markdown-body {
-          background: rgba(15,23,42,0.7);
+          background: rgba(30,41,59,0.8);
           border-radius: 15px;
           padding: 20px;
           margin-top: 15px;
           position: relative;
           z-index: 1;
+          border: 1px solid rgba(255,255,255,0.1);
       }
       
       .markdown-body h1,
       .markdown-body h2,
       .markdown-body h3,
-      .markdown-body h4 {
-          color: #f8fafc;
+      .markdown-body h4,
+      .markdown-body h5 {
+          color: #ffffff;
+          font-weight: 700;
       }
       
       .markdown-body p,
       .markdown-body li {
           color: #e2e8f0;
+          line-height: 1.7;
+      }
+      
+      .markdown-body strong {
+          color: #ffffff;
+          font-weight: 700;
       }
       
       .gemini-metrics {
@@ -385,38 +396,109 @@
       }
       
       .gemini-metric-card {
-          background: rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.15);
           border-radius: 12px;
           padding: 15px;
           backdrop-filter: blur(10px);
+          border: 1px solid rgba(255,255,255,0.2);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       }
       
       .gemini-metric-card .label {
           font-size: 0.85rem;
-          color: #cbd5f5;
+          color: #e2e8f0;
           text-transform: uppercase;
           letter-spacing: 0.05em;
+          font-weight: 600;
+          margin-bottom: 8px;
       }
       
       .gemini-metric-card .value {
-          font-size: 1.5rem;
+          font-size: 1.75rem;
           font-weight: 700;
-          color: white;
+          color: #ffffff;
+      }
+      
+      .gemini-metric-card .value.text-success {
+          color: #86efac !important;
+      }
+      
+      .gemini-metric-card .value.text-danger {
+          color: #fca5a5 !important;
+      }
+      
+      .gemini-metric-card .value.text-warning {
+          color: #fde047 !important;
       }
       
       .gemini-chip {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          background: rgba(255,255,255,0.08);
-          padding: 8px 14px;
+          background: rgba(255,255,255,0.15);
+          padding: 10px 16px;
           border-radius: 999px;
           margin-right: 10px;
-          color: #cbd5f5;
+          color: #ffffff;
+          font-weight: 600;
+          border: 1px solid rgba(255,255,255,0.2);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      }
+      
+      .gemini-chip.bg-success-subtle {
+          background: rgba(34,197,94,0.2) !important;
+          border-color: rgba(34,197,94,0.4) !important;
+          color: #86efac !important;
+      }
+      
+      .gemini-chip.bg-danger-subtle {
+          background: rgba(239,68,68,0.2) !important;
+          border-color: rgba(239,68,68,0.4) !important;
+          color: #fca5a5 !important;
+      }
+      
+      .gemini-chip.bg-warning-subtle {
+          background: rgba(234,179,8,0.2) !important;
+          border-color: rgba(234,179,8,0.4) !important;
+          color: #fde047 !important;
+      }
+      
+      .gemini-chip.text-success-emphasis {
+          color: #86efac !important;
+      }
+      
+      .gemini-chip.text-danger-emphasis {
+          color: #fca5a5 !important;
+      }
+      
+      .gemini-chip.text-warning-emphasis {
+          color: #fde047 !important;
+      }
+      
+      .gemini-recommendations {
+          background: rgba(30,41,59,0.6);
+          border-radius: 15px;
+          padding: 20px;
+          margin-top: 20px;
+          border: 1px solid rgba(255,255,255,0.1);
+      }
+      
+      .gemini-recommendations h6 {
+          color: #ffffff;
+          font-weight: 700;
+          margin-bottom: 15px;
+          font-size: 1rem;
       }
       
       .gemini-recommendations li {
-          margin-bottom: 8px;
+          margin-bottom: 12px;
+          color: #e2e8f0;
+          line-height: 1.6;
+          padding-left: 8px;
+      }
+      
+      .gemini-recommendations li::marker {
+          color: #86efac;
       }
       
       .gemini-chart-container {
@@ -1944,10 +2026,22 @@ function displayAdvancedResults(data) {
             }
         };
         
-        // Study Status
+        // Study Status - คำนวณ GPA จาก courseGrades จริง
+        let currentGpa = data.avg_gpa;
+        if (!currentGpa && courseGrades && Object.keys(courseGrades).length > 0) {
+            currentGpa = calculateGPAFromGrades(courseGrades);
+        }
+        if (!currentGpa) currentGpa = 0;
+        
+        const gpaStatus = currentGpa >= 2.00 ? 'ผ่านเกณฑ์' : 'ต่ำกว่าเกณฑ์';
+        const gpaStatusClass = currentGpa >= 2.00 ? 'text-success' : 'text-danger';
+        
         safeUpdate('studyStatus', `
             <p><strong>นักศึกษา:</strong> ${data.student_name || 'ไม่ระบุ'}</p>
-            <p><strong>GPA ปัจจุบัน:</strong> ${data.avg_gpa ? data.avg_gpa.toFixed(2) : '0.00'}</p>
+            <p><strong>GPA ปัจจุบัน:</strong> 
+                <span class="${gpaStatusClass} fw-bold">${currentGpa.toFixed(2)}</span>
+                <small class="text-muted">(${gpaStatus})</small>
+            </p>
             <p><strong>หน่วยกิตที่ผ่าน:</strong> ${data.completed_credits || 0} / ${data.total_required_credits || 0}</p>
             <p><strong>ความคืบหน้า:</strong> ${completionRate.toFixed(1)}%</p>
         `);
@@ -2592,7 +2686,8 @@ function displayGraduationAnalysis(analysis) {
         if (gpaDisplay) {
             const gpaValue = calculatedGpa ? calculatedGpa.toFixed(2) : '0.00';
             gpaDisplay.textContent = gpaValue;
-            gpaDisplay.className = calculatedGpa >= gpaThreshold ? 'text-success' : 'text-danger';
+            gpaDisplay.className = calculatedGpa >= gpaThreshold ? 'text-success fw-bold' : 'text-danger fw-bold';
+            gpaDisplay.style.fontSize = '2rem';
         }
         
         // แสดงโอกาสจบการศึกษา
@@ -2600,7 +2695,8 @@ function displayGraduationAnalysis(analysis) {
         if (probDisplay) {
             const probability = analysis.graduation_probability || (willGraduate ? 100 : 0);
             probDisplay.textContent = probability.toFixed(1) + '%';
-            probDisplay.className = probability >= 70 ? 'text-success' : probability >= 40 ? 'text-warning' : 'text-danger';
+            probDisplay.className = probability >= 70 ? 'text-success fw-bold' : probability >= 40 ? 'text-warning fw-bold' : 'text-danger fw-bold';
+            probDisplay.style.fontSize = '2rem';
         }
         
         // แสดงผลการจบ/ไม่จบที่ชัดเจน
@@ -2608,6 +2704,7 @@ function displayGraduationAnalysis(analysis) {
         if (statusDisplay) {
             statusDisplay.textContent = graduationStatus;
             statusDisplay.className = willGraduate ? 'text-success fw-bold' : 'text-danger fw-bold';
+            statusDisplay.style.fontSize = '1.5rem';
         }
         
         // แสดงระดับความเสี่ยง
@@ -2622,6 +2719,7 @@ function displayGraduationAnalysis(analysis) {
             } else {
                 riskEl.className = 'text-success fw-bold';
             }
+            riskEl.style.fontSize = '1.5rem';
         }
         
         // แสดงเหตุผลที่อาจไม่จบ
