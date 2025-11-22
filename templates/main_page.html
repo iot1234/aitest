@@ -4,68 +4,68 @@
 
 {% block custom_css %}
 .hero-section {
-    padding: 100px 0 50px 0;
-    text-align: center;
-    color: white;
+padding: 100px 0 50px 0;
+text-align: center;
+color: white;
 }
 
 .hero-section h1 {
-    font-size: 3.5rem;
-    font-weight: 700;
-    margin-bottom: 20px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+font-size: 3.5rem;
+font-weight: 700;
+margin-bottom: 20px;
+text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
 }
 
 .feature-card {
-    background: white;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    padding: 40px 30px;
-    text-align: center;
-    transition: all 0.3s ease;
-    height: 100%;
-    border: none;
-    overflow: hidden;
-    position: relative;
+background: white;
+border-radius: 20px;
+box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+padding: 40px 30px;
+text-align: center;
+transition: all 0.3s ease;
+height: 100%;
+border: none;
+overflow: hidden;
+position: relative;
 }
 
 .feature-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 5px;
-    background: var(--primary-gradient);
+content: '';
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+height: 5px;
+background: var(--primary-gradient);
 }
 
 .feature-card i {
-    font-size: 3rem;
-    margin-bottom: 20px;
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+font-size: 3rem;
+margin-bottom: 20px;
+background: var(--primary-gradient);
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
 }
 
 .stats-section {
-    background: rgba(255,255,255,0.1);
-    backdrop-filter: blur(10px);
-    padding: 60px 0;
-    margin: 50px 0;
-    border-radius: 20px;
+background: rgba(255,255,255,0.1);
+backdrop-filter: blur(10px);
+padding: 60px 0;
+margin: 50px 0;
+border-radius: 20px;
 }
 
 .stat-item {
-    text-align: center;
-    color: white;
+text-align: center;
+color: white;
 }
 
 .stat-number {
-    font-size: 3rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-    display: block;
+font-size: 3rem;
+font-weight: 700;
+margin-bottom: 10px;
+display: block;
 }
 {% endblock %}
 
@@ -115,50 +115,50 @@
     <div class="container">
         <div class="row g-4">
             {% set features = [
-                {
-                    'icon': 'bi-cpu-fill',
-                    'title': 'เทรนโมเดล AI',
-                    'description': 'อัปโหลดข้อมูลนักศึกษาเพื่อฝึกโมเดล AI ที่สามารถทำนายผลการเรียนได้อย่างแม่นยำ',
-                    'url': url_for('index'),
-                    'color': 'primary'
-                },
-                {
-                    'icon': 'bi-person-check-fill',
-                    'title': 'ทดสอบรายบุคคล',
-                    'description': 'กรอกเกรดรายวิชาเพื่อทำนายผลการเรียนพร้อมคำแนะนำการปรับปรุง',
-                    'url': url_for('curriculum_prediction_form'),
-                    'color': 'success'
-                },
-                {
-                    'icon': 'bi-file-earmark-spreadsheet-fill',
-                    'title': 'ทำนายจากไฟล์',
-                    'description': 'อัปโหลดไฟล์ CSV หรือ Excel เพื่อทำนายผลการเรียนของนักศึกษาหลายคน',
-                    'url': url_for('predict_batch_page'),
-                    'color': 'info'
-                },
-                {
-                    'icon': 'bi-graph-up-arrow',
-                    'title': 'วิเคราะห์รายวิชา',
-                    'description': 'วิเคราะห์ผลการเรียนในแต่ละรายวิชา ความยากง่าย และอัตราการผ่าน',
-                    'url': url_for('index') + '#analyze',
-                    'color': 'warning'
-                },
-                {
-                    'icon': 'bi-diagram-3-fill',
-                    'title': 'ทำนายตาม Prerequisite',
-                    'description': 'ระบบทำนายขั้นสูงที่คำนึงถึงเงื่อนไขวิชาก่อนเรียนและแผนการเรียน',
-                    'url': url_for('curriculum_page'),
-                    'color': 'dark'
-                },
-                {
-                    'icon': 'bi-folder-fill',
-                    'title': 'จัดการโมเดล',
-                    'description': 'จัดการโมเดล AI ที่ฝึกไว้ ดูประสิทธิภาพ และเปรียบเทียบโมเดล',
-                    'url': url_for('models_page'),
-                    'color': 'secondary'
-                }
+            {
+            'icon': 'bi-cpu-fill',
+            'title': 'เทรนโมเดล AI',
+            'description': 'อัปโหลดข้อมูลนักศึกษาเพื่อฝึกโมเดล AI ที่สามารถทำนายผลการเรียนได้อย่างแม่นยำ',
+            'url': url_for('index'),
+            'color': 'primary'
+            },
+            {
+            'icon': 'bi-person-check-fill',
+            'title': 'ทดสอบรายบุคคล',
+            'description': 'กรอกเกรดรายวิชาเพื่อทำนายผลการเรียนพร้อมคำแนะนำการปรับปรุง',
+            'url': url_for('curriculum_page'),
+            'color': 'success'
+            },
+            {
+            'icon': 'bi-file-earmark-spreadsheet-fill',
+            'title': 'ทำนายจากไฟล์',
+            'description': 'อัปโหลดไฟล์ CSV หรือ Excel เพื่อทำนายผลการเรียนของนักศึกษาหลายคน',
+            'url': url_for('predict_batch_page'),
+            'color': 'info'
+            },
+            {
+            'icon': 'bi-graph-up-arrow',
+            'title': 'วิเคราะห์รายวิชา',
+            'description': 'วิเคราะห์ผลการเรียนในแต่ละรายวิชา ความยากง่าย และอัตราการผ่าน',
+            'url': url_for('index') + '#analyze',
+            'color': 'warning'
+            },
+            {
+            'icon': 'bi-diagram-3-fill',
+            'title': 'ทำนายตาม Prerequisite',
+            'description': 'ระบบทำนายขั้นสูงที่คำนึงถึงเงื่อนไขวิชาก่อนเรียนและแผนการเรียน',
+            'url': url_for('curriculum_page'),
+            'color': 'dark'
+            },
+            {
+            'icon': 'bi-folder-fill',
+            'title': 'จัดการโมเดล',
+            'description': 'จัดการโมเดล AI ที่ฝึกไว้ ดูประสิทธิภาพ และเปรียบเทียบโมเดล',
+            'url': url_for('models_page'),
+            'color': 'secondary'
+            }
             ] %}
-            
+
             {% for feature in features %}
             <div class="col-lg-4 col-md-6">
                 <div class="card feature-card h-100">
@@ -180,33 +180,23 @@
 
 {% block custom_js %}
 function animateStats() {
-    const statNumbers = document.querySelectorAll('.stat-number[data-count]');
-    statNumbers.forEach(stat => {
-        const target = parseInt(stat.getAttribute('data-count'));
-        let current = 0;
-        const increment = target / 100;
-        const updateStat = () => {
-            if (current < target) {
-                current += increment;
-                stat.textContent = Math.ceil(current);
-                setTimeout(updateStat, 20);
-            } else {
-                stat.textContent = target;
-            }
-        };
-        updateStat();
-    });
-}
-const observer = new IntersectionObserver((entries) => {
+const statNumbers = document.querySelectorAll('.stat-number[data-count]');
+statNumbers.forEach(stat => {
+const target = parseInt(stat.getAttribute('data-count'));
+let current = 0;
+const increment = target / 100;
+const updateStat = () => {
+if (current < target) { current +=increment; stat.textContent=Math.ceil(current); setTimeout(updateStat, 20); } else {
+    stat.textContent=target; } }; updateStat(); }); } const observer=new IntersectionObserver((entries)=> {
     entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            animateStats();
-            observer.unobserve(entry.target);
-        }
+    if (entry.isIntersecting) {
+    animateStats();
+    observer.unobserve(entry.target);
+    }
     });
-});
-document.addEventListener('DOMContentLoaded', function() {
+    });
+    document.addEventListener('DOMContentLoaded', function() {
     const statsSection = document.querySelector('.stats-section');
     if (statsSection) observer.observe(statsSection);
-});
-{% endblock %}
+    });
+    {% endblock %}
