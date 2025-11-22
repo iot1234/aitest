@@ -4070,22 +4070,34 @@ def summarize_dataframe_for_gemini(df, max_columns=20, max_samples=10):
 
 def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_count: int):
     distribution = Counter(course_grades.values())
-    numeric_scores = []
     course_details = []
     total_credits = 0
+    total_grade_points = 0.0
+    credits_for_gpa = 0.0
     failed_courses = []
+    
+    # Grade mapping สำหรับคำนวณ GPA
+    grade_mapping = {
+        'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+        'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': None
+    }
     
     for course_id, grade in course_grades.items():
         info = COURSE_LOOKUP.get(course_id, {})
         credits = info.get('credit', 3)
         total_credits += credits
         
-        grade_point = GRADE_POINT_MAP.get(grade)
-        if grade_point is not None:
-            numeric_scores.append(float(grade_point))
+        # คำนวณ GPA แบบ weighted ด้วยหน่วยกิต (ไม่รวม S, W, WF, WU)
+        grade_upper = grade.upper() if isinstance(grade, str) else str(grade).upper()
+        grade_point = grade_mapping.get(grade_upper)
         
-        # ตรวจสอบวิชาที่สอบตก (F หรือ U)
-        if grade in ['F', 'U']:
+        if grade_point is not None:
+            # รวมหน่วยกิตและคะแนนสำหรับคำนวณ GPA
+            credits_for_gpa += credits
+            total_grade_points += grade_point * credits
+        
+        # ตรวจสอบวิชาที่สอบตก (F, U, WF, WU)
+        if grade_upper in ['F', 'U', 'WF', 'WU']:
             failed_courses.append({
                 'course_id': course_id,
                 'course_name': info.get('thaiName') or info.get('name'),
@@ -4100,7 +4112,8 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
             'grade': grade
         })
     
-    estimated_gpa = float(np.mean(numeric_scores)) if numeric_scores else None
+    # คำนวณ GPA แบบ weighted average (รวมหน่วยกิต)
+    estimated_gpa = float(total_grade_points / credits_for_gpa) if credits_for_gpa > 0 else None
     
     return {
         'total_courses': len(course_grades),

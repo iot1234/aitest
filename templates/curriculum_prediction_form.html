@@ -3330,51 +3330,105 @@ function displayGeminiResult(result) {
     
     resultCard.classList.remove('d-none');
     
+    // แสดงผลลัพธ์หลัก (Outcome)
     const outcomeLabel = document.getElementById('geminiOutcomeLabel');
     if (outcomeLabel) {
-        outcomeLabel.textContent = outcome.status || 'ไม่ทราบ';
+        const status = outcome.status || 'ไม่ทราบ';
+        const statusText = status === 'graduated' ? 'จบตามเกณฑ์' : 
+                          status === 'not_graduated' ? 'ไม่จบ/จบช้า' : 
+                          status;
+        outcomeLabel.textContent = statusText;
+        
+        // เปลี่ยนสีตามสถานะ
+        const chip = outcomeLabel.closest('.gemini-chip');
+        if (chip) {
+            chip.className = 'gemini-chip';
+            if (status === 'graduated') {
+                chip.classList.add('bg-success-subtle', 'text-success-emphasis');
+            } else if (status === 'not_graduated') {
+                chip.classList.add('bg-danger-subtle', 'text-danger-emphasis');
+            }
+        }
     }
     
+    // แสดงระดับความเสี่ยง (Risk Level)
     const riskLabel = document.getElementById('geminiRiskLevel');
     if (riskLabel) {
-        riskLabel.textContent = `ความเสี่ยง: ${risk}`;
+        const riskText = risk.replace('_', ' ').replace('risk', 'ความเสี่ยง');
+        riskLabel.textContent = `ความเสี่ยง: ${riskText}`;
+        
+        // เปลี่ยนสีตามระดับความเสี่ยง
+        const chip = riskLabel.closest('.gemini-chip');
+        if (chip) {
+            chip.className = 'gemini-chip';
+            if (risk.includes('low') || risk.includes('ต่ำ')) {
+                chip.classList.add('bg-success-subtle', 'text-success-emphasis');
+            } else if (risk.includes('moderate') || risk.includes('ปานกลาง')) {
+                chip.classList.add('bg-warning-subtle', 'text-warning-emphasis');
+            } else if (risk.includes('high') || risk.includes('สูง')) {
+                chip.classList.add('bg-danger-subtle', 'text-danger-emphasis');
+            }
+        }
     }
     
+    // แสดงผลการวิเคราะห์หลัก (Markdown)
     const markdownEl = document.getElementById('geminiMarkdownResult');
     if (markdownEl) {
         if (gemini.analysis_markdown) {
             markdownEl.innerHTML = renderGeminiMarkdown(gemini.analysis_markdown);
         } else if (outcome.description) {
             markdownEl.innerHTML = `<p class="mb-0">${outcome.description}</p>`;
-        } else if (summary.student_name || summary.total_courses) {
-            markdownEl.innerHTML = `
-                <p class="mb-1"><strong>นักศึกษา:</strong> ${summary.student_name || 'ไม่ระบุ'}</p>
-                <p class="mb-1"><strong>GPA โดยประมาณ:</strong> ${summary.estimated_gpa != null ? summary.estimated_gpa.toFixed(2) : 'N/A'}</p>
-                <p class="mb-0"><strong>วิชาที่มีเกรด:</strong> ${summary.total_courses ?? 0}</p>
-            `;
         } else {
-            markdownEl.innerHTML = '<p class="text-muted mb-0">Gemini ไม่ได้ส่งข้อความเพิ่มเติม</p>';
+            markdownEl.innerHTML = '<p class="text-muted mb-0">กำลังรอผลการวิเคราะห์จาก Gemini...</p>';
         }
     }
     
+    // แสดงตัวชี้วัดสำคัญ (Key Metrics) - แสดงเฉพาะจาก Gemini หรือสรุปจากข้อมูล
     const metricsEl = document.getElementById('geminiKeyMetrics');
     if (metricsEl) {
-        const metrics = (Array.isArray(gemini.key_metrics) && gemini.key_metrics.length > 0)
-            ? gemini.key_metrics
-            : [
-                summary.estimated_gpa != null ? { label: 'GPA โดยประมาณ', value: summary.estimated_gpa.toFixed(2) } : null,
-                summary.total_courses != null ? { label: 'วิชาที่มีเกรด', value: summary.total_courses } : null,
-                summary.total_credits_recorded != null ? { label: 'หน่วยกิตที่บันทึก', value: summary.total_credits_recorded } : null,
-                summary.loaded_terms_count != null ? { label: 'เทอมที่โหลด', value: summary.loaded_terms_count } : null
-            ].filter(Boolean);
+        let metrics = [];
+        
+        // ถ้า Gemini ส่ง key_metrics มาให้ใช้
+        if (Array.isArray(gemini.key_metrics) && gemini.key_metrics.length > 0) {
+            metrics = gemini.key_metrics;
+        } else {
+            // สร้าง metrics จากข้อมูลที่มี
+            if (summary.estimated_gpa != null) {
+                const gpaValue = parseFloat(summary.estimated_gpa);
+                const gpaStatus = gpaValue >= 2.00 ? 'ผ่านเกณฑ์' : 'ต่ำกว่าเกณฑ์';
+                metrics.push({ 
+                    label: 'GPA โดยประมาณ', 
+                    value: gpaValue.toFixed(2),
+                    status: gpaStatus
+                });
+            }
+            if (summary.total_courses != null) {
+                metrics.push({ label: 'จำนวนวิชาที่เรียน', value: summary.total_courses });
+            }
+            if (summary.total_credits_recorded != null) {
+                metrics.push({ label: 'หน่วยกิตที่เรียน', value: summary.total_credits_recorded });
+            }
+            if (summary.failed_count != null && summary.failed_count > 0) {
+                metrics.push({ 
+                    label: 'วิชาที่สอบตก', 
+                    value: summary.failed_count,
+                    status: 'warning'
+                });
+            }
+        }
         
         if (metrics.length > 0) {
-            metricsEl.innerHTML = metrics.map(m => `
+            metricsEl.innerHTML = metrics.map(m => {
+                const statusClass = m.status === 'ผ่านเกณฑ์' ? 'text-success' : 
+                                   m.status === 'warning' ? 'text-warning' : 
+                                   m.status === 'ต่ำกว่าเกณฑ์' ? 'text-danger' : '';
+                return `
                 <div class="gemini-metric-card">
                     <div class="label">${m.label || ''}</div>
-                    <div class="value">${m.value ?? '-'}</div>
+                    <div class="value ${statusClass}">${m.value ?? '-'} ${m.status ? `<small class="d-block">${m.status}</small>` : ''}</div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         } else {
             metricsEl.innerHTML = '<p class="text-muted mb-0">ไม่มีตัวชี้วัดที่พร้อมแสดง</p>';
         }
