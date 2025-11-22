@@ -4869,10 +4869,30 @@ def gemini_predict_route():
         
         logger.info(f"Processing prediction for {student_name} with {len(course_grades)} course grades")
         
-        # โหลด Course DNA จากโมเดลเพื่อใช้ในการวิเคราะห์
-        course_profiles = None
-        course_context_str = ""
-        
+        if not isinstance(course_grades, dict) or len(course_grades) == 0:
+            logger.warning("No course grades provided")
+            return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
+    except Exception as parse_error:
+        logger.error(f"Error parsing request: {parse_error}")
+        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาดในการอ่านข้อมูล: {str(parse_error)}'}), 400
+    
+    # กรองเฉพาะเกรดที่ไม่ว่าง
+    cleaned_grades = {
+        str(course_id): grade
+        for course_id, grade in course_grades.items()
+        if grade
+    }
+    
+    if len(cleaned_grades) == 0:
+        return jsonify({'success': False, 'error': 'ไม่พบเกรดที่สามารถนำมาวิเคราะห์ได้'}), 400
+    
+    # โหลด Course DNA จากโมเดลเพื่อใช้ในการวิเคราะห์
+    course_profiles = None
+    course_context_str = ""
+    training_analysis = None
+    model_metadata = None
+    
+    try:
         if model_filename:
             try:
                 stored_model = storage.load_model(model_filename)
@@ -4944,23 +4964,9 @@ def gemini_predict_route():
                 if student_easy_courses_failed:
                     course_context_str += "\n" + "\n".join(student_easy_courses_failed)
                 course_context_str += "\n"
-        
-        if not isinstance(course_grades, dict) or len(course_grades) == 0:
-            logger.warning("No course grades provided")
-            return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
-    except Exception as parse_error:
-        logger.error(f"Error parsing request: {parse_error}")
-        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาดในการอ่านข้อมูล: {str(parse_error)}'}), 400
-    
-    # กรองเฉพาะเกรดที่ไม่ว่าง
-    cleaned_grades = {
-        str(course_id): grade
-        for course_id, grade in course_grades.items()
-        if grade
-    }
-    
-    if len(cleaned_grades) == 0:
-        return jsonify({'success': False, 'error': 'ไม่พบเกรดที่สามารถนำมาวิเคราะห์ได้'}), 400
+    except Exception as context_exc:
+        logger.warning(f"Error building course context: {context_exc}")
+        course_context_str = ""
     
     try:
         logger.info(f"🔮 Starting Gemini prediction for {student_name} with {len(cleaned_grades)} courses")
