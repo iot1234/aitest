@@ -47,9 +47,11 @@ import joblib
 import os
 import logging.config
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import warnings
-from collections import Counter
+from collections import Counter, deque
+import time
+from functools import wraps
 from imblearn.over_sampling import SMOTE
 import tempfile
 import json
@@ -1211,6 +1213,69 @@ elif not GEMINI_API_KEY:
     logger.info("ℹ️ GEMINI_API_KEY not found. Gemini routes will be disabled.")
 else:
     logger.warning("⚠️ google-generativeai package not available. Install to enable Gemini features.")
+
+# ==========================================
+# RETRY MECHANISM และ RATE LIMITER สำหรับ GEMINI API
+# ==========================================
+
+def retry_on_quota_error(max_retries=3, initial_delay=20):
+    """Decorator สำหรับ retry เมื่อเจอ quota error
+    
+    Args:
+        max_retries: จำนวนครั้งทั้งหมดในการลอง (รวมครั้งแรก)
+        initial_delay: เวลารอเริ่มต้น (วินาที)
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    error_msg = str(e)
+                    is_quota_error = ('429' in error_msg or 
+                                     'quota' in error_msg.lower() or 
+                                     'resource exhausted' in error_msg.lower())
+                    
+                    if is_quota_error and attempt < max_retries - 1:
+                        logger.warning(f"Quota exceeded, retrying in {delay}s (attempt {attempt+1}/{max_retries})")
+                        time.sleep(delay)
+                        delay *= 2  # Exponential backoff
+                        continue
+                    
+                    # ถ้าไม่ใช่ quota error หรือหมดจำนวน retry แล้ว ให้ raise
+                    raise
+                
+        return wrapper
+    return decorator
+
+
+class RateLimiter:
+    """Rate limiter สำหรับ Gemini API"""
+    def __init__(self, max_requests=10, time_window=60):
+        self.max_requests = max_requests
+        self.time_window = timedelta(seconds=time_window)
+        self.requests = deque()
+    
+    def can_proceed(self):
+        now = datetime.now()
+        # ลบ request ที่เก่าเกินกว่า time window
+        while self.requests and now - self.requests[0] > self.time_window:
+            self.requests.popleft()
+        
+        if len(self.requests) < self.max_requests:
+            self.requests.append(now)
+            return True, None
+        else:
+            wait_time = (self.requests[0] + self.time_window - now).total_seconds()
+            # ป้องกัน negative wait time และให้อย่างน้อย 1 วินาที
+            return False, max(1, int(wait_time))
+
+
+# สร้าง rate limiter instance
+gemini_rate_limiter = RateLimiter(max_requests=10, time_window=60)
 
 # ==========================================
 # สร้างโฟลเดอร์ที่จำเป็นทันที
@@ -3978,6 +4043,7 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
     numeric_scores = []
     course_details = []
     total_credits = 0
+    failed_courses = []
     
     for course_id, grade in course_grades.items():
         info = COURSE_LOOKUP.get(course_id, {})
@@ -3987,6 +4053,15 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
         grade_point = GRADE_POINT_MAP.get(grade)
         if grade_point is not None:
             numeric_scores.append(float(grade_point))
+        
+        # ตรวจสอบวิชาที่สอบตก (F หรือ U)
+        if grade in ['F', 'U']:
+            failed_courses.append({
+                'course_id': course_id,
+                'course_name': info.get('thaiName') or info.get('name'),
+                'credit': credits,
+                'grade': grade
+            })
         
         course_details.append({
             'course_id': course_id,
@@ -4003,7 +4078,9 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
         'grade_distribution': dict(distribution),
         'course_details': course_details,
         'loaded_terms_count': loaded_terms_count,
-        'total_credits_recorded': total_credits
+        'total_credits_recorded': total_credits,
+        'failed_courses': failed_courses,
+        'failed_count': len(failed_courses)
     }
 
 
@@ -4094,6 +4171,18 @@ def run_gemini_training_analysis(
             'error': str(exc),
             'generated_at': datetime.now().isoformat()
         }
+
+
+@retry_on_quota_error(max_retries=3, initial_delay=20)
+def call_gemini_with_retry(prompt_or_payload, task_type='prediction_analysis'):
+    """เรียก Gemini พร้อมระบบ retry (ลองทั้งหมด 3 ครั้ง)"""
+    # ถ้าเป็น string ให้สร้าง payload ด้วย detailed_prompt
+    if isinstance(prompt_or_payload, str):
+        payload = {'detailed_prompt': prompt_or_payload}
+    else:
+        payload = prompt_or_payload
+    
+    return call_gemini_structured(task_type, payload)
 
 
 def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: str = 'insights'):
@@ -4475,7 +4564,21 @@ def gemini_predict_route():
     """ให้ Gemini วิเคราะห์ข้อมูลเกรดที่ผู้ใช้กรอกแบบสด"""
     if not is_gemini_available():
         logger.warning("Gemini API not available - missing API key")
-        return jsonify({'success': False, 'error': 'ยังไม่ได้ตั้งค่า Gemini API Key'}), 503
+        return jsonify({
+            'success': False, 
+            'error': '⚠️ ยังไม่ได้ตั้งค่า Gemini API Key',
+            'suggestion': 'กรุณาตั้งค่า GEMINI_API_KEY ใน environment variables'
+        }), 503
+    
+    # ตรวจสอบ rate limit
+    can_proceed, wait_time = gemini_rate_limiter.can_proceed()
+    if not can_proceed:
+        return jsonify({
+            'success': False,
+            'error': f'⏱️ ใช้งานบ่อยเกินไป กรุณารอ {wait_time} วินาที',
+            'suggestion': 'กรุณารอสักครู่ก่อนลองใหม่',
+            'retry_after': wait_time
+        }), 429
     
     try:
         payload = request.get_json(silent=True) or {}
@@ -4541,12 +4644,16 @@ def gemini_predict_route():
 - จำนวนเทอมที่เรียน: {loaded_terms_count} เทอม
 - GPA โดยประมาณ: {grade_summary.get('estimated_gpa', 0):.2f}
 - หน่วยกิตที่เรียนแล้ว: {grade_summary.get('total_credits_recorded', 0)} หน่วยกิต
+- จำนวนวิชาที่สอบตก: {grade_summary.get('failed_count', 0)} วิชา
 
 **การกระจายเกรด:**
 {json.dumps(grade_summary.get('grade_distribution', {}), ensure_ascii=False, indent=2)}
 
 **รายละเอียดวิชา:**
 {json.dumps(grade_summary.get('course_details', [])[:20], ensure_ascii=False, indent=2)}
+
+**วิชาที่สอบตก (ถ้ามี):**
+{json.dumps(grade_summary.get('failed_courses', []), ensure_ascii=False, indent=2)}
 
 **วัตถุประสงค์การวิเคราะห์:**
 {analysis_goal_text}
@@ -4574,7 +4681,8 @@ def gemini_predict_route():
         
         logger.info("📤 Calling Gemini API for prediction...")
         try:
-            gemini_output = call_gemini_structured('live_grade_prediction', prompt_payload, schema_key='insights')
+            # ใช้ function ที่มี retry แทน (ลองทั้งหมด 3 ครั้ง)
+            gemini_output = call_gemini_with_retry(prompt_payload, 'live_grade_prediction')
             logger.info("✅ Gemini prediction completed successfully")
         except (ValueError, RuntimeError) as gemini_error:
             # ถ้า Gemini API ล้มเหลว ให้ส่ง error message ที่ชัดเจน
@@ -4595,14 +4703,27 @@ def gemini_predict_route():
             'model_metadata': model_metadata
         })
     except Exception as exc:
+        error_msg = str(exc)
+        
+        # Check for quota/rate limit errors
+        if '429' in error_msg or 'quota' in error_msg.lower() or 'resource exhausted' in error_msg.lower():
+            logger.error(f"❌ Gemini quota exceeded: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': '⚠️ โควต้า Gemini API หมดชั่วคราว',
+                'details': 'Free tier: 15 requests/minute, 1,500 requests/day',
+                'suggestion': 'รอ 1-2 นาที หรืออัพเกรดเป็น Paid Tier',
+                'retry_after': 60
+            }), 429
+        
         logger.error(f"❌ Gemini prediction error: {exc}")
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({
             'success': False, 
-            'error': f'เกิดข้อผิดพลาดในการวิเคราะห์ด้วย Gemini: {str(exc)}',
-            'details': str(exc)
-        }), 400
+            'error': f'เกิดข้อผิดพลาด: {error_msg}',
+            'suggestion': 'กรุณาลองใหม่อีกครั้ง'
+        }), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
