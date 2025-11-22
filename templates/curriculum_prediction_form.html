@@ -827,7 +827,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="card text-center">
                         <div class="card-body">
                             <h2 class="text-info" id="graduationProbabilityDisplay">0%</h2>
@@ -835,7 +835,15 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h2 id="graduationStatusDisplay" class="text-secondary">-</h2>
+                            <p class="card-text">ผลการจบการศึกษา</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
                     <div class="card text-center">
                         <div class="card-body">
                             <h2 id="riskLevelDisplay" class="text-secondary">ไม่ทราบ</h2>
@@ -2547,65 +2555,175 @@ function displayThreeLineChart(chartData) {
     }
 }
 
-// ✨ ฟังก์ชันแสดงการวิเคราะห์เหตุผลที่อาจไม่จบ
+// ✨ ฟังก์ชันแสดงการวิเคราะห์เหตุผลที่อาจไม่จบ (รวมฟังก์ชันที่ซ้ำ)
 function displayGraduationAnalysis(analysis) {
     try {
+        if (!analysis) {
+            console.warn('No graduation analysis data provided');
+            return;
+        }
+        
+        // คำนวณ GPA จาก courseGrades ที่มีอยู่จริง
+        let calculatedGpa = analysis.current_gpa;
+        if (!calculatedGpa && courseGrades && Object.keys(courseGrades).length > 0) {
+            calculatedGpa = calculateGPAFromGrades(courseGrades);
+        }
+        
+        // กำหนดผลการจบ/ไม่จบ
+        const gpaThreshold = 2.00;
+        const creditsThreshold = 136;
+        const currentCredits = analysis.completed_credits || 0;
+        const willGraduate = calculatedGpa >= gpaThreshold && currentCredits >= creditsThreshold;
+        const graduationStatus = willGraduate ? 'จบตามเกณฑ์' : 'ไม่จบ/จบช้า';
+        
         // อัปเดตสถิติหลัก
-        const safeUpdate = (id, value) => {
+        const safeUpdate = (id, value, className = '') => {
             const el = document.getElementById(id);
-            if (el) el.textContent = value;
+            if (el) {
+                el.textContent = value;
+                if (className) {
+                    el.className = className;
+                }
+            }
         };
         
-        safeUpdate('currentGpaDisplay', analysis.current_gpa.toFixed(2));
-        safeUpdate('graduationProbabilityDisplay', analysis.graduation_probability.toFixed(1) + '%');
+        // แสดง GPA พร้อมสถานะ
+        const gpaDisplay = document.getElementById('currentGpaDisplay');
+        if (gpaDisplay) {
+            const gpaValue = calculatedGpa ? calculatedGpa.toFixed(2) : '0.00';
+            gpaDisplay.textContent = gpaValue;
+            gpaDisplay.className = calculatedGpa >= gpaThreshold ? 'text-success' : 'text-danger';
+        }
         
+        // แสดงโอกาสจบการศึกษา
+        const probDisplay = document.getElementById('graduationProbabilityDisplay');
+        if (probDisplay) {
+            const probability = analysis.graduation_probability || (willGraduate ? 100 : 0);
+            probDisplay.textContent = probability.toFixed(1) + '%';
+            probDisplay.className = probability >= 70 ? 'text-success' : probability >= 40 ? 'text-warning' : 'text-danger';
+        }
+        
+        // แสดงผลการจบ/ไม่จบที่ชัดเจน
+        const statusDisplay = document.getElementById('graduationStatusDisplay');
+        if (statusDisplay) {
+            statusDisplay.textContent = graduationStatus;
+            statusDisplay.className = willGraduate ? 'text-success fw-bold' : 'text-danger fw-bold';
+        }
+        
+        // แสดงระดับความเสี่ยง
         const riskEl = document.getElementById('riskLevelDisplay');
         if (riskEl) {
-            riskEl.textContent = analysis.risk_level;
-            riskEl.className = 'text-secondary';
-            if (analysis.risk_level === 'สูง') {
-                riskEl.className = 'text-danger';
-            } else if (analysis.risk_level === 'ปานกลาง') {
-                riskEl.className = 'text-warning';
-            } else if (analysis.risk_level === 'ต่ำ') {
-                riskEl.className = 'text-success';
+            const riskLevel = analysis.risk_level || (willGraduate ? 'ต่ำ' : 'สูง');
+            riskEl.textContent = riskLevel;
+            if (riskLevel === 'สูง' || riskLevel.includes('high')) {
+                riskEl.className = 'text-danger fw-bold';
+            } else if (riskLevel === 'ปานกลาง' || riskLevel.includes('moderate')) {
+                riskEl.className = 'text-warning fw-bold';
+            } else {
+                riskEl.className = 'text-success fw-bold';
             }
         }
         
         // แสดงเหตุผลที่อาจไม่จบ
         const failureContent = document.getElementById('failureReasonsContent');
         if (failureContent) {
+            let reasons = [];
+            
+            // เพิ่มเหตุผลจาก GPA
+            if (calculatedGpa < gpaThreshold) {
+                reasons.push(`GPA ต่ำกว่าเกณฑ์ (${calculatedGpa.toFixed(2)} < ${gpaThreshold.toFixed(2)})`);
+            }
+            
+            // เพิ่มเหตุผลจากหน่วยกิต
+            if (currentCredits < creditsThreshold) {
+                reasons.push(`หน่วยกิตไม่ครบ (${currentCredits} < ${creditsThreshold})`);
+            }
+            
+            // เพิ่มเหตุผลจาก analysis
             if (analysis.failure_reasons && analysis.failure_reasons.length > 0) {
-                let html = '<ul class="list-unstyled">';
-                analysis.failure_reasons.forEach(reason => {
+                reasons.push(...analysis.failure_reasons);
+            }
+            
+            if (reasons.length > 0) {
+                let html = '<ul class="list-unstyled mb-0">';
+                reasons.forEach(reason => {
                     html += `<li class="mb-2"><i class="bi bi-exclamation-circle text-warning me-2"></i>${reason}</li>`;
                 });
                 html += '</ul>';
                 failureContent.innerHTML = html;
             } else {
-                failureContent.innerHTML = '<p class="text-success"><i class="bi bi-check-circle me-2"></i>ไม่พบปัญหาที่จะทำให้ไม่จบการศึกษา</p>';
+                failureContent.innerHTML = '<p class="text-success mb-0"><i class="bi bi-check-circle me-2"></i>ไม่พบปัญหาที่จะทำให้ไม่จบการศึกษา</p>';
             }
         }
         
         // แสดงคำแนะนำการปรับปรุง
         const improvementEl = document.getElementById('improvementRecommendations');
         if (improvementEl) {
+            let recommendations = [];
+            
+            // เพิ่มคำแนะนำจาก GPA
+            if (calculatedGpa < gpaThreshold) {
+                const neededGpa = gpaThreshold - calculatedGpa;
+                recommendations.push(`ต้องเพิ่ม GPA อย่างน้อย ${neededGpa.toFixed(2)} เพื่อให้ผ่านเกณฑ์`);
+            }
+            
+            // เพิ่มคำแนะนำจากหน่วยกิต
+            if (currentCredits < creditsThreshold) {
+                const neededCredits = creditsThreshold - currentCredits;
+                recommendations.push(`ต้องเรียนเพิ่มอีก ${neededCredits} หน่วยกิต`);
+            }
+            
+            // เพิ่มคำแนะนำจาก analysis
             if (analysis.improvement_recommendations && analysis.improvement_recommendations.length > 0) {
-                let html = '<ul class="list-unstyled">';
-                analysis.improvement_recommendations.forEach(rec => {
+                recommendations.push(...analysis.improvement_recommendations);
+            }
+            
+            if (recommendations.length > 0) {
+                let html = '<ul class="list-unstyled mb-0">';
+                recommendations.forEach(rec => {
                     html += `<li class="mb-2"><i class="bi bi-lightbulb text-success me-2"></i>${rec}</li>`;
                 });
                 html += '</ul>';
                 improvementEl.innerHTML = html;
             } else {
-                improvementEl.innerHTML = '<p class="text-info"><i class="bi bi-info-circle me-2"></i>ผลการเรียนอยู่ในเกณฑ์ดี</p>';
+                improvementEl.innerHTML = '<p class="text-info mb-0"><i class="bi bi-info-circle me-2"></i>ผลการเรียนอยู่ในเกณฑ์ดี</p>';
             }
         }
         
-        console.log('Graduation analysis displayed successfully');
+        console.log('Graduation analysis displayed successfully', { calculatedGpa, willGraduate, graduationStatus });
     } catch (error) {
         console.error('Error displaying graduation analysis:', error);
     }
+}
+
+// ฟังก์ชันคำนวณ GPA จาก courseGrades
+function calculateGPAFromGrades(grades) {
+    if (!grades || Object.keys(grades).length === 0) return 0;
+    
+    const gradeMapping = {
+        'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+        'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': null
+    };
+    
+    let totalGradePoints = 0;
+    let totalCredits = 0;
+    
+    for (const [courseId, grade] of Object.entries(grades)) {
+        if (!grade) continue;
+        
+        const gradeUpper = grade.toUpperCase();
+        const gradePoint = gradeMapping[gradeUpper];
+        
+        if (gradePoint !== null && gradePoint !== undefined) {
+            const info = COURSE_LOOKUP[courseId] || {};
+            const credits = info.credit || 3;
+            
+            totalGradePoints += gradePoint * credits;
+            totalCredits += credits;
+        }
+    }
+    
+    return totalCredits > 0 ? totalGradePoints / totalCredits : 0;
 }
 
 // Modal functions
@@ -3065,51 +3183,7 @@ async function createThreeLineChart(chartData) {
     });
 }
 
-// แสดงการวิเคราะห์เหตุผลที่ไม่จบ
-function displayGraduationAnalysis(analysisData) {
-    // อัปเดตสถิติหลัก
-    document.getElementById('currentGpaDisplay').textContent = analysisData.current_gpa.toFixed(2);
-    document.getElementById('graduationProbabilityDisplay').textContent = analysisData.graduation_probability.toFixed(1) + '%';
-    
-    const riskDisplay = document.getElementById('riskLevelDisplay');
-    riskDisplay.textContent = analysisData.risk_level;
-    
-    // เปลี่ยนสีตามระดับความเสี่ยง
-    riskDisplay.className = 'text-secondary';
-    if (analysisData.risk_level === 'สูง') {
-        riskDisplay.className = 'text-danger';
-    } else if (analysisData.risk_level === 'ปานกลาง') {
-        riskDisplay.className = 'text-warning';
-    } else if (analysisData.risk_level === 'ต่ำ') {
-        riskDisplay.className = 'text-success';
-    }
-    
-    // แสดงเหตุผลที่ไม่จบ
-    const failureReasonsContent = document.getElementById('failureReasonsContent');
-    if (analysisData.failure_reasons && analysisData.failure_reasons.length > 0) {
-        let reasonsHtml = '<ul class="list-unstyled">';
-        analysisData.failure_reasons.forEach(reason => {
-            reasonsHtml += `<li class="mb-2"><i class="bi bi-exclamation-circle text-warning me-2"></i>${reason}</li>`;
-        });
-        reasonsHtml += '</ul>';
-        failureReasonsContent.innerHTML = reasonsHtml;
-    } else {
-        failureReasonsContent.innerHTML = '<p class="text-success"><i class="bi bi-check-circle me-2"></i>ไม่พบปัญหาที่จะทำให้ไม่จบการศึกษา</p>';
-    }
-    
-    // แสดงคำแนะนำการปรับปรุง
-    const improvementRecommendations = document.getElementById('improvementRecommendations');
-    if (analysisData.improvement_recommendations && analysisData.improvement_recommendations.length > 0) {
-        let recommendationsHtml = '<ul class="list-unstyled">';
-        analysisData.improvement_recommendations.forEach(recommendation => {
-            recommendationsHtml += `<li class="mb-2"><i class="bi bi-lightbulb text-success me-2"></i>${recommendation}</li>`;
-        });
-        recommendationsHtml += '</ul>';
-        improvementRecommendations.innerHTML = recommendationsHtml;
-    } else {
-        improvementRecommendations.innerHTML = '<p class="text-info"><i class="bi bi-info-circle me-2"></i>ผลการเรียนอยู่ในเกณฑ์ดี</p>';
-    }
-}
+// ฟังก์ชันนี้ถูกรวมเข้ากับ displayGraduationAnalysis ด้านบนแล้ว (ลบออกเพื่อไม่ให้ซ้ำ)
 
 // แสดงตารางทำนายเกรดเทอมถัดไป
 function displayNextTermPrediction(predictionData) {
