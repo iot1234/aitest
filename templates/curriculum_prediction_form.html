@@ -3404,22 +3404,35 @@ function displayGeminiResult(result) {
     
     resultCard.classList.remove('d-none');
     
-    // แสดงผลลัพธ์หลัก (Outcome)
+    // แสดงผลลัพธ์หลัก (Outcome) - ใช้ข้อมูลจาก graduation_prediction ถ้ามี
     const outcomeLabel = document.getElementById('geminiOutcomeLabel');
     if (outcomeLabel) {
-        const status = outcome.status || 'ไม่ทราบ';
-        const statusText = status === 'graduated' ? 'จบตามเกณฑ์' : 
-                          status === 'not_graduated' ? 'ไม่จบ/จบช้า' : 
-                          status;
+        let statusText = 'ไม่ทราบ';
+        let willGraduate = false;
+        
+        // ตรวจสอบ graduation_prediction ก่อน
+        if (gemini.graduation_prediction) {
+            const pred = gemini.graduation_prediction;
+            willGraduate = pred.will_graduate === true;
+            statusText = pred.prediction_text || (willGraduate ? 'จบตามเกณฑ์' : 'ไม่จบ/จบช้า');
+        } else if (outcome.status) {
+            // Fallback ไปใช้ outcome.status
+            const status = outcome.status;
+            willGraduate = status === 'graduated';
+            statusText = status === 'graduated' ? 'จบตามเกณฑ์' : 
+                        status === 'not_graduated' ? 'ไม่จบ/จบช้า' : 
+                        status;
+        }
+        
         outcomeLabel.textContent = statusText;
         
         // เปลี่ยนสีตามสถานะ
         const chip = outcomeLabel.closest('.gemini-chip');
         if (chip) {
             chip.className = 'gemini-chip';
-            if (status === 'graduated') {
+            if (willGraduate) {
                 chip.classList.add('bg-success-subtle', 'text-success-emphasis');
-            } else if (status === 'not_graduated') {
+            } else {
                 chip.classList.add('bg-danger-subtle', 'text-danger-emphasis');
             }
         }
@@ -3445,13 +3458,42 @@ function displayGeminiResult(result) {
         }
     }
     
-    // แสดงผลการวิเคราะห์หลัก (Markdown)
+    // แสดงผลการวิเคราะห์หลัก (Markdown) - รวมผลการทำนายและเหตุผล
     const markdownEl = document.getElementById('geminiMarkdownResult');
     if (markdownEl) {
+        let content = '';
+        
+        // แสดงผลการทำนายจาก graduation_prediction
+        if (gemini.graduation_prediction) {
+            const pred = gemini.graduation_prediction;
+            const willGraduate = pred.will_graduate === true;
+            
+            content += `<div class="alert alert-${willGraduate ? 'success' : 'danger'} mb-3">`;
+            content += `<h5 class="alert-heading"><i class="bi bi-${willGraduate ? 'check-circle' : 'x-circle'}-fill me-2"></i>${pred.prediction_text || (willGraduate ? 'คาดว่าจะจบตามเกณฑ์' : 'คาดว่าจะไม่จบการศึกษา')}</h5>`;
+            
+            if (pred.confidence_percent !== undefined) {
+                content += `<p class="mb-2"><strong>ระดับความมั่นใจ:</strong> ${pred.confidence_percent.toFixed(1)}%</p>`;
+            }
+            
+            // แสดงเหตุผล
+            if (willGraduate && pred.reason_why_graduate) {
+                content += `<div class="mt-2"><strong>เหตุผลที่คาดว่าจะจบ:</strong><p class="mb-0">${pred.reason_why_graduate}</p></div>`;
+            } else if (!willGraduate && pred.reason_why_not_graduate) {
+                content += `<div class="mt-2"><strong>เหตุผลที่คาดว่าจะไม่จบ:</strong><p class="mb-0">${pred.reason_why_not_graduate}</p></div>`;
+            }
+            
+            content += `</div>`;
+        }
+        
+        // แสดงการวิเคราะห์
         if (gemini.analysis_markdown) {
-            markdownEl.innerHTML = renderGeminiMarkdown(gemini.analysis_markdown);
+            content += renderGeminiMarkdown(gemini.analysis_markdown);
         } else if (outcome.description) {
-            markdownEl.innerHTML = `<p class="mb-0">${outcome.description}</p>`;
+            content += `<p class="mb-0">${outcome.description}</p>`;
+        }
+        
+        if (content) {
+            markdownEl.innerHTML = content;
         } else {
             markdownEl.innerHTML = '<p class="text-muted mb-0">กำลังรอผลการวิเคราะห์จาก Gemini...</p>';
         }
