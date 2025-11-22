@@ -2396,6 +2396,9 @@ def train_model():
                 tan1_gemini_analysis = None
                 if enable_gemini_analysis and is_gemini_available():
                     try:
+                        # สรุป Course DNA เพื่อส่งให้ Gemini
+                        dna_summary = summarize_course_dna(course_profiles)
+                        
                         training_context = {
                             'data_format': data_format,
                             'training_type': 'advanced',
@@ -2406,6 +2409,7 @@ def train_model():
                             'feature_count': X.shape[1] if hasattr(X, 'shape') else 0,
                             'label_distribution': y.value_counts().to_dict() if hasattr(y, 'value_counts') else {},
                             'course_profiles_count': len(course_profiles) if course_profiles else 0,
+                            'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
                             'model_metrics': {
                                 name: {
                                     'accuracy': res.get('accuracy'),
@@ -2490,6 +2494,9 @@ def train_model():
 
         if enable_gemini_analysis and is_gemini_available():
             try:
+                # สรุป Course DNA เพื่อส่งให้ Gemini
+                dna_summary = summarize_course_dna(course_profiles)
+                
                 training_context = {
                     'data_format': data_format,
                     'training_type': training_type,
@@ -2500,6 +2507,7 @@ def train_model():
                     'feature_count': int(X.shape[1]) if hasattr(X, 'shape') else len(model_result.get('feature_columns', [])),
                     'label_distribution': y.value_counts().to_dict(),
                     'course_profiles_count': course_profiles_count,
+                    'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
                     'model_metrics': {
                         'accuracy': model_result['accuracy'],
                         'precision': model_result['precision'],
@@ -4084,6 +4092,80 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
     }
 
 
+def summarize_course_dna(course_profiles: Optional[Dict[str, Dict[str, Any]]]) -> Dict[str, Any]:
+    """
+    สรุป Course DNA จาก course_profiles เพื่อใช้ใน Gemini Prompt
+    ค้นหาวิชาปราบเซียน (Killer Courses), วิชาง่าย (Easy Courses), และวิชาเฟ้อ (High Inflation)
+    """
+    if not course_profiles:
+        return {
+            "killer_courses": [],
+            "easy_courses": [],
+            "high_inflation_courses": [],
+            "total_courses": 0
+        }
+    
+    killer_courses = []
+    easy_courses = []
+    high_inflation_courses = []
+    
+    # กำหนด threshold
+    KILLER_FAIL_RATE_THRESHOLD = 0.3  # ตกมากกว่า 30% ถือว่าเป็น Killer
+    EASY_AVG_GRADE_THRESHOLD = 3.5  # เกรดเฉลี่ยมากกว่า 3.5 ถือว่าง่าย
+    EASY_FAIL_RATE_THRESHOLD = 0.1  # ตกน้อยกว่า 10% ถือว่าง่าย
+    HIGH_INFLATION_AVG_THRESHOLD = 3.7  # เกรดเฉลี่ยสูงมาก (เฟ้อ)
+    
+    for course_id, profile in course_profiles.items():
+        fail_rate = profile.get('fail_rate', 0)
+        avg_grade = profile.get('avg_grade', 0)
+        difficulty_score = profile.get('difficulty_score', 0)
+        total_students = profile.get('total_students', 0)
+        
+        # ตรวจสอบว่าเป็น Killer Course (วิชาปราบเซียน)
+        if fail_rate >= KILLER_FAIL_RATE_THRESHOLD and total_students >= 10:  # ต้องมีข้อมูลพอ
+            killer_courses.append({
+                'course_id': course_id,
+                'fail_rate': fail_rate,
+                'avg_grade': avg_grade,
+                'difficulty_score': difficulty_score,
+                'total_students': total_students,
+                'fail_rate_percent': f"{fail_rate*100:.1f}%"
+            })
+        
+        # ตรวจสอบว่าเป็น Easy Course (วิชาง่าย)
+        if avg_grade >= EASY_AVG_GRADE_THRESHOLD and fail_rate <= EASY_FAIL_RATE_THRESHOLD and total_students >= 10:
+            easy_courses.append({
+                'course_id': course_id,
+                'avg_grade': avg_grade,
+                'fail_rate': fail_rate,
+                'total_students': total_students
+            })
+        
+        # ตรวจสอบว่าเป็น High Inflation Course (วิชาเฟ้อ)
+        if avg_grade >= HIGH_INFLATION_AVG_THRESHOLD and total_students >= 10:
+            high_inflation_courses.append({
+                'course_id': course_id,
+                'avg_grade': avg_grade,
+                'fail_rate': fail_rate,
+                'total_students': total_students
+            })
+    
+    # เรียงลำดับ Killer Courses ตาม fail_rate (สูงสุดก่อน)
+    killer_courses.sort(key=lambda x: x['fail_rate'], reverse=True)
+    
+    # เรียงลำดับ Easy Courses ตาม avg_grade (สูงสุดก่อน)
+    easy_courses.sort(key=lambda x: x['avg_grade'], reverse=True)
+    
+    return {
+        "killer_courses": killer_courses[:20],  # เอาแค่ 20 อันแรก
+        "easy_courses": easy_courses[:20],
+        "high_inflation_courses": high_inflation_courses[:20],
+        "total_courses": len(course_profiles),
+        "killer_count": len(killer_courses),
+        "easy_count": len(easy_courses),
+        "inflation_count": len(high_inflation_courses)
+    }
+
 def run_gemini_training_analysis(
     df: pd.DataFrame,
     analysis_goal: Optional[str],
@@ -4103,12 +4185,43 @@ def run_gemini_training_analysis(
         # สรุปข้อมูลไฟล์เทรน
         summary, samples = summarize_dataframe_for_gemini(df, max_columns=30, max_samples=20)
         
+        # ดึงข้อมูล Course DNA จาก training_context
+        dna_info = training_context.get('course_dna_insight', {})
+        
         # สร้าง prompt สำหรับ Gemini
-        goal_text = (analysis_goal or '').strip() or 'วิเคราะห์คุณภาพข้อมูล ตรวจสอบความสมบูรณ์ของข้อมูล และระบุปัญหาที่อาจส่งผลต่อการเทรนโมเดล'
+        # กำหนดเป้าหมายอัตโนมัติ ถ้า user ไม่ได้พิมพ์มา
+        goal_text = (analysis_goal or '').strip()
+        if not goal_text:
+            goal_text = "วิเคราะห์ความยากง่ายของหลักสูตรและพฤติกรรมเกรดของนักศึกษาจาก Course DNA"
+        
+        # สร้างข้อความ Course DNA สำหรับใส่ใน prompt
+        dna_section = ""
+        if dna_info and dna_info.get('killer_courses'):
+            killer_list = dna_info.get('killer_courses', [])[:10]  # เอาแค่ 10 อันแรก
+            killer_str = ", ".join([f"{k['course_id']} (Fail Rate: {k['fail_rate_percent']})" for k in killer_list])
+            easy_list = dna_info.get('easy_courses', [])[:10]
+            easy_str = ", ".join([f"{e['course_id']} (Avg: {e['avg_grade']:.2f})" for e in easy_list])
+            
+            dna_section = f"""
+**ข้อมูลเชิงลึกของหลักสูตร (Course DNA) - วิเคราะห์โดยระบบ Backend:**
+- วิชาปราบเซียน (Killer Courses): {killer_str if killer_str else "ไม่พบ"}
+- จำนวนวิชาปราบเซียนทั้งหมด: {dna_info.get('killer_count', 0)} วิชา
+- วิชาง่าย (Easy Courses): {easy_str if easy_str else "ไม่พบ"}
+- จำนวนวิชาง่ายทั้งหมด: {dna_info.get('easy_count', 0)} วิชา
+- วิชาเฟ้อเกรด (High Inflation): {dna_info.get('inflation_count', 0)} วิชา
+- จำนวนรายวิชาทั้งหมด: {dna_info.get('total_courses', 0)} วิชา
+
+**หมายเหตุ:** ระบบ Backend ได้วิเคราะห์ Course DNA จากข้อมูลเทรนแล้ว โดย:
+- Killer Course = วิชาที่มีอัตราการตก ≥ 30%
+- Easy Course = วิชาที่มีเกรดเฉลี่ย ≥ 3.5 และอัตราการตก ≤ 10%
+- High Inflation = วิชาที่มีเกรดเฉลี่ย ≥ 3.7
+
+"""
         
         # สร้าง prompt ที่ละเอียดขึ้น
         training_prompt = f"""
-คุณได้รับข้อมูลไฟล์เทรนสำหรับระบบทำนายการจบการศึกษาของนักศึกษา
+คุณคือผู้เชี่ยวชาญด้าน Data Science การศึกษา
+ข้อมูลที่ได้รับคือ Course DNA และประวัติเกรดที่ผ่านการประมวลผลแบบ Dynamic Snapshots แล้ว
 
 **วัตถุประสงค์การวิเคราะห์:**
 {goal_text}
@@ -4121,6 +4234,8 @@ def run_gemini_training_analysis(
 **ตัวอย่างข้อมูล (20 แถวแรก):**
 {json.dumps(samples, ensure_ascii=False, indent=2)}
 
+{dna_section}
+
 **บริบทการเทรน:**
 - รูปแบบข้อมูล: {training_context.get('data_format', 'ไม่ระบุ')}
 - ประเภทการเทรน: {training_context.get('training_type', 'ไม่ระบุ')}
@@ -4129,12 +4244,13 @@ def run_gemini_training_analysis(
 - จำนวน features: {training_context.get('feature_count', 0)}
 - การกระจายของ label: {json.dumps(training_context.get('label_distribution', {}), ensure_ascii=False)}
 
-**คำถามที่ต้องการให้วิเคราะห์:**
-1. คุณภาพข้อมูล: ข้อมูลมีความสมบูรณ์เพียงพอหรือไม่ มี missing values หรือข้อมูลผิดปกติหรือไม่?
-2. ความสมดุลของข้อมูล: การกระจายของ label (จบ/ไม่จบ) สมดุลหรือไม่?
-3. ปัญหาที่อาจเกิดขึ้น: มีปัญหาอะไรที่อาจส่งผลต่อการเทรนโมเดลหรือไม่?
-4. คำแนะนำ: มีคำแนะนำอะไรสำหรับการปรับปรุงข้อมูลหรือการเทรนโมเดลหรือไม่?
-5. ความเสี่ยง: มีความเสี่ยงอะไรที่ควรระวังหรือไม่?
+**งานของคุณ:**
+1. วิเคราะห์ความสมดุลของหลักสูตร (มีความยาก-ง่ายเหมาะสมไหม)
+2. ประเมินว่า Killer Courses เหล่านี้มีผลกระทบต่อการจบการศึกษาอย่างไร
+3. วิเคราะห์คุณภาพข้อมูล: ข้อมูลมีความสมบูรณ์เพียงพอหรือไม่ มี missing values หรือข้อมูลผิดปกติหรือไม่?
+4. วิเคราะห์ความสมดุลของข้อมูล: การกระจายของ label (จบ/ไม่จบ) สมดุลหรือไม่?
+5. ให้คำแนะนำ: มีคำแนะนำอะไรสำหรับการปรับปรุงหลักสูตรหรือการเทรนโมเดลหรือไม่?
+6. ไม่ต้องถามข้อมูลเพิ่ม ให้วิเคราะห์จากเท่าที่มี
 
 กรุณาวิเคราะห์และให้คำตอบตามโครงสร้างที่กำหนด
 """
@@ -4753,11 +4869,16 @@ def gemini_predict_route():
         
         logger.info(f"Processing prediction for {student_name} with {len(course_grades)} course grades")
         
+        # โหลด Course DNA จากโมเดลเพื่อใช้ในการวิเคราะห์
+        course_profiles = None
+        course_context_str = ""
+        
         if model_filename:
             try:
                 stored_model = storage.load_model(model_filename)
                 if stored_model:
                     training_analysis = stored_model.get('gemini_training_analysis')
+                    course_profiles = stored_model.get('course_profiles', {})
                     model_metadata = {
                         'model_filename': model_filename,
                         'data_format': stored_model.get('data_format'),
@@ -4767,6 +4888,62 @@ def gemini_predict_route():
                     logger.info(f"Loaded model context: {model_filename}")
             except Exception as model_exc:
                 logger.warning(f"Unable to load model for Gemini context: {model_exc}")
+        else:
+            # ถ้าไม่ได้ระบุ model_filename ให้ลองโหลดโมเดลล่าสุด
+            try:
+                models = storage.list_models()
+                if models:
+                    latest_model = models[0]  # โมเดลล่าสุด
+                    loaded_model = storage.load_model(latest_model['filename'])
+                    if loaded_model:
+                        course_profiles = loaded_model.get('course_profiles', {})
+                        logger.info(f"Loaded course profiles from latest model: {latest_model['filename']}")
+            except Exception as load_exc:
+                logger.warning(f"Unable to load latest model for course profiles: {load_exc}")
+        
+        # ตรวจสอบวิชาที่นักศึกษาเรียน เทียบกับ Course DNA
+        if course_profiles:
+            student_risk_factors = []
+            student_easy_courses_failed = []
+            
+            for course_id, grade in cleaned_grades.items():
+                if course_id in course_profiles:
+                    prof = course_profiles[course_id]
+                    fail_rate = prof.get('fail_rate', 0)
+                    avg_grade = prof.get('avg_grade', 0)
+                    difficulty_score = prof.get('difficulty_score', 0)
+                    
+                    # ตรวจสอบว่าเป็น Killer Course และนักศึกษาตก
+                    is_killer = fail_rate >= 0.3  # 30% fail rate threshold
+                    is_failed = grade in ['F', 'W', 'WF', 'WU', 'D'] or (isinstance(grade, str) and grade.upper() in ['F', 'W', 'WF', 'WU', 'D'])
+                    
+                    if is_killer and is_failed:
+                        student_risk_factors.append(
+                            f"- ตกวิชาปราบเซียน {course_id} (ปกติคนตก {fail_rate*100:.0f}%, เกรดเฉลี่ย: {avg_grade:.2f})"
+                        )
+                    elif is_killer and not is_failed:
+                        # ผ่าน Killer Course แล้ว (เป็นสัญญาณดี)
+                        student_risk_factors.append(
+                            f"- ผ่านวิชาปราบเซียน {course_id} แล้ว (ปกติคนตก {fail_rate*100:.0f}%) ✓"
+                        )
+                    
+                    # ตรวจสอบว่าเป็น Easy Course แต่ได้เกรดแย่
+                    is_easy = avg_grade >= 3.5 and fail_rate <= 0.1
+                    is_poor_grade = grade in ['C', 'D', 'F', 'W', 'WF', 'WU'] or (isinstance(grade, str) and grade.upper() in ['C', 'D', 'F', 'W', 'WF', 'WU'])
+                    
+                    if is_easy and is_poor_grade:
+                        student_easy_courses_failed.append(
+                            f"- ได้เกรดน้อยในวิชาช่วย {course_id} (เกรดเฉลี่ยปกติ: {avg_grade:.2f}, ได้: {grade})"
+                        )
+            
+            # สร้างข้อความ Course Context
+            if student_risk_factors or student_easy_courses_failed:
+                course_context_str = "\n**การวิเคราะห์ตาม Course DNA (Backend System):**\n"
+                if student_risk_factors:
+                    course_context_str += "\n".join(student_risk_factors)
+                if student_easy_courses_failed:
+                    course_context_str += "\n" + "\n".join(student_easy_courses_failed)
+                course_context_str += "\n"
         
         if not isinstance(course_grades, dict) or len(course_grades) == 0:
             logger.warning("No course grades provided")
@@ -4792,10 +4969,14 @@ def gemini_predict_route():
         grade_summary['student_name'] = student_name
         
         # สร้าง prompt ที่ละเอียดสำหรับ Gemini
-        analysis_goal_text = analysis_goal or 'วิเคราะห์แนวโน้มการจบการศึกษาและให้คำแนะนำเร่งด่วน'
+        # Hardcode Prompt ให้ฉลาดขึ้นโดย User ไม่ต้องพิมพ์
+        analysis_goal_text = analysis_goal or "ประเมินโอกาสจบการศึกษาโดยพิจารณาจากความยากง่ายของรายวิชา (Course DNA)"
         
         detailed_prompt = f"""
-คุณได้รับข้อมูลเกรดของนักศึกษาเพื่อวิเคราะห์แนวโน้มการจบการศึกษา
+คุณคือผู้เชี่ยวชาญด้านการวิเคราะห์ผลการเรียนของนักศึกษา
+วิเคราะห์เกรดนักศึกษาคนนี้ โดยใช้ข้อมูล Course DNA ที่ระบบ Backend วิเคราะห์มาให้แล้ว
+
+{course_context_str}
 
 **ข้อมูลนักศึกษา:**
 - ชื่อ: {student_name}
@@ -4817,18 +4998,25 @@ def gemini_predict_route():
 **วัตถุประสงค์การวิเคราะห์:**
 {analysis_goal_text}
 
+**คำสั่งการวิเคราะห์:**
+- ให้ความสำคัญกับ "วิชาปราบเซียน" (Killer Courses) ที่นักศึกษาตกเป็นอันดับแรก
+- ถ้าตกวิชา Killer ให้แนะนำวิธีแก้ที่เข้มข้นและเป็นรูปธรรม
+- ทำนายโอกาสจบโดยดูว่าผ่านด่านวิชายากๆ ไปหรือยัง
+- ถ้าได้เกรดแย่ในวิชาง่าย (Easy Courses) ให้ระบุเป็นสัญญาณเตือน
+- วิเคราะห์จากข้อมูลที่มี ไม่ต้องถามข้อมูลเพิ่ม
+
 **คำถามที่ต้องการให้วิเคราะห์:**
 1. แนวโน้มการจบการศึกษา: นักศึกษามีแนวโน้มจะจบการศึกษาหรือไม่? (ระบุความมั่นใจเป็นเปอร์เซ็นต์)
 2. ระดับความเสี่ยง: นักศึกษามีความเสี่ยงต่อการไม่จบการศึกษาหรือไม่? (ต่ำ/ปานกลาง/สูง)
-3. ปัจจัยสำคัญ: ปัจจัยอะไรที่ส่งผลต่อการจบการศึกษามากที่สุด?
-4. คำแนะนำ: มีคำแนะนำอะไรสำหรับนักศึกษาเพื่อให้จบการศึกษาตามกำหนด?
+3. ปัจจัยสำคัญ: ปัจจัยอะไรที่ส่งผลต่อการจบการศึกษามากที่สุด? (โดยเฉพาะเรื่อง Killer Courses)
+4. คำแนะนำ: มีคำแนะนำอะไรสำหรับนักศึกษาเพื่อให้จบการศึกษาตามกำหนด? (เน้นที่การแก้ปัญหา Killer Courses)
 
 กรุณาวิเคราะห์และให้คำตอบตามโครงสร้างที่กำหนด โดยให้:
-- analysis_markdown: สรุปการวิเคราะห์เป็นภาษาไทย (อย่างน้อย 200 คำ)
+- analysis_markdown: สรุปการวิเคราะห์เป็นภาษาไทย (อย่างน้อย 200 คำ) โดยเน้นที่ Course DNA และ Killer Courses
 - risk_level: ระดับความเสี่ยง (very_low, low, moderate, high, very_high)
 - outcome_summary: สรุปผลการทำนาย (status, confidence 0-1, description)
-- key_metrics: ตัวชี้วัดสำคัญ (อย่างน้อย 3 ตัว)
-- recommendations: คำแนะนำ (อย่างน้อย 3 ข้อ)
+- key_metrics: ตัวชี้วัดสำคัญ (อย่างน้อย 3 ตัว) รวมถึงจำนวน Killer Courses ที่ตก
+- recommendations: คำแนะนำ (อย่างน้อย 3 ข้อ) โดยเน้นที่การแก้ปัญหา Killer Courses
 """
         
         prompt_payload = {
