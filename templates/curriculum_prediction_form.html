@@ -1669,6 +1669,7 @@ async function fetchGeminiPrediction(payload, signal) {
         
         if (!response.ok) {
             if (response.status === 429) {
+                // หมายเหตุ: ตัวเลข 3 ครั้งต้องตรงกับ max_retries ใน app.py
                 throw new Error('⚠️ โควต้า Gemini API หมดชั่วคราว\n' +
                     '• สาเหตุ: ใช้งานเกิน Free Tier Limit\n' +
                     '• แนะนำ: รอ 1-2 นาที แล้วลองใหม่\n' +

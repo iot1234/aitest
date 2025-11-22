@@ -1229,13 +1229,11 @@ def retry_on_quota_error(max_retries=3, initial_delay=20):
         @wraps(func)
         def wrapper(*args, **kwargs):
             delay = initial_delay
-            last_exception = None
             
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    last_exception = e
                     error_msg = str(e)
                     is_quota_error = ('429' in error_msg or 
                                      'quota' in error_msg.lower() or 
@@ -1249,10 +1247,6 @@ def retry_on_quota_error(max_retries=3, initial_delay=20):
                     
                     # ถ้าไม่ใช่ quota error หรือหมดจำนวน retry แล้ว ให้ raise
                     raise
-            
-            # ถ้าไม่มี exception ให้ raise exception สุดท้าย (กรณี edge case)
-            if last_exception:
-                raise last_exception
                 
         return wrapper
     return decorator
@@ -1276,7 +1270,7 @@ class RateLimiter:
             return True, None
         else:
             wait_time = (self.requests[0] + self.time_window - now).total_seconds()
-            # ป้องกัน negative wait time
+            # ป้องกัน negative wait time และให้อย่างน้อย 1 วินาที
             return False, max(1, int(wait_time))
 
 
