@@ -4173,6 +4173,123 @@ def run_gemini_training_analysis(
         }
 
 
+def repair_incomplete_json(text: str) -> str:
+    """
+    ซ่อมแซม JSON ที่ไม่สมบูรณ์ (unterminated string, unclosed braces, etc.)
+    """
+    if not text:
+        return text
+    
+    # ลบ markdown code blocks ถ้ามี
+    cleaned = text.strip()
+    if cleaned.startswith('```'):
+        cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```$', '', cleaned)
+    
+    # ลบ whitespace ที่ไม่จำเป็น
+    cleaned = cleaned.strip()
+    
+    # ถ้าไม่มี { ให้ return text เดิม
+    if '{' not in cleaned:
+        return cleaned
+    
+    # หา JSON object ที่สมบูรณ์ที่สุด
+    brace_count = 0
+    bracket_count = 0
+    in_string = False
+    escape_next = False
+    last_valid_pos = -1
+    start_pos = cleaned.find('{')
+    
+    if start_pos == -1:
+        return cleaned
+    
+    # วิเคราะห์ JSON structure
+    for i in range(start_pos, len(cleaned)):
+        char = cleaned[i]
+        
+        if escape_next:
+            escape_next = False
+            continue
+        
+        if char == '\\':
+            escape_next = True
+            continue
+        
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        
+        if in_string:
+            continue
+        
+        if char == '{':
+            brace_count += 1
+        elif char == '}':
+            brace_count -= 1
+            if brace_count == 0 and bracket_count == 0:
+                last_valid_pos = i
+                break
+        elif char == '[':
+            bracket_count += 1
+        elif char == ']':
+            bracket_count -= 1
+    
+    # ถ้าเจอ JSON object ที่สมบูรณ์ ให้ใช้ส่วนนั้น
+    if last_valid_pos > start_pos:
+        return cleaned[start_pos:last_valid_pos + 1]
+    
+    # ถ้าไม่สมบูรณ์ ให้ลองซ่อมแซม
+    if brace_count > 0 or bracket_count > 0 or in_string:
+        # หา string ที่ไม่ปิด quote
+        in_string = False
+        escape_next = False
+        string_start = -1
+        last_string_char = -1
+        
+        for i in range(start_pos, len(cleaned)):
+            char = cleaned[i]
+            
+            if escape_next:
+                escape_next = False
+                continue
+            
+            if char == '\\':
+                escape_next = True
+                continue
+            
+            if char == '"' and not escape_next:
+                if not in_string:
+                    in_string = True
+                    string_start = i
+                else:
+                    in_string = False
+                    string_start = -1
+                    last_string_char = i
+        
+        # ถ้ามี string ที่ไม่ปิด ให้ปิดมัน
+        if in_string and string_start >= 0:
+            # หาจุดที่เหมาะสมในการปิด string
+            # ลองหาจากท้ายสุดย้อนกลับ
+            insert_pos = len(cleaned)
+            for i in range(len(cleaned) - 1, string_start, -1):
+                if cleaned[i] in [',', '}', ']', '\n', '\r']:
+                    insert_pos = i
+                    break
+            
+            # ปิด string
+            cleaned = cleaned[:insert_pos] + '"' + cleaned[insert_pos:]
+        
+        # ปิด brackets ที่เหลือ (ต้องปิดก่อน braces)
+        if bracket_count > 0:
+            cleaned = cleaned + ']' * bracket_count
+        
+        # ปิด braces ที่เหลือ
+        if brace_count > 0:
+            cleaned = cleaned + '}' * brace_count
+    
+    return cleaned
+
 @retry_on_quota_error(max_retries=3, initial_delay=20)
 def call_gemini_with_retry(prompt_or_payload, task_type='prediction_analysis'):
     """เรียก Gemini พร้อมระบบ retry (ลองทั้งหมด 3 ครั้ง)"""
@@ -4284,8 +4401,8 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
             logger.info("✅ Gemini analysis completed successfully")
             return result
         except json.JSONDecodeError as json_err:
-            logger.error(f"❌ Failed to parse JSON response: {json_err}")
-            logger.error(f"Response text: {response_text[:500]}...")
+            logger.warning(f"⚠️ Initial JSON parse failed: {json_err}")
+            logger.debug(f"Response text (first 1000 chars): {response_text[:1000]}...")
             
             try:
                 # Attempt 1: Clean markdown code blocks
@@ -4296,18 +4413,40 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
                 
                 try:
                     result = json.loads(cleaned_text)
-                    logger.info("✅ Successfully parsed JSON after cleaning")
+                    logger.info("✅ Successfully parsed JSON after cleaning markdown")
                     return result
-                except json.JSONDecodeError:
-                    # Attempt 2: Extract JSON object using regex
-                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-                    if json_match:
-                        extracted_json = json_match.group(0)
-                        result = json.loads(extracted_json)
-                        logger.info("✅ Successfully extracted and parsed JSON using regex")
+                except json.JSONDecodeError as e1:
+                    logger.debug(f"Markdown cleaning failed: {e1}")
+                    
+                    # Attempt 2: Repair incomplete JSON (unterminated strings, unclosed braces)
+                    try:
+                        repaired_text = repair_incomplete_json(cleaned_text)
+                        result = json.loads(repaired_text)
+                        logger.info("✅ Successfully parsed JSON after repair")
                         return result
-                    raise
-            except Exception:
+                    except json.JSONDecodeError as e2:
+                        logger.debug(f"JSON repair failed: {e2}")
+                        
+                        # Attempt 3: Extract JSON object using regex (fallback)
+                        json_match = re.search(r'\{.*\}', cleaned_text, re.DOTALL)
+                        if json_match:
+                            extracted_json = json_match.group(0)
+                            try:
+                                # Try to repair extracted JSON too
+                                repaired_extracted = repair_incomplete_json(extracted_json)
+                                result = json.loads(repaired_extracted)
+                                logger.info("✅ Successfully extracted and parsed JSON using regex + repair")
+                                return result
+                            except json.JSONDecodeError:
+                                # Last attempt: try original extracted
+                                result = json.loads(extracted_json)
+                                logger.info("✅ Successfully extracted and parsed JSON using regex")
+                                return result
+                        raise ValueError(f"Invalid JSON response from Gemini: {str(json_err)}")
+            except Exception as repair_exc:
+                logger.error(f"❌ All JSON repair attempts failed: {repair_exc}")
+                logger.error(f"Original error: {json_err}")
+                logger.error(f"Response text (first 2000 chars): {response_text[:2000]}...")
                 raise ValueError(f"Invalid JSON response from Gemini: {str(json_err)}")
 
     last_error = None
