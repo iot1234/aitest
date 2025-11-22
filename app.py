@@ -4221,6 +4221,11 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
 
     def _execute_with_model(model_name: str):
         generation_config = copy.deepcopy(base_generation_config)
+        
+        # Increase token limit for 1.5 models which support higher output
+        if '1.5' in model_name:
+            generation_config['max_output_tokens'] = 8192
+            
         model = genai.GenerativeModel(
             model_name,
             system_instruction=GEMINI_SYSTEM_PROMPT,
@@ -4280,15 +4285,28 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
             return result
         except json.JSONDecodeError as json_err:
             logger.error(f"❌ Failed to parse JSON response: {json_err}")
-            logger.error(f"Response text: {response_text[:500]}")
+            logger.error(f"Response text: {response_text[:500]}...")
+            
             try:
+                # Attempt 1: Clean markdown code blocks
                 cleaned_text = response_text.strip()
                 if cleaned_text.startswith('```'):
                     cleaned_text = re.sub(r'^```(?:json)?\s*', '', cleaned_text)
                     cleaned_text = re.sub(r'\s*```$', '', cleaned_text)
-                result = json.loads(cleaned_text)
-                logger.info("✅ Successfully parsed JSON after cleaning")
-                return result
+                
+                try:
+                    result = json.loads(cleaned_text)
+                    logger.info("✅ Successfully parsed JSON after cleaning")
+                    return result
+                except json.JSONDecodeError:
+                    # Attempt 2: Extract JSON object using regex
+                    json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                    if json_match:
+                        extracted_json = json_match.group(0)
+                        result = json.loads(extracted_json)
+                        logger.info("✅ Successfully extracted and parsed JSON using regex")
+                        return result
+                    raise
             except Exception:
                 raise ValueError(f"Invalid JSON response from Gemini: {str(json_err)}")
 
@@ -4299,8 +4317,10 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
         tried_models.append(model_name)
         try:
             return _execute_with_model(model_name)
-        except ValueError:
-            raise
+        except ValueError as ve:
+            logger.warning(f"⚠️ Gemini model '{model_name}' returned invalid response: {ve}")
+            last_error = ve
+            continue
         except Exception as exc:
             last_error = exc
             if _should_retry_with_fallback(exc) and model_name != GEMINI_MODEL_CANDIDATES[-1]:
