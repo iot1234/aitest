@@ -379,13 +379,31 @@
       
       .markdown-body p,
       .markdown-body li {
-          color: #e2e8f0;
-          line-height: 1.7;
+          color: #f1f5f9;
+          line-height: 1.8;
+          font-size: 1rem;
       }
       
       .markdown-body strong {
           color: #ffffff;
           font-weight: 700;
+      }
+      
+      .markdown-body a {
+          color: #86efac;
+      }
+      
+      .markdown-body code {
+          background: rgba(0,0,0,0.3);
+          color: #f1f5f9;
+          padding: 2px 6px;
+          border-radius: 4px;
+      }
+      
+      .markdown-body blockquote {
+          border-left: 4px solid #86efac;
+          padding-left: 16px;
+          color: #e2e8f0;
       }
       
       .gemini-metrics {
@@ -405,18 +423,27 @@
       }
       
       .gemini-metric-card .label {
-          font-size: 0.85rem;
-          color: #e2e8f0;
+          font-size: 0.9rem;
+          color: #f1f5f9;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          font-weight: 600;
-          margin-bottom: 8px;
+          font-weight: 700;
+          margin-bottom: 10px;
       }
       
       .gemini-metric-card .value {
-          font-size: 1.75rem;
-          font-weight: 700;
+          font-size: 1.9rem;
+          font-weight: 800;
           color: #ffffff;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      
+      .gemini-metric-card .value small {
+          font-size: 0.75rem;
+          font-weight: 600;
+          display: block;
+          margin-top: 4px;
+          opacity: 0.9;
       }
       
       .gemini-metric-card .value.text-success {
@@ -492,13 +519,41 @@
       
       .gemini-recommendations li {
           margin-bottom: 12px;
-          color: #e2e8f0;
-          line-height: 1.6;
+          color: #f1f5f9;
+          line-height: 1.7;
           padding-left: 8px;
+          font-size: 1rem;
       }
       
       .gemini-recommendations li::marker {
           color: #86efac;
+          font-weight: bold;
+      }
+      
+      .gemini-result-card .alert {
+          border: 2px solid rgba(255,255,255,0.2);
+          border-radius: 12px;
+      }
+      
+      .gemini-result-card .alert-success {
+          background: rgba(34,197,94,0.15);
+          border-color: rgba(34,197,94,0.4);
+          color: #86efac;
+      }
+      
+      .gemini-result-card .alert-danger {
+          background: rgba(239,68,68,0.15);
+          border-color: rgba(239,68,68,0.4);
+          color: #fca5a5;
+      }
+      
+      .gemini-result-card .alert h5 {
+          color: inherit;
+          font-weight: 700;
+      }
+      
+      .gemini-result-card .alert p {
+          color: #f1f5f9;
       }
       
       .gemini-chart-container {
@@ -2657,10 +2712,18 @@ function displayGraduationAnalysis(analysis) {
             return;
         }
         
-        // คำนวณ GPA จาก courseGrades ที่มีอยู่จริง
-        let calculatedGpa = analysis.current_gpa;
-        if (!calculatedGpa && courseGrades && Object.keys(courseGrades).length > 0) {
+        // คำนวณ GPA จาก courseGrades ที่มีอยู่จริง (ให้ความสำคัญกับ courseGrades)
+        let calculatedGpa = null;
+        
+        // ลำดับความสำคัญ: courseGrades > analysis.current_gpa
+        if (courseGrades && Object.keys(courseGrades).length > 0) {
             calculatedGpa = calculateGPAFromGrades(courseGrades);
+        } else if (analysis.current_gpa != null && !isNaN(analysis.current_gpa)) {
+            calculatedGpa = parseFloat(analysis.current_gpa);
+        }
+        
+        if (calculatedGpa == null || isNaN(calculatedGpa)) {
+            calculatedGpa = 0;
         }
         
         // กำหนดผลการจบ/ไม่จบ
@@ -2794,24 +2857,38 @@ function displayGraduationAnalysis(analysis) {
     }
 }
 
-// ฟังก์ชันคำนวณ GPA จาก courseGrades
+// ฟังก์ชันคำนวณ GPA จาก courseGrades (ใช้หน่วยกิตจริง)
 function calculateGPAFromGrades(grades) {
     if (!grades || Object.keys(grades).length === 0) return 0;
     
     const gradeMapping = {
         'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
-        'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': null
+        'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': null, 'U': 0.0
     };
     
     let totalGradePoints = 0;
     let totalCredits = 0;
     
     for (const [courseId, grade] of Object.entries(grades)) {
-        if (!grade) continue;
+        if (!grade || grade === '' || grade === 'null' || grade === 'undefined') continue;
         
-        const gradeUpper = grade.toUpperCase();
+        const gradeUpper = String(grade).trim().toUpperCase();
         const gradePoint = gradeMapping[gradeUpper];
         
+        // ถ้าไม่เจอใน mapping ให้ลองแปลงเป็นตัวเลข
+        if (gradePoint === undefined) {
+            const numGrade = parseFloat(grade);
+            if (!isNaN(numGrade) && numGrade >= 0 && numGrade <= 4) {
+                // ถ้าเป็นตัวเลข 0-4 ให้ใช้ตรงๆ (อาจเป็นเกรดที่แปลงแล้ว)
+                const info = COURSE_LOOKUP[courseId] || {};
+                const credits = info.credit || 3;
+                totalGradePoints += numGrade * credits;
+                totalCredits += credits;
+            }
+            continue;
+        }
+        
+        // ไม่รวม S, W, WF, WU ในการคำนวณ GPA
         if (gradePoint !== null && gradePoint !== undefined) {
             const info = COURSE_LOOKUP[courseId] || {};
             const credits = info.credit || 3;
@@ -2821,7 +2898,8 @@ function calculateGPAFromGrades(grades) {
         }
     }
     
-    return totalCredits > 0 ? totalGradePoints / totalCredits : 0;
+    const gpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0;
+    return Math.round(gpa * 100) / 100; // ปัดเป็น 2 ทศนิยม
 }
 
 // Modal functions
@@ -3606,9 +3684,20 @@ function displayGeminiResult(result) {
         if (Array.isArray(gemini.key_metrics) && gemini.key_metrics.length > 0) {
             metrics = gemini.key_metrics;
         } else {
-            // สร้าง metrics จากข้อมูลที่มี
-            if (summary.estimated_gpa != null) {
-                const gpaValue = parseFloat(summary.estimated_gpa);
+            // สร้าง metrics จากข้อมูลที่มี - คำนวณ GPA จาก courseGrades จริง
+            let gpaValue = null;
+            
+            // ลองใช้ summary.estimated_gpa ก่อน (ถ้ามี)
+            if (summary.estimated_gpa != null && !isNaN(summary.estimated_gpa)) {
+                gpaValue = parseFloat(summary.estimated_gpa);
+            }
+            
+            // ถ้าไม่มีหรือไม่ถูกต้อง ให้คำนวณจาก courseGrades จริง
+            if ((!gpaValue || gpaValue === 0) && courseGrades && Object.keys(courseGrades).length > 0) {
+                gpaValue = calculateGPAFromGrades(courseGrades);
+            }
+            
+            if (gpaValue != null && !isNaN(gpaValue)) {
                 const gpaStatus = gpaValue >= 2.00 ? 'ผ่านเกณฑ์' : 'ต่ำกว่าเกณฑ์';
                 metrics.push({ 
                     label: 'GPA โดยประมาณ', 
