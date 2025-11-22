@@ -2936,34 +2936,60 @@ def load_existing_models():
 def calculate_gpa_and_failed_courses_backend(course_grades, courses_data):
     total_points = 0
     completed_credits = 0
+    credits_for_gpa = 0  # หน่วยกิตที่ใช้คำนวณ GPA (ไม่รวม S, W, WF, WU)
     failed_courses = []
     
     grade_mapping_points = app.config['DATA_CONFIG']['grade_mapping']
+    # เกรดที่ไม่นำมาคำนวณ GPA
+    excluded_grades = {'S', 'W', 'WF', 'WU'}
 
     for cid, grade_char in course_grades.items():
         course = next((c for c in courses_data if c['id'] == cid), None)
         if not course:
             continue
 
-        if grade_char and grade_char != "":
-            numeric_grade = grade_mapping_points.get(str(grade_char).upper(), 0.0)
+        if not grade_char or grade_char == "":
+            continue
             
-            try:
-                numeric_grade = float(grade_char)
-                if not (0.0 <= numeric_grade <= 4.0):
-                    numeric_grade = 0.0
-            except ValueError:
-                numeric_grade = grade_mapping_points.get(str(grade_char).upper(), 0.0)
-
-            if numeric_grade > 0:
-                total_points += numeric_grade * course['credit']
-                completed_credits += course['credit']
-            
-            if numeric_grade == 0.0:
-                if str(grade_char).upper() in ['F', 'W', 'I', 'NP', 'WF', 'WU']:
-                    failed_courses.append(cid)
+        grade_upper = str(grade_char).upper()
+        
+        # ข้ามเกรดที่ไม่นำมาคำนวณ GPA
+        if grade_upper in excluded_grades:
+            continue
+        
+        numeric_grade = None
+        
+        # ลองแปลงเป็นตัวเลขก่อน
+        try:
+            numeric_grade = float(grade_char)
+            if not (0.0 <= numeric_grade <= 4.0):
+                numeric_grade = None
+        except ValueError:
+            numeric_grade = None
+        
+        # ถ้าแปลงไม่ได้ ให้ใช้ grade_mapping
+        if numeric_grade is None:
+            numeric_grade = grade_mapping_points.get(grade_upper)
+        
+        # ถ้า numeric_grade เป็น None (เช่น S) ให้ข้าม
+        if numeric_grade is None:
+            continue
+        
+        # คำนวณ GPA (ไม่รวม S, W, WF, WU)
+        if numeric_grade is not None:
+            credits = course['credit']
+            total_points += numeric_grade * credits
+            credits_for_gpa += credits
+            completed_credits += credits
+        
+        # ตรวจสอบวิชาที่ตก (F, WF, WU)
+        if numeric_grade == 0.0 or grade_upper in ['F', 'WF', 'WU']:
+            if grade_upper in ['F', 'WF', 'WU']:
+                failed_courses.append(cid)
     
-    avg_gpa = total_points / completed_credits if completed_credits > 0 else 0
+    # คำนวณ GPA จากหน่วยกิตที่ใช้คำนวณ GPA ได้เท่านั้น
+    avg_gpa = total_points / credits_for_gpa if credits_for_gpa > 0 else 0
+    avg_gpa = round(avg_gpa, 2)  # ปัดเป็น 2 ทศนิยม
 
     return {
         'avgGPA': avg_gpa,
@@ -3312,8 +3338,12 @@ def determine_graduation_status_backend(completion_rate, avg_gpa, blocked_course
         if cid not in current_grades or current_grades[cid] == "" or app.config['DATA_CONFIG']['grade_mapping'].get(str(current_grades[cid]).upper(), 0.0) == 0.0
     ]
     
-    if avg_gpa > 0 and avg_gpa < app.config['DATA_CONFIG']['risk_levels']['warning_gpa_threshold']:
-        return "GPA ต่ำกว่าเกณฑ์ (2.0) จำเป็นต้องปรับปรุงอย่างเร่งด่วนเพื่อจบการศึกษา"
+    # ตรวจสอบ GPA ที่ถูกต้อง (ต้อง >= 2.00 ถึงจะผ่านเกณฑ์)
+    # ถ้า GPA ผ่านเกณฑ์แล้ว ไม่ต้องแสดงข้อความเตือน GPA ต่ำ
+    gpa_threshold = 2.00
+    if avg_gpa > 0 and avg_gpa < gpa_threshold:
+        return f"GPA ต่ำกว่าเกณฑ์ ({avg_gpa:.2f} < {gpa_threshold:.2f}) จำเป็นต้องปรับปรุงอย่างเร่งด่วนเพื่อจบการศึกษา"
+    # ถ้า GPA >= 2.00 ให้ข้ามข้อความเตือนนี้และไปตรวจสอบเงื่อนไขอื่นต่อ
 
     if is_at_or_past_final_standard_term:
         if len(failed_courses_ids) > 0:
@@ -3551,22 +3581,37 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
         incomplete_courses = [course for course, grade in current_grades.items() 
                             if grade in ['I', 'W', 'WF', 'WU']]
         
-        # คำนวณ GPA และหน่วยกิต
+        # คำนวณ GPA และหน่วยกิต (ไม่รวม S, W, WF, WU)
         total_points = 0
         total_credits = 0
         passed_credits = 0
         
+        # เกรดที่ไม่นำมาคำนวณ GPA
+        excluded_grades = {'S', 'W', 'WF', 'WU', None}
+        
         for course, grade in current_grades.items():
-            if grade and grade in grade_mapping:
-                grade_point = grade_mapping[grade]
-                # ดึงหน่วยกิตจริงจากข้อมูลหลักสูตร
-                credits = courses_data.get(course, {}).get('credits', 3)
+            if not grade or str(grade).upper() in excluded_grades:
+                continue
+                
+            grade_upper = str(grade).upper()
+            grade_point = grade_mapping.get(grade_upper)
+            
+            # ถ้า grade_point เป็น None (เช่น S) ให้ข้าม
+            if grade_point is None:
+                continue
+            
+            # ดึงหน่วยกิตจริงจากข้อมูลหลักสูตร
+            credits = courses_data.get(course, {}).get('credits', 3)
+            
+            # รวมเฉพาะเกรดที่นำมาคำนวณ GPA ได้
+            if grade_point is not None:
                 total_points += grade_point * credits
                 total_credits += credits
                 if grade_point > 0:
                     passed_credits += credits
         
         current_gpa = total_points / total_credits if total_credits > 0 else 0
+        current_gpa = round(current_gpa, 2)  # ปัดเป็น 2 ทศนิยม
         
         # วิเคราะห์เหตุผลการไม่จบแบบละเอียด
         
@@ -5566,8 +5611,10 @@ def analyze_curriculum():
             recommendations.append("ควรลงทะเบียนซ้ำวิชาที่ตก (F) โดยเร็ว")
             recommendations.append("ควรปรึกษาอาจารย์ที่ปรึกษาเพื่อวางแผนการเรียน")
         
-        if avg_gpa < 2.0 and avg_gpa > 0:
-            recommendations.append("GPA ต่ำกว่า 2.0 ควรปรับปรุงผลการเรียนอย่างเร่งด่วน")
+        # ตรวจสอบ GPA ที่ถูกต้อง (ต้อง >= 2.00 ถึงจะผ่านเกณฑ์)
+        gpa_threshold = 2.00
+        if avg_gpa > 0 and avg_gpa < gpa_threshold:
+            recommendations.append(f"GPA ต่ำกว่าเกณฑ์ ({avg_gpa:.2f} < {gpa_threshold:.2f}) ควรปรับปรุงผลการเรียนอย่างเร่งด่วน")
         
         if blocked_courses:
             recommendations.append("ควรผ่านวิชาพื้นฐานให้ครบก่อนลงวิชาขั้นสูง")
