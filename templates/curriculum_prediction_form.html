@@ -1668,6 +1668,15 @@ async function fetchGeminiPrediction(payload, signal) {
         }
         
         if (!response.ok) {
+            if (response.status === 429) {
+                throw new Error('⚠️ โควต้า Gemini API หมดชั่วคราว\n' +
+                    '• สาเหตุ: ใช้งานเกิน Free Tier Limit\n' +
+                    '• แนะนำ: รอ 1-2 นาที หรืออัพเกรด API Key\n' +
+                    '• ระบบจะลองใหม่อัตโนมัติ');
+            } else if (response.status === 503) {
+                throw new Error('⚠️ ยังไม่ได้ตั้งค่า Gemini API Key\n' +
+                    '• กรุณาตั้งค่า GEMINI_API_KEY');
+            }
             const errorMsg = result?.error || result?.details || `HTTP ${response.status}`;
             console.error('Gemini API error:', errorMsg);
             throw new Error(errorMsg);
