@@ -869,8 +869,8 @@ class AdvancedFeatureEngineer:
         """
         student_records = {}
         
-        # หาคอลัมน์ Student ID
-        student_col = self._find_column(df, ['dummy_studentno', 'student_id', 'student', 'รหัสนักศึกษา', 'id', 'name', 'ชื่อ'])
+        # หาคอลัมน์ Student ID - รองรับหลาย format
+        student_col = self._find_column(df, ['dummy_studentno', 'dummy studentno', 'studentno', 'student_id', 'student', 'รหัสนักศึกษา', 'id', 'name', 'ชื่อ'])
         
         if not student_col:
             # ถ้าไม่มี student ID ให้สร้างจากชื่อหรือ index
@@ -1345,21 +1345,27 @@ class AdvancedFeatureEngineer:
         return X
     
     def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> Optional[str]:
-        """หาชื่อคอลัมน์จากรายการที่เป็นไปได้"""
+        """หาชื่อคอลัมน์จากรายการที่เป็นไปได้ - รองรับหลาย format"""
         if df is None or df.empty:
             return None
             
-        df_columns_lower = [col.lower() for col in df.columns]
+        # Normalize column names: lowercase, remove spaces/underscores
+        def normalize(s):
+            return str(s).lower().replace(' ', '').replace('_', '').replace('-', '')
+        
+        df_columns_normalized = [normalize(col) for col in df.columns]
         
         for name in possible_names:
-            name_lower = name.lower()
-            # Exact match first
-            if name_lower in df_columns_lower:
-                idx = df_columns_lower.index(name_lower)
+            name_normalized = normalize(name)
+            
+            # Exact normalized match first
+            if name_normalized in df_columns_normalized:
+                idx = df_columns_normalized.index(name_normalized)
                 return df.columns[idx]
+            
             # Partial match
-            for col, col_lower in zip(df.columns, df_columns_lower):
-                if name_lower in col_lower or col_lower in name_lower:
+            for col, col_normalized in zip(df.columns, df_columns_normalized):
+                if name_normalized in col_normalized or col_normalized in name_normalized:
                     return col
         
         return None
@@ -1695,22 +1701,51 @@ class ContextAwarePredictor:
             logger.warning("⚠️ Course profiles not available. Please train the model first.")
             return {'probability': 0.5, 'confidence': 0.0, 'features_used': 0, 'courses_analyzed': 0}
         
-        # สร้าง features ด้วย Dynamic Snapshot Generator
-        features = self.feature_engineer.create_dynamic_snapshot_features(
-            student_data, self.feature_engineer.course_profiles
+        # สร้าง features ใช้วิธีเดียวกับการเทรน
+        # หาคอลัมน์ที่ต้องใช้
+        course_col = self.feature_engineer._find_column(student_data, ['course_code', 'course', 'subject', 'รหัสวิชา'])
+        grade_col = self.feature_engineer._find_column(student_data, ['grade', 'เกรด'])
+        credit_col = self.feature_engineer._find_column(student_data, ['credit', 'หน่วยกิต'])
+        
+        if not course_col or not grade_col:
+            logger.warning("⚠️ Cannot find required columns (course_code, grade)")
+            return {'probability': 0.5, 'confidence': 0.0, 'features_used': 0, 'courses_analyzed': 0}
+        
+        # สร้าง features ใช้ method เดียวกับ training
+        features = self.feature_engineer._create_snapshot_features(
+            student_id='prediction',
+            snapshot_id='prediction_snapshot',
+            courses_data=student_data,
+            course_col=course_col,
+            grade_col=grade_col,
+            credit_col=credit_col,
+            graduated=0  # dummy value, not used for prediction
         )
         
-        if not features or features['Total_Courses'] == 0:
+        if not features or features.get('Total_Courses_so_far', 0) == 0:
             return {'probability': 0.5, 'confidence': 0.0, 'features_used': 0, 'courses_analyzed': 0}
         
         # แปลงเป็น DataFrame
         X = pd.DataFrame([features])
         
-        # เพิ่ม advanced features
+        # เพิ่ม advanced features (เหมือนตอนเทรน)
         X = self.feature_engineer._generate_advanced_features(X)
         
-        # ทำความสะอาดข้อมูล
-        X = X.select_dtypes(include=[np.number])
+        # ลบคอลัมน์ที่ไม่ใช่ feature
+        X = X.drop(columns=['graduated', 'student_id', 'snapshot_id'], errors='ignore')
+        
+        # ===== สำคัญ: จับคู่ features ให้ตรงกับตอนเทรน =====
+        if self.feature_names and len(self.feature_names) > 0:
+            # เติม missing columns ด้วย 0
+            for col in self.feature_names:
+                if col not in X.columns:
+                    X[col] = 0
+            # เลือกเฉพาะ columns ที่โมเดลต้องการ
+            X = X[self.feature_names]
+        else:
+            # fallback: ทำความสะอาดข้อมูล
+            X = X.select_dtypes(include=[np.number])
+        
         X = X.fillna(0)
         
         # ===================================================================
@@ -1787,7 +1822,7 @@ class ContextAwarePredictor:
                 'probability': probability,
                 'confidence': confidence,
                 'features_used': len(X.columns),
-                'courses_analyzed': features['Total_Courses'],
+                'courses_analyzed': features.get('Total_Courses_so_far', features.get('Total_Courses', 0)),
                 'prediction_method': 'AI_MODEL',  # บอกว่าใช้โมเดล AI
                 'models_used': list(self.models.keys()),  # ['rf', 'gb', 'lr']
                 'model_confidence': model_confidences,  # {'rf': 0.85, 'gb': 0.82, 'lr': 0.80}
