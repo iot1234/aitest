@@ -3568,18 +3568,26 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
     """
     try:
         grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
-        courses_data = app.config.get('COURSES_DATA', {})
+        courses_data_list = app.config.get('COURSES_DATA', [])
+        
+        # สร้าง dict สำหรับ lookup หน่วยกิตจาก course id
+        courses_credit_map = {course['id']: course.get('credit', 3) for course in courses_data_list}
+        
         reasons = []
         risk_factors = []
+        
+        # Helper function สำหรับดึงหน่วยกิต
+        def get_course_credit(course_id):
+            return courses_credit_map.get(course_id, 3)
         
         # คำนวณสถิติพื้นฐาน
         total_courses = len(current_grades)
         failed_courses = [course for course, grade in current_grades.items() 
-                         if grade and grade_mapping.get(grade, 0) == 0]
+                         if grade and grade_mapping.get(str(grade).upper(), 0) == 0 and str(grade).upper() not in ['W', 'WF', 'WU', 'I']]
         low_grade_courses = [course for course, grade in current_grades.items() 
-                           if grade and 0 < grade_mapping.get(grade, 0) < 2.0]
+                           if grade and 0 < grade_mapping.get(str(grade).upper(), 0) < 2.0]
         incomplete_courses = [course for course, grade in current_grades.items() 
-                            if grade in ['I', 'W', 'WF', 'WU']]
+                            if grade and str(grade).upper() in ['I', 'W', 'WF', 'WU']]
         
         # คำนวณ GPA และหน่วยกิต (ไม่รวม S, W, WF, WU)
         total_points = 0
@@ -3587,7 +3595,7 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
         passed_credits = 0
         
         # เกรดที่ไม่นำมาคำนวณ GPA
-        excluded_grades = {'S', 'W', 'WF', 'WU', None}
+        excluded_grades = {'S', 'W', 'WF', 'WU', 'I', None}
         
         for course, grade in current_grades.items():
             if not grade or str(grade).upper() in excluded_grades:
@@ -3601,7 +3609,7 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
                 continue
             
             # ดึงหน่วยกิตจริงจากข้อมูลหลักสูตร
-            credits = courses_data.get(course, {}).get('credits', 3)
+            credits = get_course_credit(course)
             
             # รวมเฉพาะเกรดที่นำมาคำนวณ GPA ได้
             if grade_point is not None:
@@ -3617,7 +3625,7 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
         
         # 1. วิชาที่ไม่ผ่าน (เกรด F)
         if len(failed_courses) > 0:
-            failed_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in failed_courses])
+            failed_credits = sum([get_course_credit(course) for course in failed_courses])
             reasons.append({
                 'type': 'critical',
                 'title': f'มีวิชาที่ไม่ผ่าน {len(failed_courses)} วิชา ({failed_credits} หน่วยกิต)',
@@ -3643,7 +3651,7 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
         
         # 3. วิชาที่ได้เกรดต่ำ
         if len(low_grade_courses) > 0:
-            low_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in low_grade_courses])
+            low_credits = sum([get_course_credit(course) for course in low_grade_courses])
             reasons.append({
                 'type': 'warning',
                 'title': f'มีวิชาที่ได้เกรดต่ำ {len(low_grade_courses)} วิชา ({low_credits} หน่วยกิต)',
@@ -3656,7 +3664,7 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
         
         # 4. วิชาที่ไม่สมบูรณ์
         if len(incomplete_courses) > 0:
-            incomplete_credits = sum([courses_data.get(course, {}).get('credits', 3) for course in incomplete_courses])
+            incomplete_credits = sum([get_course_credit(course) for course in incomplete_courses])
             reasons.append({
                 'type': 'warning',
                 'title': f'มีวิชาที่ไม่สมบูรณ์ {len(incomplete_courses)} วิชา',
