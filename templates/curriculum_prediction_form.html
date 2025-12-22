@@ -1630,17 +1630,29 @@ function displayResults(data) {
     const probFail = pred ? Math.min(100, (pred.prob_fail * 100)).toFixed(1) : 50;
     const confidence = pred ? Math.min(100, (pred.confidence * 100)).toFixed(1) : 50;
     
-    // Result Hero - ใช้ข้อมูลจาก graduation_analysis
+    // Result Hero - ใช้ข้อมูลจาก graduation_analysis และแสดงว่าใช้ AI Model
     const resultHero = document.getElementById('resultHero');
     const gradAnalysis = data.graduation_analysis;
     const willGraduate = gradAnalysis?.will_graduate || isPass;
-    const graduationText = gradAnalysis?.graduation_prediction_text || (willGraduate ? '🎓 คาดว่าจะจบการศึกษา' : '⚠️ เสี่ยงไม่จบการศึกษา');
+    const predictionMethod = gradAnalysis?.prediction_method || data.prediction_result?.method || 'Rule-based';
+    const aiPredictionUsed = gradAnalysis?.ai_prediction_used || false;
+    const modelConfidence = gradAnalysis?.model_confidence || (pred?.confidence || 0.5);
     
     resultHero.className = `result-hero ${willGraduate ? 'success' : 'danger'}`;
     resultHero.innerHTML = `
         <h2><i class="bi bi-${willGraduate ? 'mortarboard-fill' : 'exclamation-triangle-fill'} me-2"></i>${willGraduate ? '🎓 คาดว่าจะจบการศึกษา' : '⚠️ เสี่ยงไม่จบการศึกษา'}</h2>
-        <p class="mb-0">ความมั่นใจ: <strong>${confidence}%</strong> | GPA: <strong>${(data.avg_gpa || 0).toFixed(2)}</strong></p>
-        ${gradAnalysis?.graduation_status ? `<p class="mb-0 mt-2"><span class="badge ${willGraduate ? 'bg-success' : 'bg-danger'} px-3 py-2 fs-6">${gradAnalysis.graduation_status}</span></p>` : ''}
+        <p class="mb-0">
+            ความมั่นใจ: <strong>${(modelConfidence * 100).toFixed(0)}%</strong> | 
+            GPA: <strong>${(data.avg_gpa || 0).toFixed(2)}</strong> |
+            โอกาสจบ: <strong>${probPass}%</strong>
+        </p>
+        <p class="mb-0 mt-2">
+            <span class="badge ${aiPredictionUsed ? 'bg-primary' : 'bg-secondary'} px-3 py-1">
+                <i class="bi bi-${aiPredictionUsed ? 'cpu-fill' : 'calculator'} me-1"></i>
+                ${aiPredictionUsed ? 'AI Model Prediction' : 'Rule-based Analysis'}
+            </span>
+            ${gradAnalysis?.graduation_status ? `<span class="badge ${willGraduate ? 'bg-success' : 'bg-danger'} px-3 py-1 ms-2">${gradAnalysis.graduation_status}</span>` : ''}
+        </p>
     `;
     
     // Probability Bar
@@ -1681,7 +1693,9 @@ function displayResults(data) {
                 : '<i class="bi bi-exclamation-triangle-fill me-2"></i>⚠️ เสี่ยงไม่จบการศึกษา';
         }
         if (predSubtitle) {
-            predSubtitle.textContent = `ความมั่นใจ: ${confidence}% | GPA: ${(data.avg_gpa || 0).toFixed(2)}`;
+            const aiUsed = gradAnalysis?.ai_prediction_used ? '🤖 AI Model' : '📊 Rule-based';
+            const methodInfo = gradAnalysis?.prediction_method ? ` (${gradAnalysis.prediction_method})` : '';
+            predSubtitle.textContent = `${aiUsed}${methodInfo} | ความมั่นใจ: ${(gradAnalysis?.model_confidence * 100 || confidence).toFixed(0)}% | GPA: ${(data.avg_gpa || 0).toFixed(2)}`;
         }
         
         // ตั้งค่า border color ของ card
@@ -1713,10 +1727,21 @@ function displayResults(data) {
             
             if (passReasons.length === 0) passReasons.push({ icon: '✅', title: 'ผลการเรียนดี', description: 'อยู่ในเกณฑ์ที่ดี', type: 'success' });
             
+            // เพิ่มข้อมูล AI Model ในเหตุผล (ถ้าใช้)
+            if (gradAnalysis?.ai_prediction_used) {
+                passReasons.unshift({
+                    icon: '🤖',
+                    title: 'AI Model ทำนายว่าจะจบ',
+                    description: `โอกาสจบ ${(gradAnalysis?.model_prob_pass * 100 || probPass).toFixed(0)}% (ความมั่นใจ ${(gradAnalysis?.model_confidence * 100).toFixed(0)}%)`,
+                    type: 'success'
+                });
+            }
+            
             reasonHtml = `
                 <div class="alert alert-success mb-0 border-0" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-radius: 12px;">
                     <h6 class="alert-heading fw-bold text-success mb-3">
                         <i class="bi bi-check-circle-fill me-2"></i>เหตุผลที่คาดว่าจะจบการศึกษา
+                        ${gradAnalysis?.ai_prediction_used ? '<span class="badge bg-primary ms-2"><i class="bi bi-cpu-fill me-1"></i>AI Model</span>' : ''}
                     </h6>
                     <div class="row g-2">
                         ${passReasons.map(r => `
@@ -1778,10 +1803,21 @@ function displayResults(data) {
             
             if (failReasons.length === 0) failReasons.push({ icon: '⚠️', title: 'ผลการเรียนเสี่ยง', description: 'มีความเสี่ยงจากผลการเรียน', type: 'warning' });
             
+            // เพิ่มข้อมูล AI Model ในเหตุผล (ถ้าใช้)
+            if (gradAnalysis?.ai_prediction_used) {
+                failReasons.unshift({
+                    icon: '🤖',
+                    title: 'AI Model ทำนายว่าเสี่ยงไม่จบ',
+                    description: `โอกาสจบ ${(gradAnalysis?.model_prob_pass * 100 || probPass).toFixed(0)}% (ความมั่นใจ ${(gradAnalysis?.model_confidence * 100).toFixed(0)}%)`,
+                    type: 'critical'
+                });
+            }
+            
             reasonHtml = `
                 <div class="alert alert-danger mb-0 border-0" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-radius: 12px;">
                     <h6 class="alert-heading fw-bold text-danger mb-3">
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>เหตุผลที่เสี่ยงไม่จบการศึกษา
+                        ${gradAnalysis?.ai_prediction_used ? '<span class="badge bg-danger ms-2"><i class="bi bi-cpu-fill me-1"></i>AI Model</span>' : ''}
                     </h6>
                     <div class="row g-2">
                         ${failReasons.slice(0, 6).map(r => `
