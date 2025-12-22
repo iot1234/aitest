@@ -5967,6 +5967,14 @@ def analyze_curriculum():
                         course_profiles = loaded_model_data.get('course_profiles', {})
                         engineer.course_profiles = course_profiles
                         
+                        # ======= โหลด models, scaler, feature_names จากไฟล์โมเดล =======
+                        models = loaded_model_data.get('models', {})
+                        scaler = loaded_model_data.get('scaler', None)
+                        # feature_names อาจเก็บใน 'feature_columns' หรือ 'feature_names'
+                        feature_names = loaded_model_data.get('feature_columns', loaded_model_data.get('feature_names', []))
+                        
+                        logger.info(f"📦 Model loaded: models={list(models.keys())}, features={len(feature_names)}, scaler={'✅' if scaler else '❌'}")
+                        
                         # สร้าง transcript data จากข้อมูลปัจจุบัน
                         transcript_data = []
                         for course_id, grade in current_grades.items():
@@ -5992,11 +6000,16 @@ def analyze_curriculum():
                             # แปลงเป็น DataFrame
                             transcript_df = pd.DataFrame(transcript_data)
                             
-                            # ใช้ ContextAwarePredictor
+                            # ใช้ ContextAwarePredictor พร้อม models, scaler, feature_names จากโมเดลที่โหลด
                             from advanced_training import ContextAwarePredictor
-                            predictor = ContextAwarePredictor(engineer)
+                            predictor = ContextAwarePredictor(
+                                feature_engineer=engineer,
+                                models=models,
+                                scaler=scaler,
+                                feature_names=feature_names
+                            )
                             
-                            # ทำนายด้วย Context-Aware System
+                            # ทำนายด้วย Context-Aware AI System
                             prediction_result = predictor.predict_graduation_probability(transcript_df)
                             
                             prob_pass = prediction_result['probability']
@@ -6011,6 +6024,11 @@ def analyze_curriculum():
                             elif confidence > 0.6:
                                 risk_level = 'ปานกลาง'
                             
+                            # ดึง prediction_method และ models_used จากผลลัพธ์ (ถ้ามี)
+                            ai_method = prediction_result.get('prediction_method', 'AI_MODEL')
+                            models_used = prediction_result.get('models_used', [])
+                            feature_importance = prediction_result.get('feature_importance', {})
+                            
                             response_data['prediction_result'] = {
                                 'prediction': prediction,
                                 'prob_pass': float(prob_pass),
@@ -6020,10 +6038,12 @@ def analyze_curriculum():
                                 'gpa_input': float(completion_status['gpa']),
                                 'features_used': prediction_result['features_used'],
                                 'courses_analyzed': prediction_result['courses_analyzed'],
-                                'method': 'Context-Aware AI Prediction',
+                                'method': ai_method,  # AI_MODEL หรือ Context-Aware
+                                'models_used': models_used,  # ['rf', 'gb', 'lr']
+                                'feature_importance': feature_importance,  # Top 10 features
                                 'status': 'predicted'
                             }
-                            logger.info(f"AI Prediction: {prediction} (confidence: {confidence:.3f})")
+                            logger.info(f"🤖 AI Model Prediction: {prediction} (confidence: {confidence:.3f}, models: {models_used})")
                         else:
                             logger.warning("No valid transcript data for prediction")
                         
