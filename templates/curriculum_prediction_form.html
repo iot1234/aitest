@@ -948,9 +948,58 @@
             <div class="fail" style="width: 15%">15%</div>
         </div>
         
+        <!-- Graduation Reason Card -->
+        <div class="chart-container mb-4" id="graduationReasonCard">
+            <h6 class="mb-3"><i class="bi bi-info-circle text-primary"></i> เหตุผลการทำนาย</h6>
+            <div id="graduationReasonContent"></div>
+        </div>
+        
         <!-- Stats Cards -->
         <div class="result-stats" id="resultStats">
             <!-- Will be filled by JavaScript -->
+        </div>
+        
+        <!-- Graduation Analysis Card -->
+        <div class="chart-container mb-4" id="graduationAnalysisCard" style="display: none; border-left: 4px solid #f59e0b;">
+            <h6 class="mb-3"><i class="bi bi-clipboard-data text-warning"></i> การวิเคราะห์โอกาสจบการศึกษา</h6>
+            <div class="row">
+                <div class="col-md-3 text-center mb-3">
+                    <div class="p-3 rounded-3" style="background: linear-gradient(135deg, #f8fafc, #e2e8f0);">
+                        <div class="fs-3 fw-bold" id="analysisCurrentGpa" style="color: var(--primary);">0.00</div>
+                        <small class="text-muted">GPA ปัจจุบัน</small>
+                    </div>
+                </div>
+                <div class="col-md-3 text-center mb-3">
+                    <div class="p-3 rounded-3" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">
+                        <div class="fs-3 fw-bold text-success" id="analysisGradProb">0%</div>
+                        <small class="text-muted">โอกาสจบ</small>
+                    </div>
+                </div>
+                <div class="col-md-3 text-center mb-3">
+                    <div class="p-3 rounded-3" style="background: linear-gradient(135deg, #fef2f2, #fecaca);">
+                        <div class="fs-3 fw-bold text-danger" id="analysisRiskLevel">-</div>
+                        <small class="text-muted">ระดับความเสี่ยง</small>
+                    </div>
+                </div>
+                <div class="col-md-3 text-center mb-3">
+                    <div class="p-3 rounded-3" style="background: linear-gradient(135deg, #eff6ff, #dbeafe);">
+                        <div class="fs-3 fw-bold text-info" id="analysisCredits">0</div>
+                        <small class="text-muted">หน่วยกิตที่เหลือ</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Risk Factors -->
+            <div class="mt-3" id="riskFactorsSection" style="display: none;">
+                <h6 class="text-danger mb-2"><i class="bi bi-exclamation-triangle-fill me-1"></i> ปัจจัยเสี่ยง</h6>
+                <div id="riskFactorsList" class="p-3 rounded-3" style="background: #fef2f2;"></div>
+            </div>
+            
+            <!-- Improvement Suggestions -->
+            <div class="mt-3" id="improvementSection" style="display: none;">
+                <h6 class="text-success mb-2"><i class="bi bi-lightbulb-fill me-1"></i> แนวทางแก้ไข</h6>
+                <div id="improvementList" class="p-3 rounded-3" style="background: #ecfdf5;"></div>
+            </div>
         </div>
         
         <!-- AI Insights -->
@@ -995,11 +1044,24 @@
             <div class="recommendations-grid" id="personalRecommendations"></div>
         </div>
         
+        <!-- 3-Line Chart (GPA Trajectory) -->
+        <div class="chart-container mb-4" id="threeLineChartContainer" style="display: none;">
+            <h6><i class="bi bi-graph-up-arrow text-primary"></i> กราฟเส้นทาง GPA (เป้าหมาย vs ผลจริง vs ทำนาย)</h6>
+            <div style="height: 350px;">
+                <canvas id="threeLineChart"></canvas>
+            </div>
+            <div class="d-flex justify-content-center gap-4 mt-3 flex-wrap">
+                <span><span style="display: inline-block; width: 30px; height: 4px; background: #10b981; border-radius: 2px; vertical-align: middle;"></span> เป้าหมาย (GPA 3.0)</span>
+                <span><span style="display: inline-block; width: 30px; height: 4px; background: #3b82f6; border-radius: 2px; vertical-align: middle;"></span> ผลจริง</span>
+                <span><span style="display: inline-block; width: 30px; height: 4px; background: #f59e0b; border-radius: 2px; vertical-align: middle; border-style: dashed;"></span> ทำนาย</span>
+            </div>
+        </div>
+        
         <!-- Charts -->
         <div class="row g-4 mb-4">
             <div class="col-md-6">
                 <div class="chart-container">
-                    <h6><i class="bi bi-graph-up"></i> แนวโน้ม GPA</h6>
+                    <h6><i class="bi bi-bar-chart-line"></i> GPA รายเทอม</h6>
                     <canvas id="gpaChart"></canvas>
                 </div>
             </div>
@@ -1551,6 +1613,84 @@ function displayResults(data) {
         <div class="fail" style="width: ${probFail}%">${probFail}%</div>
     `;
     
+    // Graduation Reason Card - แสดงเหตุผลจบ/ไม่จบ
+    const reasonCard = document.getElementById('graduationReasonContent');
+    if (reasonCard) {
+        const gradAnalysis = data.graduation_analysis;
+        let reasonHtml = '';
+        
+        if (isPass) {
+            // เหตุผลที่คาดว่าจะจบ
+            let passReasons = [];
+            if (data.avg_gpa >= 2.0) passReasons.push(`GPA เฉลี่ยสะสม ${(data.avg_gpa || 0).toFixed(2)} สูงกว่าเกณฑ์ขั้นต่ำ (2.00)`);
+            if ((data.failed_courses?.length || 0) === 0) passReasons.push('ไม่มีวิชาที่ตก');
+            if ((data.blocked_courses?.length || 0) === 0) passReasons.push('ไม่มีวิชาติดเงื่อนไข');
+            if ((data.completion_rate || 0) > 50) passReasons.push(`ความคืบหน้าหลักสูตร ${(data.completion_rate || 0).toFixed(1)}%`);
+            if (gradAnalysis?.progress_percentage > 75) passReasons.push(`ความคืบหน้าอยู่ในเกณฑ์ดี (${gradAnalysis.progress_percentage.toFixed(0)}%)`);
+            
+            if (passReasons.length === 0) passReasons.push('ผลการเรียนอยู่ในเกณฑ์ที่ดี');
+            
+            reasonHtml = `
+                <div class="alert alert-success mb-0 border-0" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">
+                    <h6 class="alert-heading fw-bold text-success mb-3"><i class="bi bi-check-circle-fill me-2"></i>เหตุผลที่คาดว่าจะจบการศึกษา</h6>
+                    <div class="row g-2">
+                        ${passReasons.map(r => `
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center p-2 rounded" style="background: rgba(255,255,255,0.7);">
+                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                    <span>${r}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${gradAnalysis?.graduation_status ? `<div class="mt-3 p-2 rounded text-center" style="background: rgba(16,185,129,0.2);"><i class="bi bi-trophy-fill text-success me-1"></i> <strong>${gradAnalysis.graduation_status}</strong></div>` : ''}
+                </div>
+            `;
+        } else {
+            // เหตุผลที่เสี่ยงไม่จบ - ใช้ข้อมูลจาก graduation_analysis.reasons
+            let failReasons = [];
+            
+            if (gradAnalysis?.reasons?.length > 0) {
+                failReasons = gradAnalysis.reasons.map(r => ({
+                    title: r.title,
+                    type: r.type
+                }));
+            }
+            
+            // เพิ่มเหตุผลจากข้อมูลพื้นฐาน (ถ้ายังไม่มี)
+            if (data.avg_gpa < 2.0 && !failReasons.some(r => r.title?.includes('GPA'))) {
+                failReasons.push({ title: `GPA เฉลี่ยสะสม ${(data.avg_gpa || 0).toFixed(2)} ต่ำกว่าเกณฑ์ขั้นต่ำ (2.00)`, type: 'critical' });
+            }
+            if ((data.failed_courses?.length || 0) > 0 && !failReasons.some(r => r.title?.includes('ไม่ผ่าน') || r.title?.includes('ตก'))) {
+                failReasons.push({ title: `มีวิชาที่ตก ${data.failed_courses.length} วิชา`, type: 'critical' });
+            }
+            if ((data.blocked_courses?.length || 0) > 0 && !failReasons.some(r => r.title?.includes('เงื่อนไข'))) {
+                failReasons.push({ title: `มีวิชาติดเงื่อนไข ${data.blocked_courses.length} วิชา`, type: 'warning' });
+            }
+            
+            if (failReasons.length === 0) failReasons.push({ title: 'ผลการเรียนอยู่ในระดับที่เสี่ยง', type: 'warning' });
+            
+            reasonHtml = `
+                <div class="alert alert-danger mb-0 border-0" style="background: linear-gradient(135deg, #fef2f2, #fecaca);">
+                    <h6 class="alert-heading fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>เหตุผลที่เสี่ยงไม่จบการศึกษา</h6>
+                    <div class="row g-2">
+                        ${failReasons.slice(0, 6).map(r => `
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center p-2 rounded" style="background: rgba(255,255,255,0.7);">
+                                    <i class="bi bi-${r.type === 'critical' ? 'x-circle-fill text-danger' : 'exclamation-triangle-fill text-warning'} me-2"></i>
+                                    <span>${r.title}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${gradAnalysis?.risk_description ? `<div class="mt-3 p-2 rounded text-center" style="background: rgba(239,68,68,0.2);"><i class="bi bi-exclamation-diamond-fill text-danger me-1"></i> <strong>${gradAnalysis.risk_description}</strong></div>` : ''}
+                </div>
+            `;
+        }
+        
+        reasonCard.innerHTML = reasonHtml;
+    }
+    
     // Stats Cards
     const statsContainer = document.getElementById('resultStats');
     statsContainer.innerHTML = `
@@ -1575,6 +1715,54 @@ function displayResults(data) {
             <div class="label">วิชาที่ตก</div>
         </div>
     `;
+    
+    // Graduation Analysis Card
+    const gradAnalysis = data.graduation_analysis;
+    if (gradAnalysis) {
+        const analysisCard = document.getElementById('graduationAnalysisCard');
+        analysisCard.style.display = 'block';
+        
+        document.getElementById('analysisCurrentGpa').textContent = (gradAnalysis.current_gpa || data.avg_gpa || 0).toFixed(2);
+        document.getElementById('analysisGradProb').textContent = `${(gradAnalysis.graduation_probability || (parseFloat(probPass))).toFixed(0)}%`;
+        document.getElementById('analysisRiskLevel').textContent = gradAnalysis.risk_level || (isPass ? 'ต่ำ' : 'สูง');
+        
+        // Calculate remaining credits (total required - passed)
+        const remainingCredits = Math.max(0, 136 - (gradAnalysis.passed_credits || 0));
+        document.getElementById('analysisCredits').textContent = remainingCredits || '-';
+        
+        // Risk Factors from reasons array
+        const riskSection = document.getElementById('riskFactorsSection');
+        const riskList = document.getElementById('riskFactorsList');
+        const criticalReasons = gradAnalysis.reasons?.filter(r => r.type === 'critical' || r.type === 'warning') || [];
+        
+        if (criticalReasons.length > 0) {
+            riskSection.style.display = 'block';
+            riskList.innerHTML = criticalReasons.map(r => `
+                <div class="d-flex align-items-start mb-2">
+                    <i class="bi bi-exclamation-${r.type === 'critical' ? 'triangle' : 'circle'}-fill text-${r.type === 'critical' ? 'danger' : 'warning'} me-2 mt-1"></i>
+                    <div>
+                        <div class="fw-bold">${r.title}</div>
+                        <small class="text-muted">${r.description}</small>
+                        ${r.solution ? `<div class="mt-1"><small class="text-success"><i class="bi bi-lightbulb me-1"></i>${r.solution}</small></div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            riskSection.style.display = 'none';
+        }
+        
+        // Improvement Suggestions from recommendations array
+        const improvementSection = document.getElementById('improvementSection');
+        const improvementList = document.getElementById('improvementList');
+        if (gradAnalysis.recommendations?.length > 0) {
+            improvementSection.style.display = 'block';
+            improvementList.innerHTML = gradAnalysis.recommendations.slice(0, 5).map(s => 
+                `<div class="d-flex align-items-start mb-2"><i class="bi bi-lightbulb-fill text-success me-2 mt-1"></i><span>${s}</span></div>`
+            ).join('');
+        } else {
+            improvementSection.style.display = 'none';
+        }
+    }
     
     // AI Insights
     if (pred?.prediction_method === 'AI_MODEL' && pred?.feature_importance) {
@@ -1644,8 +1832,287 @@ function displayResults(data) {
         }).join('');
     }
     
+    // 3-Line Chart (Target vs Actual vs Prediction)
+    if (data.chart_data) {
+        displayThreeLineChart(data.chart_data);
+    }
+    
+    // GPA Chart per Term
+    displayGpaChart(data);
+    
+    // Grade Distribution Chart
+    displayGradeDistChart(data);
+    
     // Scroll to results
     setTimeout(() => resultsSection.scrollIntoView({ behavior: 'smooth' }), 100);
+}
+
+// ===== Three-Line Chart (เส้นเป้าหมาย, ผลจริง, ทำนาย) =====
+function displayThreeLineChart(chartData) {
+    const container = document.getElementById('threeLineChartContainer');
+    const canvas = document.getElementById('threeLineChart');
+    
+    if (!chartData || !chartData.terms || chartData.terms.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    // Destroy existing chart if any
+    if (window.threeLineChartInstance) {
+        window.threeLineChartInstance.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    const labels = chartData.terms || [];
+    const targetLine = chartData.target_line || [];
+    const actualLine = chartData.actual_line || [];
+    const predictionLine = chartData.prediction_line || [];
+    
+    window.threeLineChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'เป้าหมาย (GPA 3.0)',
+                    data: targetLine,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    borderDash: [],
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#10b981'
+                },
+                {
+                    label: 'ผลจริง',
+                    data: actualLine,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#3b82f6',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                },
+                {
+                    label: 'ทำนาย',
+                    data: predictionLine,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 3,
+                    borderDash: [8, 4],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#f59e0b',
+                    pointStyle: 'triangle'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20,
+                        font: { size: 12, family: "'Sarabun', sans-serif" }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 12 },
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y?.toFixed(2) || '-'}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'เทอม',
+                        font: { size: 12, weight: 'bold' }
+                    },
+                    grid: { display: false }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'GPA',
+                        font: { size: 12, weight: 'bold' }
+                    },
+                    min: 0,
+                    max: 4,
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+}
+
+// ===== GPA Chart per Term =====
+function displayGpaChart(data) {
+    const canvas = document.getElementById('gpaChart');
+    if (!canvas) return;
+    
+    // Destroy existing chart
+    if (window.gpaChartInstance) {
+        window.gpaChartInstance.destroy();
+    }
+    
+    // Get actual GPAs from chart_data (filter out null values from prediction area)
+    let termGpas = [];
+    let terms = [];
+    
+    if (data.chart_data?.actual_line && data.chart_data?.terms) {
+        // Use actual_line data (real cumulative GPA per term)
+        for (let i = 0; i < data.chart_data.actual_line.length; i++) {
+            const gpa = data.chart_data.actual_line[i];
+            if (gpa !== null && gpa !== undefined) {
+                termGpas.push(gpa);
+                terms.push(data.chart_data.terms[i] || `เทอม ${i + 1}`);
+            }
+        }
+    }
+    
+    // Fallback: calculate from courseGrades
+    if (termGpas.length === 0 && loadedTermsCount > 0) {
+        for (let i = 0; i < loadedTermsCount; i++) {
+            terms.push(`เทอม ${i + 1}`);
+            // Calculate term GPA from courseGrades
+            const termCourses = allTermsData[i]?.ids || [];
+            let termPoints = 0, termCredits = 0;
+            termCourses.forEach(courseId => {
+                const grade = courseGrades[courseId];
+                const gp = gradeMapping[grade];
+                if (gp !== undefined && gp !== null) {
+                    const course = coursesData.find(c => c.id === courseId);
+                    const credit = course?.credit || 3;
+                    termPoints += gp * credit;
+                    termCredits += credit;
+                }
+            });
+            termGpas.push(termCredits > 0 ? termPoints / termCredits : 0);
+        }
+    }
+    
+    const gpas = termGpas;
+    
+    const ctx = canvas.getContext('2d');
+    window.gpaChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: terms,
+            datasets: [{
+                label: 'GPA รายเทอม',
+                data: gpas,
+                backgroundColor: gpas.map(g => g >= 3.0 ? 'rgba(16, 185, 129, 0.7)' : g >= 2.0 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
+                borderColor: gpas.map(g => g >= 3.0 ? '#10b981' : g >= 2.0 ? '#f59e0b' : '#ef4444'),
+                borderWidth: 2,
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 4,
+                    ticks: { stepSize: 1 },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+// ===== Grade Distribution Chart =====
+function displayGradeDistChart(data) {
+    const canvas = document.getElementById('gradeDistChart');
+    if (!canvas) return;
+    
+    // Destroy existing chart
+    if (window.gradeDistChartInstance) {
+        window.gradeDistChartInstance.destroy();
+    }
+    
+    // Count grades from current data
+    const gradeCounts = {};
+    const grades = ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'];
+    grades.forEach(g => gradeCounts[g] = 0);
+    
+    Object.values(courseGrades).forEach(grade => {
+        if (grade && grades.includes(grade)) {
+            gradeCounts[grade]++;
+        }
+    });
+    
+    const ctx = canvas.getContext('2d');
+    window.gradeDistChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: grades,
+            datasets: [{
+                data: grades.map(g => gradeCounts[g] || 0),
+                backgroundColor: [
+                    '#10b981', // A - Green
+                    '#34d399', // B+ - Light Green
+                    '#60a5fa', // B - Blue
+                    '#93c5fd', // C+ - Light Blue
+                    '#fbbf24', // C - Yellow
+                    '#f97316', // D+ - Orange
+                    '#fb923c', // D - Light Orange
+                    '#ef4444'  // F - Red
+                ],
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15,
+                        font: { size: 11 }
+                    }
+                }
+            },
+            cutout: '60%'
+        }
+    });
 }
 
 function displayGeminiResult(result) {
