@@ -9,17 +9,25 @@
         background: white;
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow-lg);
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border: 1px solid var(--gray-200);
+        transition: transform 0.3s ease;
+    }
+    
+    .status-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-xl);
     }
     
     .status-card h5 {
         font-weight: 700;
         color: var(--gray-800);
-        margin-bottom: 1.25rem;
+        margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.75rem;
+        font-size: 1.25rem;
     }
     
     /* Status Indicator */
@@ -29,17 +37,34 @@
         border-radius: 50%;
         display: inline-block;
         margin-right: 0.5rem;
-        animation: pulse 2s infinite;
+        position: relative;
     }
     
-    .status-online { background: #10b981; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-    .status-offline { background: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-    .status-warning { background: #f59e0b; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+    .status-indicator::after {
+        content: '';
+        position: absolute;
+        top: -4px;
+        left: -4px;
+        right: -4px;
+        bottom: -4px;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+        opacity: 0.6;
+        z-index: -1;
+    }
+    
+    .status-online { background: #10b981; }
+    .status-online::after { background: #10b981; }
+    
+    .status-offline { background: #ef4444; }
+    .status-offline::after { background: #ef4444; }
+    
+    .status-warning { background: #f59e0b; }
+    .status-warning::after { background: #f59e0b; }
     
     @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 currentColor; }
-        70% { box-shadow: 0 0 0 8px transparent; }
-        100% { box-shadow: 0 0 0 0 transparent; }
+        0% { transform: scale(1); opacity: 0.6; }
+        100% { transform: scale(2.5); opacity: 0; }
     }
     
     /* Metric Box */
@@ -50,32 +75,32 @@
         text-align: center;
         height: 100%;
         transition: all 0.3s ease;
-        border: 2px solid transparent;
+        border: 1px solid transparent;
     }
     
     .metric-box:hover {
-        border-color: var(--primary);
+        background: white;
+        border-color: var(--primary-light);
         box-shadow: var(--shadow-md);
+        transform: translateY(-3px);
     }
     
     .metric-label {
         color: var(--gray-500);
-        font-weight: 500;
-        font-size: 0.875rem;
-        margin-bottom: 0.75rem;
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     .metric-value {
         font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--primary);
+        font-weight: 800;
+        color: var(--gray-800);
         margin-bottom: 0.25rem;
         word-break: break-all;
     }
-    
-    .metric-value.text-success { color: var(--success); }
-    .metric-value.text-danger { color: var(--danger); }
-    .metric-value.text-warning { color: var(--warning); }
     
     /* Log Viewer */
     .log-viewer {
@@ -89,75 +114,60 @@
         overflow-y: auto;
         white-space: pre-wrap;
         word-wrap: break-word;
+        box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
     }
     
-    .log-viewer::-webkit-scrollbar {
-        width: 8px;
-    }
+    .log-viewer::-webkit-scrollbar { width: 8px; }
+    .log-viewer::-webkit-scrollbar-track { background: #334155; }
+    .log-viewer::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
     
-    .log-viewer::-webkit-scrollbar-track {
-        background: #334155;
-    }
-    
-    .log-viewer::-webkit-scrollbar-thumb {
-        background: #64748b;
-        border-radius: 4px;
-    }
-    
-    .log-error { color: #f87171; font-weight: 600; }
-    .log-warning { color: #fbbf24; }
-    .log-info { color: #4ade80; }
+    .log-error { color: #fca5a5; font-weight: bold; }
+    .log-warning { color: #fcd34d; }
+    .log-info { color: #86efac; }
     .log-debug { color: #94a3b8; }
     
     /* Env Status Grid */
     .env-status-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
     }
     
     .env-status-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.75rem 1rem;
+        padding: 1rem;
         background: var(--gray-50);
         border-radius: var(--radius);
         font-weight: 500;
+        border: 1px solid var(--gray-100);
     }
     
-    .env-status-item .status-icon {
-        font-size: 1.25rem;
+    .env-status-item:hover {
+        background: white;
+        border-color: var(--primary-light);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     
     /* System Info Table */
     .system-info-table {
-        background: var(--gray-50);
         border-radius: var(--radius-lg);
         overflow: hidden;
+        border: 1px solid var(--gray-200);
     }
     
+    .system-info-table tr:first-child td { border-top: none; }
     .system-info-table td {
-        padding: 0.875rem 1rem;
-        border-bottom: 1px solid var(--gray-200);
-    }
-    
-    .system-info-table tr:last-child td {
-        border-bottom: none;
+        padding: 1rem 1.5rem;
+        vertical-align: middle;
     }
     
     .system-info-table td:first-child {
+        background: var(--gray-50);
+        width: 30%;
         font-weight: 600;
         color: var(--gray-700);
-        width: 200px;
-    }
-    
-    /* Action Buttons */
-    .action-buttons {
-        display: flex;
-        gap: 1rem;
-        justify-content: center;
-        flex-wrap: wrap;
     }
     
     /* Loading Skeleton */
@@ -165,8 +175,10 @@
         background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
         background-size: 200% 100%;
         animation: loading 1.5s infinite;
-        height: 24px;
-        border-radius: var(--radius);
+        height: 20px;
+        border-radius: 4px;
+        display: inline-block;
+        min-width: 60px;
     }
     
     @keyframes loading {
@@ -178,73 +190,78 @@
 
 {% block content %}
 <!-- Page Header -->
-<div class="page-header">
-    <h1><i class="bi bi-activity me-2"></i>สถานะระบบ</h1>
-    <p class="lead">ตรวจสอบการเชื่อมต่อและประสิทธิภาพของระบบ</p>
+<div class="d-flex justify-content-between align-items-center mb-5" data-aos="fade-down">
+    <div>
+        <h1 class="fw-bold text-white mb-2 text-shadow"><i class="bi bi-activity me-2"></i>สถานะระบบ</h1>
+        <p class="lead text-white-50 mb-0">ตรวจสอบประสิทธิภาพและการทำงานของระบบแบบ Real-time</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-light shadow-sm fw-bold" onclick="checkAllStatus()" id="refreshBtn">
+            <i class="bi bi-arrow-clockwise refresh-icon"></i> รีเฟรช
+        </button>
+    </div>
 </div>
 
 <div id="statusAlertContainer"></div>
 
 <!-- Connection Status -->
-<div class="status-card">
+<div class="status-card" data-aos="fade-up">
     <h5><i class="bi bi-hdd-network text-primary"></i> สถานะการเชื่อมต่อ</h5>
-    <div class="row g-3">
+    <div class="row g-4">
         <div class="col-md-4">
             <div class="metric-box">
-                <div class="metric-label">เว็บเซิร์ฟเวอร์</div>
-                <div id="server-status">
+                <div class="metric-label">WEB SERVER</div>
+                <div id="server-status" class="mb-2">
                     <span class="status-indicator status-online"></span>
-                    <span class="text-success fw-bold">ออนไลน์</span>
+                    <span class="text-success fw-bold">ONLINE</span>
                 </div>
-                <small class="text-muted">Flask Application</small>
+                <small class="text-muted bg-light px-2 py-1 rounded">Flask App</small>
             </div>
         </div>
         <div class="col-md-4">
             <div class="metric-box">
-                <div class="metric-label">Cloudflare R2 Storage</div>
-                <div id="r2-status">
-                    <span class="status-indicator status-warning"></span>
-                    <span class="text-muted">กำลังตรวจสอบ...</span>
+                <div class="metric-label">CLOUDFLARE R2</div>
+                <div id="r2-status" class="mb-2">
+                    <div class="loading-skeleton"></div>
                 </div>
-                <div id="r2-details" class="mt-2 small"></div>
+                <div id="r2-details" class="small"></div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="metric-box">
-                <div class="metric-label">โมเดล AI</div>
-                <div id="model-status">
-                    <span class="status-indicator status-warning"></span>
-                    <span class="text-muted">กำลังตรวจสอบ...</span>
+                <div class="metric-label">AI MODELS</div>
+                <div id="model-status" class="mb-2">
+                    <div class="loading-skeleton"></div>
                 </div>
-                <div id="model-details" class="mt-2 small"></div>
+                <div id="model-details" class="small"></div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Storage Info -->
-<div class="status-card">
-    <h5><i class="bi bi-database text-primary"></i> ข้อมูล Storage</h5>
-    <div class="row g-3">
+<div class="status-card" data-aos="fade-up" data-aos-delay="100">
+    <h5><i class="bi bi-database text-primary"></i> ข้อมูลพื้นที่จัดเก็บ</h5>
+    <div class="row g-4">
         <div class="col-md-3 col-6">
             <div class="metric-box">
-                <div class="metric-label">Storage Provider</div>
-                <div class="metric-value" id="storage-provider">
+                <div class="metric-label">Provider</div>
+                <div class="metric-value text-primary" id="storage-provider">
                     <div class="loading-skeleton"></div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 col-6">
             <div class="metric-box">
-                <div class="metric-label">Bucket Name</div>
-                <div class="metric-value" id="bucket-name" style="font-size: 1rem;">
+                <div class="metric-label">Bucket</div>
+                <div class="metric-value fs-5" id="bucket-name">
                     <div class="loading-skeleton"></div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 col-6">
             <div class="metric-box">
-                <div class="metric-label">จำนวนโมเดล</div>
+                <div class="metric-label">Models Count</div>
                 <div class="metric-value" id="model-count">
                     <div class="loading-skeleton"></div>
                 </div>
@@ -252,7 +269,7 @@
         </div>
         <div class="col-md-3 col-6">
             <div class="metric-box">
-                <div class="metric-label">ขนาดรวม</div>
+                <div class="metric-label">Total Size</div>
                 <div class="metric-value" id="total-size">
                     <div class="loading-skeleton"></div>
                 </div>
@@ -261,89 +278,81 @@
     </div>
 </div>
 
-<!-- Environment Variables -->
-<div class="status-card">
-    <h5><i class="bi bi-shield-check text-primary"></i> สถานะ Environment Variables</h5>
-    <div class="env-status-grid">
-        <div class="env-status-item">
-            <span>R2 Access Key</span>
-            <span id="env-r2-access" class="status-icon">⏳</span>
-        </div>
-        <div class="env-status-item">
-            <span>R2 Secret Key</span>
-            <span id="env-r2-secret" class="status-icon">⏳</span>
-        </div>
-        <div class="env-status-item">
-            <span>R2 Endpoint</span>
-            <span id="env-r2-endpoint" class="status-icon">⏳</span>
-        </div>
-        <div class="env-status-item">
-            <span>R2 Bucket</span>
-            <span id="env-r2-bucket" class="status-icon">⏳</span>
+<div class="row" data-aos="fade-up" data-aos-delay="200">
+    <div class="col-lg-6">
+        <!-- Environment Variables -->
+        <div class="status-card h-100">
+            <h5><i class="bi bi-shield-check text-primary"></i> การตั้งค่า Environment</h5>
+            <div class="env-status-grid">
+                <div class="env-status-item">
+                    <span>R2 Access Key</span>
+                    <span id="env-r2-access"><div class="loading-skeleton" style="width: 24px;"></div></span>
+                </div>
+                <div class="env-status-item">
+                    <span>R2 Secret Key</span>
+                    <span id="env-r2-secret"><div class="loading-skeleton" style="width: 24px;"></div></span>
+                </div>
+                <div class="env-status-item">
+                    <span>R2 Endpoint</span>
+                    <span id="env-r2-endpoint"><div class="loading-skeleton" style="width: 24px;"></div></span>
+                </div>
+                <div class="env-status-item">
+                    <span>R2 Bucket</span>
+                    <span id="env-r2-bucket"><div class="loading-skeleton" style="width: 24px;"></div></span>
+                </div>
+            </div>
         </div>
     </div>
-</div>
-
-<!-- System Info -->
-<div class="status-card">
-    <h5><i class="bi bi-info-circle text-primary"></i> ข้อมูลระบบ</h5>
-    <table class="table system-info-table mb-0">
-        <tbody>
-            <tr>
-                <td>Python Version:</td>
-                <td id="python-version"><div class="loading-skeleton" style="width: 100px;"></div></td>
-            </tr>
-            <tr>
-                <td>Flask Version:</td>
-                <td id="flask-version"><div class="loading-skeleton" style="width: 100px;"></div></td>
-            </tr>
-            <tr>
-                <td>Environment:</td>
-                <td id="environment"><div class="loading-skeleton" style="width: 100px;"></div></td>
-            </tr>
-            <tr>
-                <td>Debug Mode:</td>
-                <td id="debug-mode"><div class="loading-skeleton" style="width: 100px;"></div></td>
-            </tr>
-            <tr>
-                <td>Upload Folder:</td>
-                <td id="upload-folder"><div class="loading-skeleton" style="width: 200px;"></div></td>
-            </tr>
-            <tr>
-                <td>Model Folder:</td>
-                <td id="model-folder"><div class="loading-skeleton" style="width: 200px;"></div></td>
-            </tr>
-            <tr>
-                <td>Server Time:</td>
-                <td id="server-time"><div class="loading-skeleton" style="width: 200px;"></div></td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="col-lg-6">
+        <!-- System Info -->
+        <div class="status-card h-100">
+            <h5><i class="bi bi-cpu text-primary"></i> ข้อมูลระบบ</h5>
+            <table class="table system-info-table mb-0">
+                <tbody>
+                    <tr>
+                        <td>Python</td>
+                        <td id="python-version"><div class="loading-skeleton"></div></td>
+                    </tr>
+                    <tr>
+                        <td>Flask</td>
+                        <td id="flask-version"><div class="loading-skeleton"></div></td>
+                    </tr>
+                    <tr>
+                        <td>Env</td>
+                        <td id="environment"><div class="loading-skeleton"></div></td>
+                    </tr>
+                    <tr>
+                        <td>Server Time</td>
+                        <td id="server-time"><div class="loading-skeleton"></div></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <!-- Recent Logs -->
-<div class="status-card">
+<div class="status-card" data-aos="fade-up" data-aos-delay="300">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0"><i class="bi bi-terminal text-primary"></i> บันทึกล่าสุด</h5>
-        <button class="btn btn-outline-secondary btn-sm" onclick="clearLogs()">
-            <i class="bi bi-trash me-1"></i> ล้างบันทึก
+        <h5 class="mb-0"><i class="bi bi-terminal text-primary"></i> บันทึกระบบล่าสุด</h5>
+        <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="clearLogs()">
+            <i class="bi bi-trash me-1"></i> ล้าง
         </button>
     </div>
     <div class="log-viewer" id="log-viewer">
-        <div class="text-center text-muted">กำลังโหลดบันทึก...</div>
+        <div class="text-center text-muted py-5">
+            <span class="spinner-border spinner-border-sm me-2"></span>กำลังโหลดบันทึก...
+        </div>
     </div>
 </div>
 
 <!-- Action Buttons -->
-<div class="action-buttons mt-4 mb-5">
-    <button class="btn btn-primary btn-lg" onclick="checkAllStatus()" id="refreshBtn">
-        <i class="bi bi-arrow-clockwise refresh-icon"></i> รีเฟรชสถานะ
+<div class="d-flex justify-content-center gap-3 my-5 flex-wrap" data-aos="fade-up" data-aos-delay="400">
+    <button class="btn btn-warning btn-lg rounded-pill px-4 shadow-sm" onclick="testR2Connection()">
+        <i class="bi bi-plugin me-2"></i> ทดสอบการเชื่อมต่อ R2
     </button>
-    <button class="btn btn-warning btn-lg" onclick="testR2Connection()">
-        <i class="bi bi-plugin"></i> ทดสอบ R2
-    </button>
-    <button class="btn btn-info btn-lg" onclick="downloadSystemInfo()">
-        <i class="bi bi-download"></i> ดาวน์โหลดข้อมูลระบบ
+    <button class="btn btn-info btn-lg rounded-pill px-4 shadow-sm text-white" onclick="downloadSystemInfo()">
+        <i class="bi bi-download me-2"></i> ดาวน์โหลดรายงาน
     </button>
 </div>
 {% endblock %}
@@ -356,6 +365,7 @@ async function checkAllStatus() {
     const refreshBtn = document.getElementById('refreshBtn');
     const refreshIcon = refreshBtn.querySelector('.refresh-icon');
     refreshIcon.style.animation = 'spin 1s linear infinite';
+    refreshBtn.disabled = true;
     
     try {
         const response = await fetch('/api/system/status');
@@ -374,9 +384,10 @@ async function checkAllStatus() {
         updateLogs(data);
         
     } catch (error) {
-        showAlert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: ' + error.message, 'danger');
+        showAlert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'danger');
     } finally {
         refreshIcon.style.animation = '';
+        refreshBtn.disabled = false;
     }
 }
 
@@ -387,17 +398,17 @@ function updateR2Status(data) {
     if (data.r2_connected) {
         r2Status.innerHTML = `
             <span class="status-indicator status-online"></span>
-            <span class="text-success fw-bold">เชื่อมต่อแล้ว</span>
+            <span class="text-success fw-bold">CONNECTED</span>
         `;
-        r2Details.innerHTML = '<span class="text-success">✓ พร้อมใช้งาน</span>';
+        r2Details.innerHTML = '<span class="badge bg-success-subtle text-success border border-success"><i class="bi bi-check2"></i> พร้อมใช้งาน</span>';
     } else {
         r2Status.innerHTML = `
             <span class="status-indicator status-offline"></span>
-            <span class="text-danger fw-bold">ไม่สามารถเชื่อมต่อ</span>
+            <span class="text-danger fw-bold">DISCONNECTED</span>
         `;
         r2Details.innerHTML = data.error_message ? 
-            `<span class="text-danger">${escapeHtml(data.error_message)}</span>` : 
-            '<span class="text-warning">ใช้ Local Storage</span>';
+            `<span class="badge bg-danger-subtle text-danger border border-danger text-wrap text-start">${escapeHtml(data.error_message)}</span>` : 
+            '<span class="badge bg-warning-subtle text-warning border border-warning">ใช้ Local Storage</span>';
     }
 }
 
@@ -408,34 +419,36 @@ function updateModelStatus(data) {
     if (data.models_available > 0) {
         modelStatus.innerHTML = `
             <span class="status-indicator status-online"></span>
-            <span class="text-success fw-bold">${data.models_available} โมเดล</span>
+            <span class="text-success fw-bold">READY</span>
         `;
-        modelDetails.innerHTML = '<span class="text-success">พร้อมใช้งาน</span>';
+        modelDetails.innerHTML = `<span class="badge bg-success-subtle text-success border border-success">${data.models_available} โมเดล</span>`;
     } else {
         modelStatus.innerHTML = `
             <span class="status-indicator status-warning"></span>
-            <span class="text-warning fw-bold">ไม่มีโมเดล</span>
+            <span class="text-warning fw-bold">NO MODELS</span>
         `;
-        modelDetails.innerHTML = '<span class="text-muted">กรุณาฝึกโมเดลใหม่</span>';
+        modelDetails.innerHTML = '<span class="text-muted small">ต้องการการฝึกฝน</span>';
     }
 }
 
 function updateStorageInfo(data) {
     document.getElementById('storage-provider').innerHTML = `
-        <span class="${data.r2_connected ? 'text-success' : ''}">${data.storage_provider || 'Local'}</span>
+        <span class="fw-bold ${data.r2_connected ? 'text-primary' : 'text-secondary'}">${data.storage_provider || 'Local'}</span>
     `;
-    document.getElementById('bucket-name').innerHTML = data.bucket_name || 'N/A';
+    document.getElementById('bucket-name').textContent = data.bucket_name || '-';
     document.getElementById('model-count').textContent = data.models_available || 0;
     document.getElementById('total-size').textContent = formatBytes(data.total_size || 0);
 }
 
 function updateEnvStatus(data) {
     if (data.env_vars_status) {
-        const icons = { true: '✅', false: '❌' };
-        document.getElementById('env-r2-access').textContent = icons[data.env_vars_status.R2_ACCESS_KEY];
-        document.getElementById('env-r2-secret').textContent = icons[data.env_vars_status.R2_SECRET_KEY];
-        document.getElementById('env-r2-endpoint').textContent = icons[data.env_vars_status.R2_ENDPOINT];
-        document.getElementById('env-r2-bucket').textContent = icons[data.env_vars_status.R2_BUCKET];
+        const iconCheck = '<i class="bi bi-check-circle-fill text-success fs-5"></i>';
+        const iconX = '<i class="bi bi-x-circle-fill text-danger fs-5"></i>';
+        
+        document.getElementById('env-r2-access').innerHTML = data.env_vars_status.R2_ACCESS_KEY ? iconCheck : iconX;
+        document.getElementById('env-r2-secret').innerHTML = data.env_vars_status.R2_SECRET_KEY ? iconCheck : iconX;
+        document.getElementById('env-r2-endpoint').innerHTML = data.env_vars_status.R2_ENDPOINT ? iconCheck : iconX;
+        document.getElementById('env-r2-bucket').innerHTML = data.env_vars_status.R2_BUCKET ? iconCheck : iconX;
     }
 }
 
@@ -443,22 +456,8 @@ function updateSystemInfo(data) {
     document.getElementById('python-version').textContent = data.python_version || '-';
     document.getElementById('flask-version').textContent = data.flask_version || '-';
     document.getElementById('environment').innerHTML = `
-        <span class="badge bg-${data.environment === 'production' ? 'success' : 'warning'}">${data.environment || 'production'}</span>
+        <span class="badge bg-${data.environment === 'production' ? 'success' : 'warning'} rounded-pill">${data.environment || 'production'}</span>
     `;
-    document.getElementById('debug-mode').innerHTML = data.debug_mode ? 
-        '<span class="badge bg-warning">เปิด</span>' : 
-        '<span class="badge bg-success">ปิด</span>';
-    
-    if (data.app_folders) {
-        document.getElementById('upload-folder').innerHTML = `
-            ${data.app_folders.upload_folder} 
-            ${data.app_folders.upload_exists ? '<span class="text-success">✓</span>' : '<span class="text-danger">✗</span>'}
-        `;
-        document.getElementById('model-folder').innerHTML = `
-            ${data.app_folders.model_folder} 
-            ${data.app_folders.model_exists ? '<span class="text-success">✓</span>' : '<span class="text-danger">✗</span>'}
-        `;
-    }
     
     if (data.server_time) {
         document.getElementById('server-time').textContent = new Date(data.server_time).toLocaleString('th-TH');
@@ -474,24 +473,24 @@ function updateLogs(data) {
             if (log.includes('ERROR') || log.includes('❌')) className = 'log-error';
             else if (log.includes('WARNING') || log.includes('⚠️')) className = 'log-warning';
             else if (log.includes('DEBUG')) className = 'log-debug';
-            return `<div class="${className}">${escapeHtml(log)}</div>`;
+            return `<div class="${className} py-1 border-bottom border-secondary border-opacity-25">${escapeHtml(log)}</div>`;
         }).join('');
         logViewer.scrollTop = logViewer.scrollHeight;
     } else {
-        logViewer.innerHTML = '<div class="text-center text-muted">ไม่มีบันทึกล่าสุด</div>';
+        logViewer.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-journal-x fs-1 d-block mb-2"></i>ไม่มีบันทึกล่าสุด</div>';
     }
 }
 
 async function testR2Connection() {
     try {
-        showAlert('กำลังทดสอบการเชื่อมต่อ Cloudflare R2...', 'info');
+        showAlert('กำลังทดสอบการเชื่อมต่อ...', 'info');
         const response = await fetch('/api/test-r2-connection');
         const result = await response.json();
         
         if (result.success) {
-            showAlert('✅ เชื่อมต่อ Cloudflare R2 สำเร็จ! (Bucket: ' + result.bucket + ')', 'success');
+            showAlert(`✅ เชื่อมต่อสำเร็จ! Bucket: ${result.bucket}`, 'success');
         } else {
-            showAlert('❌ ไม่สามารถเชื่อมต่อ R2: ' + result.error, 'danger');
+            showAlert(`❌ เชื่อมต่อล้มเหลว: ${result.error}`, 'danger');
         }
         
         setTimeout(checkAllStatus, 1000);
@@ -506,26 +505,24 @@ function downloadSystemInfo() {
         .then(data => {
             const dataStr = JSON.stringify(data, null, 2);
             const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-            const filename = 'system_info_' + new Date().toISOString().slice(0,10) + '.json';
+            const filename = 'system_status_' + new Date().toISOString().slice(0,10) + '.json';
             
             const link = document.createElement('a');
             link.setAttribute('href', dataUri);
             link.setAttribute('download', filename);
             link.click();
         })
-        .catch(error => {
-            showAlert('ไม่สามารถดาวน์โหลดข้อมูลได้: ' + error.message, 'danger');
-        });
+        .catch(error => showAlert('ดาวน์โหลดล้มเหลว', 'danger'));
 }
 
 function clearLogs() {
-    document.getElementById('log-viewer').innerHTML = '<div class="text-center text-muted">บันทึกถูกล้างแล้ว</div>';
+    document.getElementById('log-viewer').innerHTML = '<div class="text-center text-muted py-5">บันทึกถูกล้างแล้ว</div>';
 }
 
 function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

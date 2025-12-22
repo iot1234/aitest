@@ -6,21 +6,41 @@
 <style>
     /* Form Card */
     .form-card {
-        background: white;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow-xl);
         overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     .form-card-header {
-        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
         color: white;
-        padding: 1.25rem 1.5rem;
+        padding: 1.5rem 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .form-card-header::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.05' fill-rule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E");
     }
     
     .form-card-header h5 {
         margin: 0;
         font-weight: 700;
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
     }
     
     .form-card-body {
@@ -29,89 +49,141 @@
     
     /* Progress Section */
     .progress-section {
-        background: var(--primary-bg);
+        background: rgba(59, 130, 246, 0.05);
         border-radius: var(--radius-lg);
         padding: 1.5rem;
         margin: 1.5rem 0;
-        border: 2px solid rgba(30, 64, 175, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.1);
+        backdrop-filter: blur(5px);
     }
     
     .progress-stats {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-        margin-bottom: 1rem;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
     }
     
     .progress-stat {
         text-align: center;
+        padding: 1rem;
+        background: white;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        transition: transform 0.2s;
+    }
+    
+    .progress-stat:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
     }
     
     .progress-stat-value {
         font-size: 1.75rem;
         font-weight: 800;
-        color: var(--primary);
-        line-height: 1;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.2;
         margin-bottom: 0.25rem;
     }
     
     .progress-stat-label {
         font-size: 0.8rem;
         color: var(--gray-500);
-        font-weight: 500;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     /* Subject Card */
     .subject-card {
         background: white;
-        border: 2px solid var(--gray-200);
+        border: 1px solid var(--gray-200);
         border-radius: var(--radius-lg);
-        padding: 1rem;
-        transition: all 0.2s;
+        padding: 1.25rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         height: 100%;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .subject-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--gray-300);
+        transition: background 0.3s;
     }
     
     .subject-card:hover {
-        border-color: var(--primary);
-        box-shadow: var(--shadow-md);
+        border-color: var(--primary-light);
+        box-shadow: var(--shadow-lg);
+        transform: translateY(-5px);
+    }
+    
+    .subject-card:hover::before {
+        background: var(--primary);
     }
     
     .subject-card h6 {
-        font-weight: 600;
+        font-weight: 700;
         color: var(--gray-800);
         margin-bottom: 0.5rem;
-        font-size: 0.95rem;
+        font-size: 1rem;
+        padding-left: 0.5rem;
     }
     
     .subject-card .subject-meta {
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         color: var(--gray-500);
-        margin-bottom: 0.75rem;
+        margin-bottom: 1rem;
+        padding-left: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
     
     /* Results Section */
     .results-section {
-        background: white;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
         border-radius: var(--radius-xl);
         box-shadow: var(--shadow-xl);
         overflow: hidden;
-        margin-top: 2rem;
+        margin-top: 3rem;
+        border: 1px solid rgba(255, 255, 255, 0.5);
     }
     
     /* Summary Card */
     .summary-card {
-        background: linear-gradient(135deg, var(--success), var(--success-light));
+        background: linear-gradient(135deg, var(--success), var(--success-dark));
         color: white;
-        padding: 2rem;
-        border-radius: var(--radius-xl);
+        padding: 2.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .summary-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 300px;
+        height: 300px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
     }
     
     .summary-card.danger {
-        background: linear-gradient(135deg, var(--danger), var(--danger-light));
+        background: linear-gradient(135deg, var(--danger), #b91c1c);
     }
     
     .summary-card.warning {
-        background: linear-gradient(135deg, var(--warning), var(--warning-light));
+        background: linear-gradient(135deg, var(--warning), #d97706);
     }
     
     /* Progress Ring */
@@ -119,18 +191,23 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        position: relative;
+        width: 160px;
+        height: 160px;
+        margin: 0 auto;
     }
     
     .progress-ring {
         position: relative;
-        width: 140px;
-        height: 140px;
+        width: 100%;
+        height: 100%;
     }
     
     .progress-ring svg {
-        width: 140px;
-        height: 140px;
+        width: 100%;
+        height: 100%;
         transform: rotate(-90deg);
+        overflow: visible;
     }
     
     .progress-ring circle {
@@ -139,15 +216,16 @@
     }
     
     .progress-ring circle.bg {
-        stroke: rgba(255,255,255,0.3);
+        stroke: rgba(255,255,255,0.2);
     }
     
     .progress-ring circle.progress {
         stroke: white;
         stroke-dasharray: 377;
         stroke-dashoffset: 377;
-        transition: stroke-dashoffset 0.5s ease;
+        transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
         stroke-linecap: round;
+        filter: drop-shadow(0 0 4px rgba(255,255,255,0.5));
     }
     
     .progress-text {
@@ -155,9 +233,10 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        font-size: 1.75rem;
+        font-size: 2.5rem;
         font-weight: 800;
         color: white;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     
     /* Info Cards */
@@ -166,77 +245,113 @@
         border-radius: var(--radius-lg);
         overflow: hidden;
         height: 100%;
+        box-shadow: var(--shadow-md);
+        transition: transform 0.3s;
+    }
+    
+    .info-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
     }
     
     .info-card-header {
-        padding: 1rem 1.25rem;
+        padding: 1rem 1.5rem;
         font-weight: 700;
         color: white;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
     
-    .info-card-header.bg-danger { background: linear-gradient(135deg, var(--danger), var(--danger-light)); }
-    .info-card-header.bg-warning { background: linear-gradient(135deg, var(--warning), var(--warning-light)); }
-    .info-card-header.bg-primary { background: linear-gradient(135deg, var(--primary), var(--primary-light)); }
+    .info-card-header.bg-danger { background: linear-gradient(135deg, var(--danger), #ef4444); }
+    .info-card-header.bg-warning { background: linear-gradient(135deg, var(--warning), #f59e0b); }
+    .info-card-header.bg-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
     
     .info-card-body {
-        padding: 1.25rem;
+        padding: 1.5rem;
     }
     
     /* Analysis Method */
     .analysis-method {
-        background: var(--gray-50);
+        background: white;
         border-radius: var(--radius-lg);
-        padding: 1rem;
-        margin-top: 1rem;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+        border: 1px solid var(--gray-200);
+        box-shadow: var(--shadow-sm);
     }
     
     .method-option {
         display: flex;
         align-items: center;
-        padding: 0.75rem;
+        padding: 1rem;
         border-radius: var(--radius);
         cursor: pointer;
         transition: all 0.2s;
+        border: 2px solid transparent;
+        margin-bottom: 0.5rem;
     }
     
     .method-option:hover {
-        background: white;
+        background: var(--gray-50);
+        border-color: var(--gray-200);
+    }
+    
+    .method-option.selected {
+        background: rgba(59, 130, 246, 0.05);
+        border-color: var(--primary);
     }
     
     .method-option input {
-        margin-right: 0.75rem;
-    }
-    
-    .method-option .form-check-label {
-        cursor: pointer;
-        font-weight: 500;
+        margin-right: 1rem;
+        transform: scale(1.2);
     }
     
     /* Gemini Card */
     .gemini-card {
         background: linear-gradient(135deg, #1e1e2e, #2d2d3e);
         border-radius: var(--radius-xl);
-        padding: 1.5rem;
+        padding: 2rem;
         color: white;
-        margin-top: 1.5rem;
+        margin-top: 2rem;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    
+    .gemini-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at top right, rgba(167, 139, 250, 0.2), transparent 40%);
+        pointer-events: none;
     }
     
     .gemini-card h6 {
         color: #a78bfa;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+        font-size: 1.25rem;
+        font-weight: 700;
     }
     
     .gemini-content {
         color: #e2e8f0;
-        line-height: 1.7;
+        line-height: 1.8;
+        font-size: 1.05rem;
     }
     
     @media (max-width: 768px) {
         .progress-stats {
             grid-template-columns: repeat(2, 1fr);
+        }
+        .form-card-header {
+            padding: 1.25rem;
         }
     }
 </style>
@@ -244,36 +359,38 @@
 
 {% block content %}
 <!-- Page Header -->
-<div class="page-header">
-    <h1><i class="bi bi-diagram-3-fill me-2"></i>วิเคราะห์หลักสูตร</h1>
-    <p class="lead">วิเคราะห์ความคืบหน้าการเรียนตามหลักสูตรและเงื่อนไข prerequisite</p>
+<div class="d-flex justify-content-between align-items-center mb-5" data-aos="fade-down">
+    <div>
+        <h1 class="fw-bold text-white mb-2 text-shadow"><i class="bi bi-diagram-3-fill me-2"></i>วิเคราะห์หลักสูตร</h1>
+        <p class="lead text-white-50 mb-0">วิเคราะห์ความคืบหน้าการเรียนตามหลักสูตรและเงื่อนไข Prerequisite</p>
+    </div>
 </div>
 
 <!-- Form Card -->
-<div class="form-card">
+<div class="form-card" data-aos="fade-up">
     <div class="form-card-header">
-        <h5><i class="bi bi-pencil-square me-2"></i>กรอกข้อมูลสำหรับการวิเคราะห์</h5>
+        <h5><i class="bi bi-pencil-square"></i>กรอกข้อมูลสำหรับการวิเคราะห์</h5>
     </div>
     <div class="form-card-body">
         <form id="advancedPredictionForm">
             <!-- Basic Info -->
-            <div class="row g-3 mb-4">
+            <div class="row g-4 mb-4">
                 <div class="col-md-6">
-                    <label for="studentName" class="form-label">ชื่อ-นามสกุล</label>
-                    <input type="text" class="form-control" id="studentName" placeholder="เช่น นายสมชาย ใจดี">
+                    <label for="studentName" class="form-label fw-bold text-secondary">ชื่อ-นามสกุล</label>
+                    <input type="text" class="form-control glass-control" id="studentName" placeholder="เช่น นายสมชาย ใจดี">
                 </div>
                 <div class="col-md-6">
-                    <label for="modelSelect" class="form-label">เลือกโมเดล</label>
-                    <select class="form-select" id="modelSelect">
+                    <label for="modelSelect" class="form-label fw-bold text-secondary">เลือกโมเดล</label>
+                    <select class="form-select glass-control" id="modelSelect">
                         <option value="">กำลังโหลดรายการโมเดล...</option>
                     </select>
                 </div>
             </div>
             
-            <div class="row g-3 mb-4">
+            <div class="row g-4 mb-4">
                 <div class="col-md-4">
-                    <label for="currentYear" class="form-label">ปีการศึกษา</label>
-                    <select class="form-select" id="currentYear">
+                    <label for="currentYear" class="form-label fw-bold text-secondary">ปีการศึกษา</label>
+                    <select class="form-select glass-control" id="currentYear">
                         <option value="1">ปี 1</option>
                         <option value="2" selected>ปี 2</option>
                         <option value="3">ปี 3</option>
@@ -281,8 +398,8 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="currentTerm" class="form-label">เทอม</label>
-                    <select class="form-select" id="currentTerm">
+                    <label for="currentTerm" class="form-label fw-bold text-secondary">เทอม</label>
+                    <select class="form-select glass-control" id="currentTerm">
                         <option value="1" selected>เทอม 1</option>
                         <option value="2">เทอม 2</option>
                     </select>
@@ -290,7 +407,7 @@
             </div>
             
             <!-- Progress Section -->
-            <div class="progress-section">
+            <div class="progress-section" data-aos="fade-in" data-aos-delay="100">
                 <div class="progress-stats">
                     <div class="progress-stat">
                         <div class="progress-stat-value" id="completedSubjects">0</div>
@@ -298,7 +415,7 @@
                     </div>
                     <div class="progress-stat">
                         <div class="progress-stat-value" id="totalSubjects">0</div>
-                        <div class="progress-stat-label">วิชาทั้งหมดในแผน</div>
+                        <div class="progress-stat-label">วิชาทั้งหมด</div>
                     </div>
                     <div class="progress-stat">
                         <div class="progress-stat-value" id="currentGPA">0.00</div>
@@ -309,42 +426,56 @@
                         <div class="progress-stat-label">ความคืบหน้า</div>
                     </div>
                 </div>
-                <div class="progress" style="height: 1rem;">
-                    <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                <div class="progress" style="height: 0.8rem; border-radius: 1rem;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width: 0%"></div>
                 </div>
             </div>
             
             <!-- Subject Tabs -->
-            <h5 class="fw-bold mb-3">
-                <i class="bi bi-journal-text me-2"></i>เกรดรายวิชา
+            <h5 class="fw-bold mb-3 mt-5">
+                <i class="bi bi-journal-text me-2 text-primary"></i>เกรดรายวิชา
             </h5>
-            <ul class="nav nav-tabs mb-3" id="subjectTabs"></ul>
+            <ul class="nav nav-pills mb-4 gap-2" id="subjectTabs"></ul>
             <div class="tab-content" id="subjectTabContent"></div>
             
             <!-- Analysis Method -->
-            <div class="analysis-method">
-                <label class="form-label fw-bold">
-                    <i class="bi bi-gear me-1"></i> เลือกวิธีการวิเคราะห์
+            <div class="analysis-method" data-aos="fade-up" data-aos-delay="200">
+                <label class="form-label fw-bold mb-3 text-secondary">
+                    <i class="bi bi-gear me-2"></i> เลือกวิธีการวิเคราะห์
                 </label>
-                <div class="method-option">
-                    <input class="form-check-input" type="radio" name="analysisMethod" id="methodNormal" value="normal" checked>
-                    <label class="form-check-label" for="methodNormal">
-                        <i class="bi bi-cpu me-1 text-primary"></i> วิเคราะห์ด้วยโมเดล AI ปกติ
-                    </label>
-                </div>
-                <div class="method-option">
-                    <input class="form-check-input" type="radio" name="analysisMethod" id="methodGemini" value="gemini">
-                    <label class="form-check-label" for="methodGemini">
-                        <i class="bi bi-stars me-1 text-warning"></i> วิเคราะห์ด้วย Gemini AI
-                    </label>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="method-option border rounded p-3" onclick="selectMethod('normal')">
+                            <input class="form-check-input" type="radio" name="analysisMethod" id="methodNormal" value="normal" checked>
+                            <label class="form-check-label d-flex align-items-center w-100" for="methodNormal">
+                                <span class="bg-primary bg-opacity-10 text-primary rounded p-2 me-3"><i class="bi bi-cpu fs-4"></i></span>
+                                <div>
+                                    <div class="fw-bold">โมเดล AI ปกติ</div>
+                                    <small class="text-muted">วิเคราะห์ตามกฎและสถิติพื้นฐาน</small>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="method-option border rounded p-3" onclick="selectMethod('gemini')">
+                            <input class="form-check-input" type="radio" name="analysisMethod" id="methodGemini" value="gemini">
+                            <label class="form-check-label d-flex align-items-center w-100" for="methodGemini">
+                                <span class="bg-warning bg-opacity-10 text-warning rounded p-2 me-3"><i class="bi bi-stars fs-4"></i></span>
+                                <div>
+                                    <div class="fw-bold">Gemini AI ขั้นสูง</div>
+                                    <small class="text-muted">วิเคราะห์เชิงลึกและให้คำแนะนำละเอียด</small>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
             
             <!-- Submit Button -->
-            <div class="d-grid mt-4">
-                <button type="submit" class="btn btn-primary btn-lg" id="predictBtn" disabled>
+            <div class="d-grid mt-5">
+                <button type="submit" class="btn btn-primary btn-lg rounded-pill py-3 shadow-lg btn-glow" id="predictBtn" disabled>
                     <span id="predictSpinner" class="spinner-border spinner-border-sm d-none me-2"></span>
-                    <i class="bi bi-magic me-1"></i> เริ่มการวิเคราะห์
+                    <i class="bi bi-magic me-2"></i> เริ่มการวิเคราะห์หลักสูตร
                 </button>
             </div>
         </form>
@@ -356,51 +487,67 @@
     <!-- Summary Card -->
     <div class="summary-card" id="summaryCard">
         <div class="row align-items-center">
-            <div class="col-md-4">
+            <div class="col-lg-4 text-center border-end border-white border-opacity-25 mb-4 mb-lg-0">
                 <div class="progress-ring-container">
                     <div class="progress-ring">
-                        <svg>
+                        <svg viewBox="0 0 140 140">
                             <circle class="bg" cx="70" cy="70" r="60"></circle>
                             <circle class="progress" cx="70" cy="70" r="60" id="resultsCompletionRing"></circle>
                         </svg>
                         <div class="progress-text" id="resultsCompletionRate">0%</div>
                     </div>
                 </div>
-                <h6 class="text-center text-white mt-2">ความคืบหน้าหลักสูตร</h6>
+                <h6 class="text-white mt-3 opacity-75">ความคืบหน้าหลักสูตร</h6>
             </div>
-            <div class="col-md-8">
-                <h3 class="mb-3" id="resultsGraduationStatus"></h3>
-                <div class="row">
-                    <div class="col-6">
-                        <p class="mb-1"><strong>นักศึกษา:</strong> <span id="resultsStudentName">-</span></p>
-                        <p class="mb-0"><strong>GPA ปัจจุบัน:</strong> <span id="resultsCurrentGPA">-</span></p>
+            <div class="col-lg-8 ps-lg-5">
+                <h2 class="mb-4 fw-bold" id="resultsGraduationStatus"></h2>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="bg-white bg-opacity-20 rounded p-3">
+                            <small class="text-white-50 d-block mb-1">นักศึกษา</small>
+                            <div class="fw-bold fs-5" id="resultsStudentName">-</div>
+                        </div>
                     </div>
-                    <div class="col-6">
-                        <p class="mb-1"><strong>คาดการณ์:</strong> <span id="resultsPrediction">-</span></p>
-                        <p class="mb-0"><strong>ความเสี่ยง:</strong> <span id="resultsRiskLevel" class="badge">-</span></p>
+                    <div class="col-md-6">
+                        <div class="bg-white bg-opacity-20 rounded p-3">
+                            <small class="text-white-50 d-block mb-1">GPA ปัจจุบัน</small>
+                            <div class="fw-bold fs-5" id="resultsCurrentGPA">-</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="bg-white bg-opacity-20 rounded p-3">
+                            <small class="text-white-50 d-block mb-1">ผลการคาดการณ์</small>
+                            <div class="fw-bold fs-5" id="resultsPrediction">-</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="bg-white bg-opacity-20 rounded p-3">
+                            <small class="text-white-50 d-block mb-1">ระดับความเสี่ยง</small>
+                            <span id="resultsRiskLevel" class="badge bg-white text-dark mt-1 fs-6">-</span>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="p-4">
+    <div class="p-4 p-lg-5">
         <!-- Info Cards -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-6">
+        <div class="row g-4 mb-5">
+            <div class="col-md-6" data-aos="fade-up" data-aos-delay="100">
                 <div class="info-card">
                     <div class="info-card-header bg-danger">
-                        <i class="bi bi-x-circle-fill me-2"></i>วิชาที่ตก (เกรด F)
+                        <i class="bi bi-x-circle-fill fs-5"></i>วิชาที่ตก (เกรด F)
                     </div>
                     <div class="info-card-body" id="failedCourses">
                         <p class="text-muted mb-0">ไม่พบวิชาที่ตก</p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-6" data-aos="fade-up" data-aos-delay="200">
                 <div class="info-card">
                     <div class="info-card-header bg-warning">
-                        <i class="bi bi-slash-circle-fill me-2"></i>วิชาที่ถูกบล็อก
+                        <i class="bi bi-slash-circle-fill fs-5"></i>วิชาที่ติดเงื่อนไข (Blocked)
                     </div>
                     <div class="info-card-body" id="blockedCourses">
                         <p class="text-muted mb-0">ไม่พบวิชาที่ถูกบล็อก</p>
@@ -410,9 +557,9 @@
         </div>
         
         <!-- Recommendations -->
-        <div class="info-card">
+        <div class="info-card mb-5" data-aos="fade-up" data-aos-delay="300">
             <div class="info-card-header bg-primary">
-                <i class="bi bi-lightbulb-fill me-2"></i>คำแนะนำ
+                <i class="bi bi-lightbulb-fill fs-5"></i>คำแนะนำเพิ่มเติม
             </div>
             <div class="info-card-body" id="recommendations">
                 <p class="text-muted mb-0">ไม่มีคำแนะนำเฉพาะ</p>
@@ -420,7 +567,7 @@
         </div>
         
         <!-- Gemini Analysis -->
-        <div id="geminiAnalysisContainer"></div>
+        <div id="geminiAnalysisContainer" data-aos="fade-up" data-aos-delay="400"></div>
     </div>
 </div>
 {% endblock %}
@@ -433,11 +580,19 @@ let gradeMapping = {};
 
 document.addEventListener('DOMContentLoaded', function() {
     initializeAdvancedTest();
+    
+    // Custom method selection logic
+    window.selectMethod = function(method) {
+        document.querySelectorAll('.method-option').forEach(el => el.classList.remove('selected'));
+        const input = document.getElementById(method === 'normal' ? 'methodNormal' : 'methodGemini');
+        input.checked = true;
+        input.closest('.method-option').classList.add('selected');
+    };
 });
 
 async function initializeAdvancedTest() {
     try {
-        showLoading('กำลังโหลดข้อมูล...');
+        showLoading('กำลังโหลดข้อมูลหลักสูตร...');
         const configResponse = await fetch('/api/config');
         const configData = await configResponse.json();
         
@@ -454,7 +609,7 @@ async function initializeAdvancedTest() {
             showAlert('ไม่สามารถโหลดข้อมูลหลักสูตรได้', 'danger');
         }
     } catch (error) {
-        showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'danger');
+        showAlert('เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + error.message, 'danger');
     } finally {
         hideLoading();
     }
@@ -470,12 +625,12 @@ async function loadModels() {
             const subjectModels = data.models.filter(m => m.data_format === 'subject_based');
             
             if (subjectModels.length > 0) {
-                modelSelect.innerHTML = '<option value="">-- เลือกโมเดล --</option>';
+                modelSelect.innerHTML = '<option value="">-- เลือกโมเดลที่ต้องการ --</option>';
                 subjectModels.forEach(model => {
                     const accuracy = model.performance.accuracy ? (model.performance.accuracy * 100).toFixed(1) : 'N/A';
                     const option = document.createElement('option');
                     option.value = model.filename;
-                    option.textContent = `${model.filename} (${accuracy}%)`;
+                    option.textContent = `${model.filename} (ความแม่นยำ ${accuracy}%)`;
                     modelSelect.appendChild(option);
                 });
                 document.getElementById('predictBtn').disabled = false;
@@ -499,7 +654,7 @@ function generateSubjectTabs() {
     allTermsData.forEach((term, index) => {
         const tab = document.createElement('li');
         tab.className = 'nav-item';
-        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''}" data-bs-toggle="tab" data-bs-target="#term${index}">ปี ${term.year} เทอม ${term.term}</button>`;
+        tab.innerHTML = `<button class="nav-link ${index === 0 ? 'active' : ''}" data-bs-toggle="pill" data-bs-target="#term${index}">ปี ${term.year} เทอม ${term.term}</button>`;
         tabsContainer.appendChild(tab);
         
         const content = document.createElement('div');
@@ -520,8 +675,8 @@ function generateSubjectGrid(courseIds) {
             <div class="col-md-6 col-lg-4">
                 <div class="subject-card">
                     <h6>${course.thaiName}</h6>
-                    <div class="subject-meta">${course.id} | ${course.credit} หน่วยกิต</div>
-                    <select class="form-select form-select-sm subject-grade" data-course-id="${course.id}" onchange="updateProgress()">
+                    <div class="subject-meta"><i class="bi bi-upc-scan"></i> ${course.id} | ${course.credit} หน่วยกิต</div>
+                    <select class="form-select form-select-sm subject-grade glass-control" data-course-id="${course.id}" onchange="updateProgress()">
                         <option value="">-- เลือกเกรด --</option>
                         ${Object.keys(gradeMapping).map(grade => `<option value="${grade}">${grade}</option>`).join('')}
                     </select>
@@ -568,7 +723,18 @@ function updateProgress() {
     
     const progressBar = document.getElementById('progressBar');
     progressBar.style.width = completionRate + '%';
-    progressBar.className = 'progress-bar ' + (currentGPA >= 3.0 ? 'bg-success' : currentGPA >= 2.0 ? 'bg-warning' : 'bg-danger');
+    
+    // Progress bar color based on GPA
+    if (currentGPA >= 3.0) {
+        progressBar.classList.remove('bg-warning', 'bg-danger');
+        progressBar.classList.add('bg-success');
+    } else if (currentGPA >= 2.0) {
+        progressBar.classList.remove('bg-success', 'bg-danger');
+        progressBar.classList.add('bg-warning');
+    } else {
+        progressBar.classList.remove('bg-success', 'bg-warning');
+        progressBar.classList.add('bg-danger');
+    }
 }
 
 async function handleAdvancedPrediction(event) {
@@ -591,7 +757,7 @@ async function handleAdvancedPrediction(event) {
         return;
     }
     
-    showLoading(analysisMethod === 'gemini' ? 'กำลังวิเคราะห์ด้วย Gemini...' : 'กำลังวิเคราะห์หลักสูตร...');
+    showLoading(analysisMethod === 'gemini' ? 'กำลังวิเคราะห์ด้วย Gemini AI...' : 'กำลังประมวลผล...');
     
     try {
         const endpoint = analysisMethod === 'gemini' ? '/api/gemini/predict' : '/api/analyze_curriculum';
@@ -631,7 +797,7 @@ async function handleAdvancedPrediction(event) {
                 result.analysis_method = 'normal';
                 displayAdvancedResults(result);
             }
-            showAlert('วิเคราะห์สำเร็จ!', 'success');
+            showAlert('การวิเคราะห์เสร็จสมบูรณ์!', 'success');
         } else {
             showAlert('เกิดข้อผิดพลาด: ' + (result.error || 'Unknown error'), 'danger');
         }
@@ -645,12 +811,22 @@ async function handleAdvancedPrediction(event) {
 function displayAdvancedResults(data) {
     const resultsSection = document.getElementById('resultsSection');
     resultsSection.classList.remove('d-none');
-    resultsSection.scrollIntoView({ behavior: 'smooth' });
+    
+    // Scroll to results smoothly
+    setTimeout(() => {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
     
     // Update summary card color based on risk
     const summaryCard = document.getElementById('summaryCard');
     const riskLevel = data.prediction_result?.risk_level || '';
-    summaryCard.className = 'summary-card ' + (riskLevel === 'สูง' || riskLevel === 'high' ? 'danger' : riskLevel === 'ปานกลาง' || riskLevel === 'moderate' ? 'warning' : '');
+    
+    summaryCard.classList.remove('danger', 'warning');
+    if (['สูง', 'high', 'very_high'].includes(riskLevel)) {
+        summaryCard.classList.add('danger');
+    } else if (['ปานกลาง', 'moderate'].includes(riskLevel)) {
+        summaryCard.classList.add('warning');
+    }
     
     document.getElementById('resultsStudentName').textContent = data.student_name;
     document.getElementById('resultsCurrentGPA').textContent = data.avg_gpa ? data.avg_gpa.toFixed(2) : '0.00';
@@ -663,33 +839,33 @@ function displayAdvancedResults(data) {
             data.prediction_result.prediction + ' (' + (data.prediction_result.confidence * 100).toFixed(1) + '%)';
         
         const riskBadge = document.getElementById('resultsRiskLevel');
-        riskBadge.textContent = data.prediction_result.risk_level || 'ไม่ทราบ';
-        riskBadge.className = 'badge bg-' + getRiskColor(data.prediction_result.risk_level);
+        riskBadge.textContent = (data.prediction_result.risk_level || 'ไม่ทราบ').toUpperCase();
+        riskBadge.className = 'badge bg-' + getRiskColor(data.prediction_result.risk_level) + ' text-white mt-1 fs-6';
     }
     
     // Failed Courses
     const failedCoursesContainer = document.getElementById('failedCourses');
     if (data.failed_courses && data.failed_courses.length > 0) {
         failedCoursesContainer.innerHTML = '<ul class="list-unstyled mb-0">' + 
-            data.failed_courses.map(name => `<li><i class="bi bi-x-circle-fill text-danger me-2"></i>${name}</li>`).join('') + '</ul>';
+            data.failed_courses.map(name => `<li class="mb-2"><i class="bi bi-x-circle-fill text-danger me-2"></i>${name}</li>`).join('') + '</ul>';
     } else {
-        failedCoursesContainer.innerHTML = '<p class="text-muted mb-0">ไม่พบวิชาที่ตก</p>';
+        failedCoursesContainer.innerHTML = '<div class="text-muted d-flex align-items-center"><i class="bi bi-check-circle me-2 text-success"></i>ไม่พบวิชาที่ตก</div>';
     }
     
     // Blocked Courses
     const blockedCoursesContainer = document.getElementById('blockedCourses');
     if (data.blocked_courses_details && data.blocked_courses_details.length > 0) {
         blockedCoursesContainer.innerHTML = '<ul class="list-unstyled mb-0">' + 
-            data.blocked_courses_details.map(course => `<li><i class="bi bi-slash-circle-fill text-warning me-2"></i>${course.name} (ขาด: ${course.unmet_prereqs.join(', ')})</li>`).join('') + '</ul>';
+            data.blocked_courses_details.map(course => `<li class="mb-2"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i><strong>${course.name}</strong> <span class="text-muted text-sm d-block ms-4">ขาด: ${course.unmet_prereqs.join(', ')}</span></li>`).join('') + '</ul>';
     } else {
-        blockedCoursesContainer.innerHTML = '<p class="text-muted mb-0">ไม่พบวิชาที่ถูกบล็อก</p>';
+        blockedCoursesContainer.innerHTML = '<div class="text-muted d-flex align-items-center"><i class="bi bi-check-circle me-2 text-success"></i>ไม่พบวิชาที่ติดเงื่อนไข</div>';
     }
     
     // Recommendations
     const recommendationsContainer = document.getElementById('recommendations');
     if (data.recommendations && data.recommendations.length > 0) {
         recommendationsContainer.innerHTML = '<ul class="list-unstyled mb-0">' + 
-            data.recommendations.map(rec => `<li><i class="bi bi-check-circle-fill text-success me-2"></i>${rec}</li>`).join('') + '</ul>';
+            data.recommendations.map(rec => `<li class="mb-3 d-flex"><i class="bi bi-lightbulb-fill text-primary me-2 flex-shrink-0 mt-1"></i><span>${rec}</span></li>`).join('') + '</ul>';
     } else {
         recommendationsContainer.innerHTML = '<p class="text-muted mb-0">ไม่มีคำแนะนำเฉพาะ</p>';
     }
@@ -707,7 +883,8 @@ function updateProgressRingForResults(percentage) {
     const percentageText = document.getElementById('resultsCompletionRate');
     
     if (circle) {
-        const circumference = 2 * Math.PI * 60;
+        // radius = 60, circumference = 2 * PI * 60 approx 377
+        const circumference = 377;
         const offset = circumference - (percentage / 100) * circumference;
         circle.style.strokeDasharray = circumference;
         circle.style.strokeDashoffset = offset;
@@ -732,22 +909,22 @@ function displayGeminiAnalysis(geminiData) {
     
     let html = `
         <div class="gemini-card">
-            <h6><i class="bi bi-stars"></i> การวิเคราะห์จาก Gemini AI</h6>
+            <h6><i class="bi bi-stars"></i> การวิเคราะห์เชิงลึกจาก Gemini AI</h6>
             <div class="gemini-content">
     `;
     
     if (geminiData.analysis_markdown) {
-        html += `<div class="mb-3">${geminiData.analysis_markdown.replace(/\n/g, '<br>')}</div>`;
+        html += `<div class="mb-4">${geminiData.analysis_markdown.replace(/\n/g, '<br>')}</div>`;
     }
     
     if (geminiData.key_metrics && geminiData.key_metrics.length > 0) {
-        html += '<div class="row g-2 mb-3">';
+        html += '<div class="row g-3">';
         geminiData.key_metrics.forEach(metric => {
             html += `
                 <div class="col-6 col-md-4">
-                    <div class="p-2 bg-white bg-opacity-10 rounded">
-                        <small class="text-white-50">${metric.label}</small>
-                        <div class="fw-bold">${metric.value}</div>
+                    <div class="p-3 bg-black bg-opacity-20 rounded border border-white border-opacity-10 h-100">
+                        <small class="text-white-50 text-uppercase letter-spacing-1 d-block mb-1" style="font-size: 0.75rem;">${metric.label}</small>
+                        <div class="fw-bold fs-5 text-white">${metric.value}</div>
                     </div>
                 </div>
             `;
