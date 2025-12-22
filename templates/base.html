@@ -535,8 +535,8 @@
         ::-webkit-scrollbar-thumb { background: var(--gray-400); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--gray-600); }
 
-        {% block custom_css %}{% endblock %}
     </style>
+    {% block custom_css %}{% endblock %}
 </head>
 <body>
     <!-- Top Bar -->
@@ -821,7 +821,7 @@
             });
         });
         
-        {% block custom_js %}{% endblock %}
     </script>
+    {% block custom_js %}{% endblock %}
 </body>
 </html>
