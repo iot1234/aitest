@@ -296,6 +296,25 @@
         gap: 1rem;
         margin-top: 1.5rem;
     }
+
+    /* Modal Overlay */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .modal-overlay.show {
+        display: flex;
+    }
 </style>
 {% endblock %}
 
@@ -2038,6 +2057,325 @@ async function analyzeLiveGradesWithGemini() {
         document.getElementById('studentName').value, 
         document.getElementById('modelSelect').value
     );
+}
+
+// Export and Print functions
+function exportResults(format) {
+    const resultsSection = document.getElementById('resultsSection');
+    if (!resultsSection || resultsSection.classList.contains('d-none')) {
+        showAlert('กรุณาวิเคราะห์ข้อมูลก่อนส่งออก', 'warning');
+        return;
+    }
+    
+    const studentName = document.getElementById('studentName').value || 'นักศึกษา';
+    const studentId = document.getElementById('studentId').value || 'N/A';
+    const gpa = document.getElementById('statGPA').textContent || '0.00';
+    const credits = document.getElementById('statCredits').textContent || '0';
+    const passed = document.getElementById('statPassed').textContent || '0';
+    const failed = document.getElementById('statFailed').textContent || '0';
+    
+    if (format === 'excel') {
+        // Create CSV content
+        let csvContent = 'data:text/csv;charset=utf-8,';
+        csvContent += 'รายงานผลการวิเคราะห์นักศึกษา\n\n';
+        csvContent += 'ข้อมูลนักศึกษา\n';
+        csvContent += `ชื่อ-นามสกุล,${studentName}\n`;
+        csvContent += `รหัสนักศึกษา,${studentId}\n`;
+        csvContent += `GPA,${gpa}\n`;
+        csvContent += `หน่วยกิตที่ผ่าน,${credits}\n`;
+        csvContent += `วิชาที่ผ่าน,${passed}\n`;
+        csvContent += `วิชาที่ตก,${failed}\n\n`;
+        
+        csvContent += 'รายละเอียดเกรด\n';
+        csvContent += 'รหัสวิชา,ชื่อวิชา,เกรด\n';
+        
+        Object.entries(courseGrades).forEach(([courseId, grade]) => {
+            const course = coursesData.find(c => c.id === courseId);
+            if (course && grade) {
+                csvContent += `${courseId},${course.thaiName},${grade}\n`;
+            }
+        });
+        
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `รายงาน_${studentName}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showAlert('ส่งออกไฟล์ Excel (CSV) สำเร็จ', 'success');
+    } else if (format === 'pdf') {
+        // For PDF, use browser print with custom styling
+        printResults();
+    }
+}
+
+function printResults() {
+    const resultsSection = document.getElementById('resultsSection');
+    if (!resultsSection || resultsSection.classList.contains('d-none')) {
+        showAlert('กรุณาวิเคราะห์ข้อมูลก่อนพิมพ์', 'warning');
+        return;
+    }
+    
+    const studentName = document.getElementById('studentName').value || 'นักศึกษา';
+    const studentId = document.getElementById('studentId').value || 'N/A';
+    const gpa = document.getElementById('statGPA').textContent || '0.00';
+    const credits = document.getElementById('statCredits').textContent || '0';
+    const passed = document.getElementById('statPassed').textContent || '0';
+    const failed = document.getElementById('statFailed').textContent || '0';
+    const progress = document.getElementById('statProgress').textContent || '0%';
+    
+    // Build grade details
+    let gradeDetailsHtml = '';
+    Object.entries(courseGrades).forEach(([courseId, grade]) => {
+        const course = coursesData.find(c => c.id === courseId);
+        if (course && grade) {
+            gradeDetailsHtml += `<tr><td>${courseId}</td><td>${course.thaiName}</td><td>${course.credit}</td><td>${grade}</td></tr>`;
+        }
+    });
+    
+    // Get prediction result if available
+    const mainPrediction = document.getElementById('mainPrediction');
+    const predictionHtml = mainPrediction ? mainPrediction.innerHTML : '';
+    
+    // Get recommendations if available
+    const recommendations = document.getElementById('personalRecommendations');
+    const recommendationsHtml = recommendations ? recommendations.innerHTML : '';
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>รายงานผลการวิเคราะห์ - ${studentName}</title>
+            <meta charset="UTF-8">
+            <style>
+                body { 
+                    font-family: 'Sarabun', 'Segoe UI', sans-serif; 
+                    padding: 40px; 
+                    color: #333;
+                    line-height: 1.6;
+                }
+                .header { 
+                    text-align: center; 
+                    margin-bottom: 30px;
+                    border-bottom: 3px solid #4f46e5;
+                    padding-bottom: 20px;
+                }
+                .header h1 { 
+                    color: #4f46e5; 
+                    margin-bottom: 5px;
+                }
+                .header p { 
+                    color: #666; 
+                    margin: 0;
+                }
+                .section { 
+                    margin-bottom: 25px;
+                    page-break-inside: avoid;
+                }
+                .section h3 { 
+                    color: #4f46e5; 
+                    border-bottom: 2px solid #e5e7eb;
+                    padding-bottom: 8px;
+                    margin-bottom: 15px;
+                }
+                .info-grid { 
+                    display: grid; 
+                    grid-template-columns: repeat(3, 1fr); 
+                    gap: 15px;
+                    margin-bottom: 20px;
+                }
+                .info-item { 
+                    background: #f8fafc; 
+                    padding: 15px; 
+                    border-radius: 8px;
+                    text-align: center;
+                    border: 1px solid #e5e7eb;
+                }
+                .info-item .label { 
+                    color: #666; 
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .info-item .value { 
+                    font-size: 24px; 
+                    font-weight: bold; 
+                    color: #4f46e5;
+                    margin-top: 5px;
+                }
+                table { 
+                    width: 100%; 
+                    border-collapse: collapse; 
+                    margin-top: 10px;
+                }
+                th, td { 
+                    border: 1px solid #e5e7eb; 
+                    padding: 10px 12px; 
+                    text-align: left;
+                }
+                th { 
+                    background: #4f46e5; 
+                    color: white;
+                    font-weight: 600;
+                }
+                tr:nth-child(even) { 
+                    background: #f8fafc; 
+                }
+                .prediction-box {
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                }
+                .prediction-box.success {
+                    background: #ecfdf5;
+                    border: 2px solid #10b981;
+                }
+                .prediction-box.danger {
+                    background: #fef2f2;
+                    border: 2px solid #ef4444;
+                }
+                .footer { 
+                    margin-top: 40px; 
+                    text-align: center; 
+                    color: #999;
+                    font-size: 12px;
+                    border-top: 1px solid #e5e7eb;
+                    padding-top: 20px;
+                }
+                @media print {
+                    body { padding: 20px; }
+                    .no-print { display: none; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>📊 รายงานผลการวิเคราะห์นักศึกษา</h1>
+                <p>ระบบทำนายความสำเร็จของนักศึกษา (AI-Powered)</p>
+            </div>
+            
+            <div class="section">
+                <h3>👤 ข้อมูลนักศึกษา</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="label">ชื่อ-นามสกุล</div>
+                        <div class="value" style="font-size: 18px;">${studentName}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">รหัสนักศึกษา</div>
+                        <div class="value" style="font-size: 18px;">${studentId}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">วันที่รายงาน</div>
+                        <div class="value" style="font-size: 14px;">${new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>📈 สถิติการเรียน</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="label">GPA</div>
+                        <div class="value">${gpa}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">หน่วยกิตที่ผ่าน</div>
+                        <div class="value">${credits}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">ความคืบหน้า</div>
+                        <div class="value">${progress}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">วิชาที่ผ่าน</div>
+                        <div class="value" style="color: #10b981;">${passed}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="label">วิชาที่ตก</div>
+                        <div class="value" style="color: #ef4444;">${failed}</div>
+                    </div>
+                </div>
+            </div>
+            
+            ${predictionHtml ? `
+            <div class="section">
+                <h3>🎯 ผลการทำนาย</h3>
+                ${predictionHtml}
+            </div>
+            ` : ''}
+            
+            <div class="section">
+                <h3>📚 รายละเอียดเกรด</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>รหัสวิชา</th>
+                            <th>ชื่อวิชา</th>
+                            <th>หน่วยกิต</th>
+                            <th>เกรด</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${gradeDetailsHtml || '<tr><td colspan="4" style="text-align: center; color: #999;">ไม่มีข้อมูลเกรด</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+            
+            ${recommendationsHtml ? `
+            <div class="section">
+                <h3>💡 คำแนะนำ</h3>
+                ${recommendationsHtml}
+            </div>
+            ` : ''}
+            
+            <div class="footer">
+                <p>สร้างโดยระบบทำนายความสำเร็จของนักศึกษา | พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')}</p>
+            </div>
+        </body>
+        </html>
+    `);
+    
+    printWindow.document.close();
+    
+    // Wait for content to load, then print
+    setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+    }, 500);
+}
+
+// Show Alert Helper (ensure it exists)
+function showAlert(message, type = 'info') {
+    const alertContainer = document.getElementById('alertContainer');
+    if (!alertContainer) {
+        console.log(`Alert (${type}): ${message}`);
+        return;
+    }
+    
+    const alertId = 'alert-' + Date.now();
+    const alertHtml = `
+        <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show shadow-sm border-0" role="alert" 
+             style="animation: slideInDown 0.3s ease-out;">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'x-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}-fill me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    alertContainer.insertAdjacentHTML('beforeend', alertHtml);
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+        const alertEl = document.getElementById(alertId);
+        if (alertEl) {
+            alertEl.classList.remove('show');
+            setTimeout(() => alertEl.remove(), 300);
+        }
+    }, 5000);
 }
 </script>
 {% endblock %}
