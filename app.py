@@ -3562,9 +3562,21 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
             }
         }
 
-def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
+def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8, prediction_result=None):
     """
     วิเคราะห์เหตุผลที่ไม่จบการศึกษาอย่างครอบคลุม
+    ใช้ผลการทำนายจากโมเดล AI (prediction_result) ร่วมกับการวิเคราะห์เงื่อนไข
+    
+    Args:
+        current_grades: dict ของเกรดปัจจุบัน {course_id: grade}
+        loaded_terms_count: จำนวนเทอมที่โหลด
+        prediction_result: ผลการทำนายจากโมเดล AI (dict) ประกอบด้วย:
+            - prediction: 'จบ' หรือ 'ไม่จบ'
+            - prob_pass: ความน่าจะเป็นที่จะจบ (0-1)
+            - prob_fail: ความน่าจะเป็นที่จะไม่จบ (0-1)
+            - confidence: ความมั่นใจในการทำนาย (0-1)
+            - risk_level: ระดับความเสี่ยง
+            - method: วิธีที่ใช้ทำนาย
     """
     try:
         grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
@@ -3746,6 +3758,168 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
             graduation_status = 'มีความเสี่ยงสูงที่จะไม่จบ'
             graduation_status_color = 'danger'
         
+        # ====== การทำนายผลการจบ/ไม่จบ: ใช้ผลจากโมเดล AI เป็นหลัก ======
+        # ถ้ามีผลจากโมเดล AI ให้ใช้ผลนั้นเป็นหลัก
+        if prediction_result and isinstance(prediction_result, dict):
+            # ใช้ผลการทำนายจากโมเดล AI
+            model_prediction = prediction_result.get('prediction', '')
+            model_prob_pass = prediction_result.get('prob_pass', 0.5)
+            model_confidence = prediction_result.get('confidence', 0.5)
+            prediction_method = prediction_result.get('method', 'Unknown')
+            
+            # กำหนด will_graduate จากผลของโมเดล
+            will_graduate = model_prediction == 'จบ' or model_prob_pass >= 0.5
+            
+            # ปรับ graduation_probability ให้สอดคล้องกับผลจากโมเดล
+            graduation_probability = model_prob_pass * 100
+            
+            logger.info(f"📊 Using AI Model prediction: {model_prediction} (prob: {model_prob_pass:.2f}, confidence: {model_confidence:.2f}) from {prediction_method}")
+        else:
+            # Fallback: ใช้เงื่อนไขพื้นฐานถ้าไม่มีผลจากโมเดล
+            will_graduate = graduation_probability >= 50 and current_gpa >= 2.0 and len(failed_courses) == 0
+            prediction_method = 'Rule-based Analysis'
+            model_prob_pass = graduation_probability / 100
+            model_confidence = 0.5
+            logger.info(f"📊 Using rule-based prediction (no AI model result)")
+        
+        # สร้างเหตุผลที่จะจบการศึกษา
+        reasons_for_graduation = []
+        if current_gpa >= 2.0:
+            reasons_for_graduation.append({
+                'icon': '✅',
+                'title': f'GPA ผ่านเกณฑ์',
+                'description': f'GPA สะสม {current_gpa:.2f} ≥ 2.00 (เกณฑ์ขั้นต่ำ)',
+                'type': 'success'
+            })
+        if len(failed_courses) == 0:
+            reasons_for_graduation.append({
+                'icon': '✅',
+                'title': 'ไม่มีวิชาที่ตก',
+                'description': 'ผ่านทุกวิชาที่ลงทะเบียน',
+                'type': 'success'
+            })
+        if current_gpa >= 2.5:
+            reasons_for_graduation.append({
+                'icon': '🌟',
+                'title': 'ผลการเรียนดี',
+                'description': f'GPA {current_gpa:.2f} อยู่ในระดับที่ดี',
+                'type': 'success'
+            })
+        if current_gpa >= 3.0:
+            reasons_for_graduation.append({
+                'icon': '🏆',
+                'title': 'ผลการเรียนดีมาก',
+                'description': f'GPA {current_gpa:.2f} สูงกว่าค่าเฉลี่ย',
+                'type': 'success'
+            })
+        if passed_credits >= 100:
+            reasons_for_graduation.append({
+                'icon': '📚',
+                'title': 'หน่วยกิตใกล้ครบ',
+                'description': f'สะสมหน่วยกิตแล้ว {passed_credits} หน่วยกิต',
+                'type': 'success'
+            })
+        progress_pct = round(passed_credits/136*100, 1) if passed_credits > 0 else 0
+        if progress_pct >= 75:
+            reasons_for_graduation.append({
+                'icon': '📈',
+                'title': 'ความคืบหน้าดี',
+                'description': f'เรียนผ่านแล้ว {progress_pct}% ของหลักสูตร',
+                'type': 'success'
+            })
+        if len(low_grade_courses) == 0 and total_courses > 0:
+            reasons_for_graduation.append({
+                'icon': '💪',
+                'title': 'คุณภาพผลการเรียนดี',
+                'description': 'ไม่มีวิชาที่ได้เกรดต่ำ (D+, D)',
+                'type': 'success'
+            })
+        
+        # สร้างเหตุผลที่ไม่จบการศึกษา
+        reasons_for_not_graduation = []
+        if current_gpa < 2.0:
+            gpa_deficit = 2.0 - current_gpa
+            reasons_for_not_graduation.append({
+                'icon': '❌',
+                'title': f'GPA ต่ำกว่าเกณฑ์',
+                'description': f'GPA สะสม {current_gpa:.2f} < 2.00 (ต้องเพิ่มอีก {gpa_deficit:.2f})',
+                'type': 'critical'
+            })
+        if len(failed_courses) > 0:
+            failed_names = ', '.join(failed_courses[:3])
+            if len(failed_courses) > 3:
+                failed_names += f' และอีก {len(failed_courses)-3} วิชา'
+            reasons_for_not_graduation.append({
+                'icon': '❌',
+                'title': f'มีวิชาที่ตก {len(failed_courses)} วิชา',
+                'description': f'วิชาที่ไม่ผ่าน: {failed_names}',
+                'type': 'critical',
+                'courses': failed_courses
+            })
+        if len(low_grade_courses) > 2:
+            reasons_for_not_graduation.append({
+                'icon': '⚠️',
+                'title': f'มีวิชาเกรดต่ำจำนวนมาก',
+                'description': f'ได้เกรด D+, D จำนวน {len(low_grade_courses)} วิชา ส่งผลต่อ GPA',
+                'type': 'warning',
+                'courses': low_grade_courses
+            })
+        if len(incomplete_courses) > 0:
+            reasons_for_not_graduation.append({
+                'icon': '⚠️',
+                'title': f'มีวิชาที่ยังไม่สมบูรณ์',
+                'description': f'วิชาที่ได้ I/W/WF/WU: {len(incomplete_courses)} วิชา',
+                'type': 'warning',
+                'courses': incomplete_courses
+            })
+        if progress_pct < 50 and loaded_terms_count >= 4:
+            reasons_for_not_graduation.append({
+                'icon': '⚠️',
+                'title': 'ความคืบหน้าช้า',
+                'description': f'เรียนผ่านเพียง {progress_pct}% อาจจบช้ากว่าแผน',
+                'type': 'warning'
+            })
+        
+        # ข้อความทำนายผลการจบ - รวมข้อมูลจากโมเดล AI
+        if will_graduate:
+            graduation_prediction_text = '🎓 คาดว่าจะจบการศึกษาตามเกณฑ์'
+            
+            # สร้างรายละเอียดจากผลการทำนาย
+            detail_parts = []
+            if prediction_result and isinstance(prediction_result, dict):
+                detail_parts.append(f'AI Model ทำนาย: โอกาสจบ {graduation_probability:.0f}%')
+                detail_parts.append(f'ความมั่นใจ: {model_confidence*100:.0f}%')
+                if prediction_method:
+                    detail_parts.append(f'วิธีทำนาย: {prediction_method}')
+            
+            if current_gpa >= 2.0:
+                detail_parts.append(f'GPA {current_gpa:.2f} ผ่านเกณฑ์ขั้นต่ำ')
+            if len(failed_courses) == 0:
+                detail_parts.append('ไม่มีวิชาที่ตก')
+            
+            graduation_prediction_detail = ' | '.join(detail_parts) if detail_parts else f'โอกาสจบการศึกษา {graduation_probability:.0f}%'
+        else:
+            graduation_prediction_text = '⚠️ เสี่ยงไม่จบการศึกษา'
+            
+            # สร้างรายละเอียดจากผลการทำนายและปัญหาที่พบ
+            detail_parts = []
+            if prediction_result and isinstance(prediction_result, dict):
+                detail_parts.append(f'AI Model ทำนาย: โอกาสจบ {graduation_probability:.0f}%')
+                detail_parts.append(f'ความมั่นใจ: {model_confidence*100:.0f}%')
+            
+            main_issues = []
+            if current_gpa < 2.0:
+                main_issues.append(f'GPA ต่ำกว่าเกณฑ์ ({current_gpa:.2f} < 2.00)')
+            if len(failed_courses) > 0:
+                main_issues.append(f'มีวิชาตก {len(failed_courses)} วิชา')
+            if len(main_issues) == 0 and graduation_probability < 50:
+                main_issues.append(f'โอกาสจบต่ำตามการทำนายของ AI ({graduation_probability:.0f}%)')
+            
+            if main_issues:
+                detail_parts.append('สาเหตุหลัก: ' + ', '.join(main_issues))
+            
+            graduation_prediction_detail = ' | '.join(detail_parts) if detail_parts else 'มีความเสี่ยงจากผลการเรียน'
+        
         return {
             'reasons': reasons,
             'risk_level': risk_level,
@@ -3764,11 +3938,27 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
             'total_credits': total_credits,
             'expected_credits': expected_credits,
             'progress_percentage': round(passed_credits/136*100, 1) if passed_credits > 0 else 0,  # 136 หน่วยกิตรวม
-            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses)
+            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses),
+            # ====== ข้อมูลการทำนายจบ/ไม่จบ (ใช้ AI Model เป็นหลัก) ======
+            'will_graduate': will_graduate,
+            'graduation_prediction_text': graduation_prediction_text,
+            'graduation_prediction_detail': graduation_prediction_detail,
+            'reasons_for_graduation': reasons_for_graduation,
+            'reasons_for_not_graduation': reasons_for_not_graduation,
+            'failed_courses': failed_courses,
+            'low_grade_courses': low_grade_courses,
+            'incomplete_courses': incomplete_courses,
+            # ข้อมูลจากโมเดล AI
+            'prediction_method': prediction_method if 'prediction_method' in dir() else 'Rule-based',
+            'model_prob_pass': model_prob_pass if 'model_prob_pass' in dir() else graduation_probability / 100,
+            'model_confidence': model_confidence if 'model_confidence' in dir() else 0.5,
+            'ai_prediction_used': prediction_result is not None
         }
         
     except Exception as e:
         logger.error(f"Error analyzing graduation failure reasons: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return {
             'reasons': [],
             'risk_level': 'ไม่ทราบ',
@@ -3787,7 +3977,20 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
             'total_credits': 0,
             'expected_credits': 0,
             'progress_percentage': 0,
-            'recommendations': []
+            'recommendations': [],
+            # ข้อมูลการทำนาย (fallback)
+            'will_graduate': False,
+            'graduation_prediction_text': '⚠️ ไม่สามารถวิเคราะห์ได้',
+            'graduation_prediction_detail': 'เกิดข้อผิดพลาดในการวิเคราะห์',
+            'reasons_for_graduation': [],
+            'reasons_for_not_graduation': [],
+            'failed_courses': [],
+            'low_grade_courses': [],
+            'incomplete_courses': [],
+            'prediction_method': 'Error',
+            'model_prob_pass': 0,
+            'model_confidence': 0,
+            'ai_prediction_used': False
         }
 
 def generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses=None):
@@ -5838,13 +6041,26 @@ def analyze_curriculum():
             logger.error(f"Error generating chart data: {str(e)}")
             response_data['chart_data'] = None
         
-        # ✨ เพิ่มการวิเคราะห์เหตุผลที่อาจไม่จบ
+        # ✨ เพิ่มการวิเคราะห์เหตุผลที่อาจไม่จบ - ส่งผลการทำนายจากโมเดล AI ไปด้วย
         try:
-            graduation_analysis = analyze_graduation_failure_reasons(current_grades, loaded_terms_count)
+            # ดึงผลการทำนายจากโมเดล AI (ถ้ามี)
+            ai_prediction_result = response_data.get('prediction_result', None)
+            
+            graduation_analysis = analyze_graduation_failure_reasons(
+                current_grades, 
+                loaded_terms_count, 
+                prediction_result=ai_prediction_result  # ส่งผลจากโมเดล AI
+            )
             response_data['graduation_analysis'] = graduation_analysis
-            logger.info(f"Added graduation analysis with risk level: {graduation_analysis.get('risk_level', 'N/A')}")
+            
+            # Log ว่าใช้วิธีไหนในการทำนาย
+            prediction_method = graduation_analysis.get('prediction_method', 'Unknown')
+            will_graduate = graduation_analysis.get('will_graduate', False)
+            logger.info(f"✅ Graduation analysis: will_graduate={will_graduate}, method={prediction_method}, risk={graduation_analysis.get('risk_level', 'N/A')}")
         except Exception as e:
             logger.error(f"Error in graduation analysis: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             response_data['graduation_analysis'] = None
         
         return jsonify(response_data)
