@@ -3746,6 +3746,122 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
             graduation_status = 'มีความเสี่ยงสูงที่จะไม่จบ'
             graduation_status_color = 'danger'
         
+        # ====== เพิ่ม: การทำนายผลการจบ/ไม่จบ พร้อมเหตุผลชัดเจน ======
+        will_graduate = graduation_probability >= 50 and current_gpa >= 2.0 and len(failed_courses) == 0
+        
+        # สร้างเหตุผลที่จะจบการศึกษา
+        reasons_for_graduation = []
+        if current_gpa >= 2.0:
+            reasons_for_graduation.append({
+                'icon': '✅',
+                'title': f'GPA ผ่านเกณฑ์',
+                'description': f'GPA สะสม {current_gpa:.2f} ≥ 2.00 (เกณฑ์ขั้นต่ำ)',
+                'type': 'success'
+            })
+        if len(failed_courses) == 0:
+            reasons_for_graduation.append({
+                'icon': '✅',
+                'title': 'ไม่มีวิชาที่ตก',
+                'description': 'ผ่านทุกวิชาที่ลงทะเบียน',
+                'type': 'success'
+            })
+        if current_gpa >= 2.5:
+            reasons_for_graduation.append({
+                'icon': '🌟',
+                'title': 'ผลการเรียนดี',
+                'description': f'GPA {current_gpa:.2f} อยู่ในระดับที่ดี',
+                'type': 'success'
+            })
+        if current_gpa >= 3.0:
+            reasons_for_graduation.append({
+                'icon': '🏆',
+                'title': 'ผลการเรียนดีมาก',
+                'description': f'GPA {current_gpa:.2f} สูงกว่าค่าเฉลี่ย',
+                'type': 'success'
+            })
+        if passed_credits >= 100:
+            reasons_for_graduation.append({
+                'icon': '📚',
+                'title': 'หน่วยกิตใกล้ครบ',
+                'description': f'สะสมหน่วยกิตแล้ว {passed_credits} หน่วยกิต',
+                'type': 'success'
+            })
+        progress_pct = round(passed_credits/136*100, 1) if passed_credits > 0 else 0
+        if progress_pct >= 75:
+            reasons_for_graduation.append({
+                'icon': '📈',
+                'title': 'ความคืบหน้าดี',
+                'description': f'เรียนผ่านแล้ว {progress_pct}% ของหลักสูตร',
+                'type': 'success'
+            })
+        if len(low_grade_courses) == 0 and total_courses > 0:
+            reasons_for_graduation.append({
+                'icon': '💪',
+                'title': 'คุณภาพผลการเรียนดี',
+                'description': 'ไม่มีวิชาที่ได้เกรดต่ำ (D+, D)',
+                'type': 'success'
+            })
+        
+        # สร้างเหตุผลที่ไม่จบการศึกษา
+        reasons_for_not_graduation = []
+        if current_gpa < 2.0:
+            gpa_deficit = 2.0 - current_gpa
+            reasons_for_not_graduation.append({
+                'icon': '❌',
+                'title': f'GPA ต่ำกว่าเกณฑ์',
+                'description': f'GPA สะสม {current_gpa:.2f} < 2.00 (ต้องเพิ่มอีก {gpa_deficit:.2f})',
+                'type': 'critical'
+            })
+        if len(failed_courses) > 0:
+            failed_names = ', '.join(failed_courses[:3])
+            if len(failed_courses) > 3:
+                failed_names += f' และอีก {len(failed_courses)-3} วิชา'
+            reasons_for_not_graduation.append({
+                'icon': '❌',
+                'title': f'มีวิชาที่ตก {len(failed_courses)} วิชา',
+                'description': f'วิชาที่ไม่ผ่าน: {failed_names}',
+                'type': 'critical',
+                'courses': failed_courses
+            })
+        if len(low_grade_courses) > 2:
+            reasons_for_not_graduation.append({
+                'icon': '⚠️',
+                'title': f'มีวิชาเกรดต่ำจำนวนมาก',
+                'description': f'ได้เกรด D+, D จำนวน {len(low_grade_courses)} วิชา ส่งผลต่อ GPA',
+                'type': 'warning',
+                'courses': low_grade_courses
+            })
+        if len(incomplete_courses) > 0:
+            reasons_for_not_graduation.append({
+                'icon': '⚠️',
+                'title': f'มีวิชาที่ยังไม่สมบูรณ์',
+                'description': f'วิชาที่ได้ I/W/WF/WU: {len(incomplete_courses)} วิชา',
+                'type': 'warning',
+                'courses': incomplete_courses
+            })
+        if progress_pct < 50 and loaded_terms_count >= 4:
+            reasons_for_not_graduation.append({
+                'icon': '⚠️',
+                'title': 'ความคืบหน้าช้า',
+                'description': f'เรียนผ่านเพียง {progress_pct}% อาจจบช้ากว่าแผน',
+                'type': 'warning'
+            })
+        
+        # ข้อความทำนายผลการจบ
+        if will_graduate:
+            graduation_prediction_text = '🎓 คาดว่าจะจบการศึกษาตามเกณฑ์'
+            graduation_prediction_detail = f'นักศึกษามี GPA {current_gpa:.2f} (ผ่านเกณฑ์ ≥ 2.00) และไม่มีวิชาที่ตก มีโอกาสจบการศึกษา {graduation_probability:.0f}%'
+        else:
+            graduation_prediction_text = '⚠️ เสี่ยงไม่จบการศึกษา'
+            main_issues = []
+            if current_gpa < 2.0:
+                main_issues.append(f'GPA ต่ำกว่าเกณฑ์ ({current_gpa:.2f} < 2.00)')
+            if len(failed_courses) > 0:
+                main_issues.append(f'มีวิชาตก {len(failed_courses)} วิชา')
+            if len(main_issues) == 0:
+                main_issues.append('มีความเสี่ยงจากผลการเรียน')
+            graduation_prediction_detail = 'สาเหตุหลัก: ' + ', '.join(main_issues)
+        
         return {
             'reasons': reasons,
             'risk_level': risk_level,
@@ -3764,7 +3880,16 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8):
             'total_credits': total_credits,
             'expected_credits': expected_credits,
             'progress_percentage': round(passed_credits/136*100, 1) if passed_credits > 0 else 0,  # 136 หน่วยกิตรวม
-            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses)
+            'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses),
+            # ====== ข้อมูลใหม่: การทำนายจบ/ไม่จบ พร้อมเหตุผล ======
+            'will_graduate': will_graduate,
+            'graduation_prediction_text': graduation_prediction_text,
+            'graduation_prediction_detail': graduation_prediction_detail,
+            'reasons_for_graduation': reasons_for_graduation,
+            'reasons_for_not_graduation': reasons_for_not_graduation,
+            'failed_courses': failed_courses,
+            'low_grade_courses': low_grade_courses,
+            'incomplete_courses': incomplete_courses
         }
         
     except Exception as e:

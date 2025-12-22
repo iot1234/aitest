@@ -879,22 +879,46 @@
         </div>
 
         <div id="geminiResultCard" class="gemini-result d-none">
+            <!-- Header: แสดงผลทำนายจบ/ไม่จบ -->
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="d-flex gap-2">
-                    <span class="badge bg-primary"><i class="bi bi-activity me-1"></i> <span id="geminiOutcomeLabel">-</span></span>
-                    <span class="badge bg-warning text-dark"><i class="bi bi-shield-check me-1"></i> <span id="geminiRiskLevel">-</span></span>
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="badge bg-primary" id="geminiOutcomeBadge">
+                        <i class="bi bi-mortarboard-fill me-1"></i> 
+                        <span id="geminiOutcomeLabel">กำลังวิเคราะห์...</span>
+                    </span>
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-shield-check me-1"></i> 
+                        <span id="geminiRiskLevel">-</span>
+                    </span>
                 </div>
-                <button class="btn btn-sm btn-outline-light rounded-circle" id="geminiClearBtn"><i class="bi bi-x-lg"></i></button>
+                <button class="btn btn-sm btn-outline-light rounded-circle" id="geminiClearBtn">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
             
+            <!-- Metrics: แสดงข้อมูลสำคัญ -->
             <div class="gemini-metrics" id="geminiKeyMetrics"></div>
             
+            <!-- Graduation Prediction Summary -->
+            <div id="geminiGraduationSummary" class="mb-3 p-3 rounded" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+                <div class="text-center">
+                    <h5 class="mb-2" id="geminiGradPredText" style="color: #a78bfa;">
+                        <i class="bi bi-stars me-1"></i> ผลการทำนาย
+                    </h5>
+                    <p class="mb-0 text-light opacity-75" id="geminiGradPredDetail">-</p>
+                </div>
+            </div>
+            
+            <!-- Analysis Content -->
             <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 1.5rem; max-height: 400px; overflow-y: auto;">
                 <div class="markdown-body text-light" id="geminiMarkdownResult"></div>
             </div>
             
+            <!-- Recommendations -->
             <div class="mt-3" id="geminiRecommendationsContainer" style="display: none;">
-                <h6 class="text-uppercase text-white-50 mb-2">คำแนะนำเพิ่มเติม</h6>
+                <h6 class="text-uppercase text-white-50 mb-2">
+                    <i class="bi bi-lightbulb-fill text-warning me-1"></i> คำแนะนำเพิ่มเติม
+                </h6>
                 <ul class="list-unstyled text-light" id="geminiRecommendationsList"></ul>
             </div>
         </div>
@@ -948,11 +972,19 @@
             <div class="fail" style="width: 15%">15%</div>
         </div>
         
-        <!-- Graduation Reason Card -->
-        <div class="chart-container mb-4" id="graduationReasonCard">
+    <!-- Graduation Prediction Card - แสดงผลจบ/ไม่จบ พร้อมเหตุผล -->
+    <div class="chart-container mb-4" id="graduationReasonCard" style="border: 2px solid; border-radius: 16px; overflow: hidden;">
+        <div id="graduationPredictionHeader" class="p-3 text-center" style="background: linear-gradient(135deg, #10b981, #059669);">
+            <h4 class="mb-1 text-white fw-bold" id="graduationPredictionTitle">
+                <i class="bi bi-mortarboard-fill me-2"></i>ผลการทำนาย
+            </h4>
+            <p class="text-white mb-0 opacity-75" id="graduationPredictionSubtitle">กำลังวิเคราะห์...</p>
+        </div>
+        <div class="p-3">
             <h6 class="mb-3"><i class="bi bi-info-circle text-primary"></i> เหตุผลการทำนาย</h6>
             <div id="graduationReasonContent"></div>
         </div>
+    </div>
         
         <!-- Stats Cards -->
         <div class="result-stats" id="resultStats">
@@ -1598,12 +1630,17 @@ function displayResults(data) {
     const probFail = pred ? Math.min(100, (pred.prob_fail * 100)).toFixed(1) : 50;
     const confidence = pred ? Math.min(100, (pred.confidence * 100)).toFixed(1) : 50;
     
-    // Result Hero
+    // Result Hero - ใช้ข้อมูลจาก graduation_analysis
     const resultHero = document.getElementById('resultHero');
-    resultHero.className = `result-hero ${isPass ? 'success' : 'danger'}`;
+    const gradAnalysis = data.graduation_analysis;
+    const willGraduate = gradAnalysis?.will_graduate || isPass;
+    const graduationText = gradAnalysis?.graduation_prediction_text || (willGraduate ? '🎓 คาดว่าจะจบการศึกษา' : '⚠️ เสี่ยงไม่จบการศึกษา');
+    
+    resultHero.className = `result-hero ${willGraduate ? 'success' : 'danger'}`;
     resultHero.innerHTML = `
-        <h2><i class="bi bi-${isPass ? 'check-circle-fill' : 'x-circle-fill'} me-2"></i>${isPass ? 'คาดว่าจะจบการศึกษา' : 'เสี่ยงไม่จบการศึกษา'}</h2>
-        <p class="mb-0">ความมั่นใจ: <strong>${confidence}%</strong></p>
+        <h2><i class="bi bi-${willGraduate ? 'mortarboard-fill' : 'exclamation-triangle-fill'} me-2"></i>${willGraduate ? '🎓 คาดว่าจะจบการศึกษา' : '⚠️ เสี่ยงไม่จบการศึกษา'}</h2>
+        <p class="mb-0">ความมั่นใจ: <strong>${confidence}%</strong> | GPA: <strong>${(data.avg_gpa || 0).toFixed(2)}</strong></p>
+        ${gradAnalysis?.graduation_status ? `<p class="mb-0 mt-2"><span class="badge ${willGraduate ? 'bg-success' : 'bg-danger'} px-3 py-2 fs-6">${gradAnalysis.graduation_status}</span></p>` : ''}
     `;
     
     // Probability Bar
@@ -1613,77 +1650,155 @@ function displayResults(data) {
         <div class="fail" style="width: ${probFail}%">${probFail}%</div>
     `;
     
-    // Graduation Reason Card - แสดงเหตุผลจบ/ไม่จบ
+    // Graduation Prediction Card - แสดงผลจบ/ไม่จบ พร้อมเหตุผลครบถ้วน
     const reasonCard = document.getElementById('graduationReasonContent');
+    const predHeader = document.getElementById('graduationPredictionHeader');
+    const predTitle = document.getElementById('graduationPredictionTitle');
+    const predSubtitle = document.getElementById('graduationPredictionSubtitle');
+    
     if (reasonCard) {
         const gradAnalysis = data.graduation_analysis;
         let reasonHtml = '';
         
-        if (isPass) {
-            // เหตุผลที่คาดว่าจะจบ
+        // ตรวจสอบสถานะจบ/ไม่จบจาก graduation_analysis
+        const willGraduate = gradAnalysis?.will_graduate || isPass;
+        const predictionText = gradAnalysis?.graduation_prediction_text || (willGraduate ? '🎓 คาดว่าจะจบการศึกษา' : '⚠️ เสี่ยงไม่จบการศึกษา');
+        const predictionDetail = gradAnalysis?.graduation_prediction_detail || '';
+        
+        // อัพเดท Header ของ Graduation Prediction Card
+        if (predHeader) {
+            if (willGraduate) {
+                predHeader.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                predHeader.style.borderColor = '#10b981';
+            } else {
+                predHeader.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                predHeader.style.borderColor = '#ef4444';
+            }
+        }
+        if (predTitle) {
+            predTitle.innerHTML = willGraduate 
+                ? '<i class="bi bi-mortarboard-fill me-2"></i>🎓 คาดว่าจะจบการศึกษา'
+                : '<i class="bi bi-exclamation-triangle-fill me-2"></i>⚠️ เสี่ยงไม่จบการศึกษา';
+        }
+        if (predSubtitle) {
+            predSubtitle.textContent = `ความมั่นใจ: ${confidence}% | GPA: ${(data.avg_gpa || 0).toFixed(2)}`;
+        }
+        
+        // ตั้งค่า border color ของ card
+        const graduationCard = document.getElementById('graduationReasonCard');
+        if (graduationCard) {
+            graduationCard.style.borderColor = willGraduate ? '#10b981' : '#ef4444';
+        }
+        
+        if (willGraduate) {
+            // ========== เหตุผลที่คาดว่าจะจบการศึกษา ==========
+            const reasonsForGrad = gradAnalysis?.reasons_for_graduation || [];
             let passReasons = [];
-            if (data.avg_gpa >= 2.0) passReasons.push(`GPA เฉลี่ยสะสม ${(data.avg_gpa || 0).toFixed(2)} สูงกว่าเกณฑ์ขั้นต่ำ (2.00)`);
-            if ((data.failed_courses?.length || 0) === 0) passReasons.push('ไม่มีวิชาที่ตก');
-            if ((data.blocked_courses?.length || 0) === 0) passReasons.push('ไม่มีวิชาติดเงื่อนไข');
-            if ((data.completion_rate || 0) > 50) passReasons.push(`ความคืบหน้าหลักสูตร ${(data.completion_rate || 0).toFixed(1)}%`);
-            if (gradAnalysis?.progress_percentage > 75) passReasons.push(`ความคืบหน้าอยู่ในเกณฑ์ดี (${gradAnalysis.progress_percentage.toFixed(0)}%)`);
             
-            if (passReasons.length === 0) passReasons.push('ผลการเรียนอยู่ในเกณฑ์ที่ดี');
+            // ใช้เหตุผลจาก backend ถ้ามี
+            if (reasonsForGrad.length > 0) {
+                passReasons = reasonsForGrad.map(r => ({
+                    icon: r.icon || '✅',
+                    title: r.title,
+                    description: r.description,
+                    type: r.type || 'success'
+                }));
+            } else {
+                // Fallback: สร้างเหตุผลจากข้อมูลพื้นฐาน
+                if (data.avg_gpa >= 2.0) passReasons.push({ icon: '✅', title: 'GPA ผ่านเกณฑ์', description: `GPA สะสม ${(data.avg_gpa || 0).toFixed(2)} ≥ 2.00`, type: 'success' });
+                if ((data.failed_courses?.length || 0) === 0) passReasons.push({ icon: '✅', title: 'ไม่มีวิชาที่ตก', description: 'ผ่านทุกวิชาที่ลงทะเบียน', type: 'success' });
+                if ((data.blocked_courses?.length || 0) === 0) passReasons.push({ icon: '✅', title: 'ไม่มีวิชาติดเงื่อนไข', description: 'สามารถเรียนได้ตามแผน', type: 'success' });
+                if ((data.completion_rate || 0) > 50) passReasons.push({ icon: '📈', title: 'ความคืบหน้าดี', description: `เรียนผ่าน ${(data.completion_rate || 0).toFixed(1)}%`, type: 'success' });
+            }
+            
+            if (passReasons.length === 0) passReasons.push({ icon: '✅', title: 'ผลการเรียนดี', description: 'อยู่ในเกณฑ์ที่ดี', type: 'success' });
             
             reasonHtml = `
-                <div class="alert alert-success mb-0 border-0" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">
-                    <h6 class="alert-heading fw-bold text-success mb-3"><i class="bi bi-check-circle-fill me-2"></i>เหตุผลที่คาดว่าจะจบการศึกษา</h6>
+                <div class="alert alert-success mb-0 border-0" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-radius: 12px;">
+                    <h6 class="alert-heading fw-bold text-success mb-3">
+                        <i class="bi bi-check-circle-fill me-2"></i>เหตุผลที่คาดว่าจะจบการศึกษา
+                    </h6>
                     <div class="row g-2">
                         ${passReasons.map(r => `
                             <div class="col-md-6">
-                                <div class="d-flex align-items-center p-2 rounded" style="background: rgba(255,255,255,0.7);">
-                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                    <span>${r}</span>
+                                <div class="d-flex align-items-start p-2 rounded" style="background: rgba(255,255,255,0.8); border-left: 4px solid #10b981;">
+                                    <span class="me-2" style="font-size: 1.2rem;">${r.icon}</span>
+                                    <div>
+                                        <div class="fw-bold text-success">${r.title}</div>
+                                        <small class="text-muted">${r.description}</small>
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
-                    ${gradAnalysis?.graduation_status ? `<div class="mt-3 p-2 rounded text-center" style="background: rgba(16,185,129,0.2);"><i class="bi bi-trophy-fill text-success me-1"></i> <strong>${gradAnalysis.graduation_status}</strong></div>` : ''}
+                    ${predictionDetail ? `<div class="mt-3 p-2 rounded text-center" style="background: rgba(16,185,129,0.2); border-radius: 8px;"><i class="bi bi-info-circle-fill text-success me-1"></i> ${predictionDetail}</div>` : ''}
+                    ${gradAnalysis?.graduation_status ? `<div class="mt-2 p-2 rounded text-center" style="background: rgba(16,185,129,0.3); border-radius: 8px;"><i class="bi bi-trophy-fill text-success me-1"></i> <strong>${gradAnalysis.graduation_status}</strong></div>` : ''}
                 </div>
             `;
         } else {
-            // เหตุผลที่เสี่ยงไม่จบ - ใช้ข้อมูลจาก graduation_analysis.reasons
+            // ========== เหตุผลที่เสี่ยงไม่จบการศึกษา ==========
+            const reasonsForNotGrad = gradAnalysis?.reasons_for_not_graduation || [];
             let failReasons = [];
             
-            if (gradAnalysis?.reasons?.length > 0) {
-                failReasons = gradAnalysis.reasons.map(r => ({
+            // ใช้เหตุผลจาก backend ถ้ามี
+            if (reasonsForNotGrad.length > 0) {
+                failReasons = reasonsForNotGrad.map(r => ({
+                    icon: r.icon || '❌',
                     title: r.title,
-                    type: r.type
+                    description: r.description,
+                    type: r.type || 'critical',
+                    courses: r.courses || []
                 }));
             }
             
-            // เพิ่มเหตุผลจากข้อมูลพื้นฐาน (ถ้ายังไม่มี)
-            if (data.avg_gpa < 2.0 && !failReasons.some(r => r.title?.includes('GPA'))) {
-                failReasons.push({ title: `GPA เฉลี่ยสะสม ${(data.avg_gpa || 0).toFixed(2)} ต่ำกว่าเกณฑ์ขั้นต่ำ (2.00)`, type: 'critical' });
+            // เพิ่มเหตุผลจาก graduation_analysis.reasons (ถ้ามี)
+            if (gradAnalysis?.reasons?.length > 0) {
+                gradAnalysis.reasons.forEach(r => {
+                    if (!failReasons.some(fr => fr.title === r.title)) {
+                        failReasons.push({
+                            icon: r.type === 'critical' ? '❌' : '⚠️',
+                            title: r.title,
+                            description: r.description || '',
+                            type: r.type
+                        });
+                    }
+                });
             }
-            if ((data.failed_courses?.length || 0) > 0 && !failReasons.some(r => r.title?.includes('ไม่ผ่าน') || r.title?.includes('ตก'))) {
-                failReasons.push({ title: `มีวิชาที่ตก ${data.failed_courses.length} วิชา`, type: 'critical' });
+            
+            // Fallback: เพิ่มเหตุผลจากข้อมูลพื้นฐาน (ถ้ายังไม่มี)
+            if (data.avg_gpa < 2.0 && !failReasons.some(r => r.title?.includes('GPA'))) {
+                failReasons.push({ icon: '❌', title: 'GPA ต่ำกว่าเกณฑ์', description: `GPA สะสม ${(data.avg_gpa || 0).toFixed(2)} < 2.00 ไม่ผ่านเกณฑ์ขั้นต่ำ`, type: 'critical' });
+            }
+            if ((data.failed_courses?.length || 0) > 0 && !failReasons.some(r => r.title?.includes('ตก') || r.title?.includes('ไม่ผ่าน'))) {
+                failReasons.push({ icon: '❌', title: `มีวิชาที่ตก ${data.failed_courses.length} วิชา`, description: `วิชา: ${data.failed_courses.slice(0, 3).join(', ')}${data.failed_courses.length > 3 ? '...' : ''}`, type: 'critical', courses: data.failed_courses });
             }
             if ((data.blocked_courses?.length || 0) > 0 && !failReasons.some(r => r.title?.includes('เงื่อนไข'))) {
-                failReasons.push({ title: `มีวิชาติดเงื่อนไข ${data.blocked_courses.length} วิชา`, type: 'warning' });
+                failReasons.push({ icon: '⚠️', title: `มีวิชาติดเงื่อนไข ${data.blocked_courses.length} วิชา`, description: 'ต้องผ่านวิชาบังคับก่อนก่อน', type: 'warning' });
             }
             
-            if (failReasons.length === 0) failReasons.push({ title: 'ผลการเรียนอยู่ในระดับที่เสี่ยง', type: 'warning' });
+            if (failReasons.length === 0) failReasons.push({ icon: '⚠️', title: 'ผลการเรียนเสี่ยง', description: 'มีความเสี่ยงจากผลการเรียน', type: 'warning' });
             
             reasonHtml = `
-                <div class="alert alert-danger mb-0 border-0" style="background: linear-gradient(135deg, #fef2f2, #fecaca);">
-                    <h6 class="alert-heading fw-bold text-danger mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>เหตุผลที่เสี่ยงไม่จบการศึกษา</h6>
+                <div class="alert alert-danger mb-0 border-0" style="background: linear-gradient(135deg, #fef2f2, #fecaca); border-radius: 12px;">
+                    <h6 class="alert-heading fw-bold text-danger mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>เหตุผลที่เสี่ยงไม่จบการศึกษา
+                    </h6>
                     <div class="row g-2">
                         ${failReasons.slice(0, 6).map(r => `
                             <div class="col-md-6">
-                                <div class="d-flex align-items-center p-2 rounded" style="background: rgba(255,255,255,0.7);">
-                                    <i class="bi bi-${r.type === 'critical' ? 'x-circle-fill text-danger' : 'exclamation-triangle-fill text-warning'} me-2"></i>
-                                    <span>${r.title}</span>
+                                <div class="d-flex align-items-start p-2 rounded" style="background: rgba(255,255,255,0.8); border-left: 4px solid ${r.type === 'critical' ? '#ef4444' : '#f59e0b'};">
+                                    <span class="me-2" style="font-size: 1.2rem;">${r.icon}</span>
+                                    <div>
+                                        <div class="fw-bold ${r.type === 'critical' ? 'text-danger' : 'text-warning'}">${r.title}</div>
+                                        <small class="text-muted">${r.description}</small>
+                                        ${r.courses?.length > 0 ? `<div class="mt-1"><small class="text-danger"><i class="bi bi-list-ul me-1"></i>${r.courses.slice(0, 3).join(', ')}${r.courses.length > 3 ? '...' : ''}</small></div>` : ''}
+                                    </div>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
-                    ${gradAnalysis?.risk_description ? `<div class="mt-3 p-2 rounded text-center" style="background: rgba(239,68,68,0.2);"><i class="bi bi-exclamation-diamond-fill text-danger me-1"></i> <strong>${gradAnalysis.risk_description}</strong></div>` : ''}
+                    ${predictionDetail ? `<div class="mt-3 p-2 rounded text-center" style="background: rgba(239,68,68,0.2); border-radius: 8px;"><i class="bi bi-info-circle-fill text-danger me-1"></i> ${predictionDetail}</div>` : ''}
+                    ${gradAnalysis?.risk_description ? `<div class="mt-2 p-2 rounded text-center" style="background: rgba(239,68,68,0.3); border-radius: 8px;"><i class="bi bi-exclamation-diamond-fill text-danger me-1"></i> <strong>${gradAnalysis.risk_description}</strong></div>` : ''}
                 </div>
             `;
         }
@@ -2120,33 +2235,129 @@ function displayGeminiResult(result) {
     card.classList.remove('d-none');
     
     const gemini = result.gemini || {};
+    const gradPrediction = gemini.graduation_prediction || {};
     
-    document.getElementById('geminiOutcomeLabel').textContent = gemini.prediction || 'วิเคราะห์';
+    // ตรวจสอบผลการทำนายจบ/ไม่จบ
+    const willGraduate = gradPrediction.will_graduate || (gemini.outcome_summary?.status === 'graduated');
+    const predictionText = gradPrediction.prediction_text || gemini.prediction || (willGraduate ? 'คาดว่าจะจบ' : 'เสี่ยงไม่จบ');
+    
+    // อัพเดท Outcome Label ด้วยสีและไอคอน
+    const outcomeLabel = document.getElementById('geminiOutcomeLabel');
+    if (outcomeLabel) {
+        outcomeLabel.innerHTML = willGraduate 
+            ? `<span class="text-success">🎓 ${predictionText}</span>`
+            : `<span class="text-danger">⚠️ ${predictionText}</span>`;
+        outcomeLabel.parentElement.className = willGraduate ? 'badge bg-success' : 'badge bg-danger';
+    }
+    
     document.getElementById('geminiRiskLevel').textContent = gemini.risk_level || '-';
     
     const metricsDiv = document.getElementById('geminiKeyMetrics');
+    const confidence = gradPrediction.confidence_percent || gemini.confidence || gemini.outcome_summary?.confidence * 100 || 0;
+    
     metricsDiv.innerHTML = `
         <div class="gemini-metric">
-            <div class="value">${gemini.estimated_gpa?.toFixed(2) || '-'}</div>
+            <div class="value" style="color: ${willGraduate ? '#10b981' : '#ef4444'};">
+                ${willGraduate ? '🎓' : '⚠️'}
+            </div>
+            <div class="label">${willGraduate ? 'คาดว่าจบ' : 'เสี่ยงไม่จบ'}</div>
+        </div>
+        <div class="gemini-metric">
+            <div class="value">${(gemini.estimated_gpa || result.analysis?.estimated_gpa || 0).toFixed(2)}</div>
             <div class="label">GPA ประมาณ</div>
         </div>
         <div class="gemini-metric">
-            <div class="value">${gemini.confidence || '-'}%</div>
+            <div class="value">${confidence.toFixed(0)}%</div>
             <div class="label">ความมั่นใจ</div>
+        </div>
+        <div class="gemini-metric">
+            <div class="value">${gemini.risk_level || '-'}</div>
+            <div class="label">ระดับความเสี่ยง</div>
         </div>
     `;
     
-    const mkDiv = document.getElementById('geminiMarkdownResult');
-    if (gemini.analysis_markdown) {
-        mkDiv.innerHTML = typeof marked !== 'undefined' ? marked.parse(gemini.analysis_markdown) : gemini.analysis_markdown.replace(/\n/g, '<br>');
+    // แสดงเหตุผลจบ/ไม่จบจาก Gemini
+    let graduationReasonHtml = '';
+    if (willGraduate) {
+        const reasonWhy = gradPrediction.reason_why_graduate || gemini.outcome_summary?.description || '';
+        if (reasonWhy) {
+            graduationReasonHtml = `
+                <div class="p-3 rounded mb-3" style="background: rgba(16,185,129,0.2); border-left: 4px solid #10b981;">
+                    <h6 class="text-success mb-2"><i class="bi bi-check-circle-fill me-1"></i> เหตุผลที่คาดว่าจะจบ:</h6>
+                    <p class="mb-0 text-light">${reasonWhy}</p>
+                </div>
+            `;
+        }
+    } else {
+        const reasonWhyNot = gradPrediction.reason_why_not_graduate || gemini.outcome_summary?.description || '';
+        if (reasonWhyNot) {
+            graduationReasonHtml = `
+                <div class="p-3 rounded mb-3" style="background: rgba(239,68,68,0.2); border-left: 4px solid #ef4444;">
+                    <h6 class="text-danger mb-2"><i class="bi bi-exclamation-triangle-fill me-1"></i> เหตุผลที่เสี่ยงไม่จบ:</h6>
+                    <p class="mb-0 text-light">${reasonWhyNot}</p>
+                </div>
+            `;
+        }
     }
     
+    const mkDiv = document.getElementById('geminiMarkdownResult');
+    let markdownContent = '';
+    
+    // เพิ่มเหตุผลจบ/ไม่จบก่อน
+    if (graduationReasonHtml) {
+        markdownContent += graduationReasonHtml;
+    }
+    
+    // เพิ่ม Analysis Markdown
+    if (gemini.analysis_markdown) {
+        const parsedMarkdown = typeof marked !== 'undefined' ? marked.parse(gemini.analysis_markdown) : gemini.analysis_markdown.replace(/\n/g, '<br>');
+        markdownContent += `<div class="mt-2">${parsedMarkdown}</div>`;
+    }
+    
+    mkDiv.innerHTML = markdownContent || '<p class="text-muted mb-0">ไม่มีข้อมูลการวิเคราะห์</p>';
+    
+    // แสดงคำแนะนำ
     if (gemini.recommendations?.length > 0) {
         const recsContainer = document.getElementById('geminiRecommendationsContainer');
         const recsList = document.getElementById('geminiRecommendationsList');
         recsContainer.style.display = 'block';
-        recsList.innerHTML = gemini.recommendations.map(r => `<li class="mb-1">• ${r}</li>`).join('');
+        recsList.innerHTML = gemini.recommendations.map(r => `
+            <li class="mb-2 d-flex align-items-start">
+                <i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i>
+                <span>${r}</span>
+            </li>
+        `).join('');
     }
+    
+    // อัพเดท Graduation Summary Section
+    const gradSummary = document.getElementById('geminiGraduationSummary');
+    const gradPredText = document.getElementById('geminiGradPredText');
+    const gradPredDetail = document.getElementById('geminiGradPredDetail');
+    
+    if (gradSummary && gradPredText && gradPredDetail) {
+        if (willGraduate) {
+            gradSummary.style.background = 'rgba(16,185,129,0.2)';
+            gradSummary.style.borderColor = '#10b981';
+            gradPredText.innerHTML = '<i class="bi bi-mortarboard-fill me-2"></i>🎓 คาดว่าจะจบการศึกษา';
+            gradPredText.style.color = '#10b981';
+        } else {
+            gradSummary.style.background = 'rgba(239,68,68,0.2)';
+            gradSummary.style.borderColor = '#ef4444';
+            gradPredText.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>⚠️ เสี่ยงไม่จบการศึกษา';
+            gradPredText.style.color = '#ef4444';
+        }
+        
+        // แสดงรายละเอียดเหตุผล
+        const reasonDetail = willGraduate 
+            ? (gradPrediction.reason_why_graduate || gemini.outcome_summary?.description || 'ผลการเรียนอยู่ในเกณฑ์ที่ดี')
+            : (gradPrediction.reason_why_not_graduate || gemini.outcome_summary?.description || 'มีความเสี่ยงจากผลการเรียน');
+        gradPredDetail.textContent = reasonDetail;
+    }
+    
+    // Scroll ไปยังผลลัพธ์
+    setTimeout(() => {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
 }
 
 function clearGeminiResult() {
