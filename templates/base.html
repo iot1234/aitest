@@ -716,13 +716,21 @@
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     
     <script>
-        // Initialize AOS
-        AOS.init({
-            duration: 800,
-            easing: 'ease-out-cubic',
-            once: true,
-            offset: 50
-        });
+        // Initialize AOS (optional; don't break app if CDN blocked)
+        try {
+            if (window.AOS && typeof window.AOS.init === 'function') {
+                window.AOS.init({
+                    duration: 800,
+                    easing: 'ease-out-cubic',
+                    once: true,
+                    offset: 50
+                });
+            } else {
+                console.warn('AOS not available; skipping animations.');
+            }
+        } catch (e) {
+            console.warn('Failed to init AOS; continuing without animations.', e);
+        }
 
         // Update current time
         function updateTime() {
