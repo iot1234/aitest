@@ -6216,6 +6216,11 @@ def curriculum_page():
             gradeMapping='{}'
         )
 
+@app.route('/advanced')
+def advanced_test_page():
+    """Page for advanced curriculum analysis."""
+    return render_template('advanced_test.html')
+
 @app.route('/predict-batch')
 def predict_batch_page():
     return render_template('index.html')
