@@ -1161,43 +1161,84 @@ let geminiEnabled = false;
 
 // ===== Initialization =====
 document.addEventListener('DOMContentLoaded', async function() {
+    console.log('🚀 Starting initialization...');
     try {
-        await loadConfigFromAPI();
+        const configLoaded = await loadConfigFromAPI();
+        console.log('📦 Config loaded:', configLoaded);
+        
         if (validateData()) {
+            console.log('✅ Data validated, initializing app...');
             await initializeApp();
+            console.log('🎉 App initialized successfully');
+        } else {
+            console.error('❌ Data validation failed');
+            console.log('coursesData:', coursesData?.length || 0);
+            console.log('allTermsData:', allTermsData?.length || 0);
+            console.log('gradeMapping:', Object.keys(gradeMapping || {}).length);
+            showAlert('ไม่สามารถโหลดข้อมูลหลักสูตรได้ กรุณารีเฟรชหน้า', 'danger');
         }
     } catch (error) {
-        console.error('Initialization failed:', error);
+        console.error('❌ Initialization failed:', error);
         showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
     }
 });
 
 async function loadConfigFromAPI() {
-    const response = await fetch('/api/config');
-    const data = await response.json();
-    
-    if (data.success) {
-        coursesData = data.COURSES_DATA || [];
-        allTermsData = data.ALL_TERMS_DATA || [];
-        gradeMapping = data.GRADE_MAPPING || {};
-        geminiEnabled = Boolean(data.GEMINI_ENABLED);
-        updateGeminiStatus();
-        return true;
+    console.log('📡 Fetching config from API...');
+    try {
+        const response = await fetch('/api/config');
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📡 Config data received:', data.success);
+        
+        if (data.success) {
+            coursesData = data.COURSES_DATA || [];
+            allTermsData = data.ALL_TERMS_DATA || [];
+            gradeMapping = data.GRADE_MAPPING || {};
+            geminiEnabled = Boolean(data.GEMINI_ENABLED);
+            
+            console.log('📚 Courses loaded:', coursesData.length);
+            console.log('📅 Terms loaded:', allTermsData.length);
+            console.log('📊 Grade mapping keys:', Object.keys(gradeMapping).length);
+            
+            updateGeminiStatus();
+            return true;
+        }
+        throw new Error('Config API returned success: false');
+    } catch (error) {
+        console.error('❌ loadConfigFromAPI error:', error);
+        throw error;
     }
-    throw new Error('Failed to load configuration');
 }
 
 function validateData() {
-    return coursesData.length > 0 && allTermsData.length > 0 && Object.keys(gradeMapping).length > 0;
+    const valid = coursesData.length > 0 && allTermsData.length > 0 && Object.keys(gradeMapping).length > 0;
+    console.log('🔍 validateData:', valid);
+    return valid;
 }
 
 async function initializeApp() {
-    if (isInitialized) return;
+    if (isInitialized) {
+        console.log('⚠️ App already initialized');
+        return;
+    }
     
+    console.log('🔧 Setting up event listeners...');
     setupEventListeners();
-    loadModels();
+    
+    console.log('📊 Loading models...');
+    await loadModels();
+    
+    console.log('📈 Updating live stats...');
     updateLiveStats();
+    
     isInitialized = true;
+    console.log('✅ App initialization complete');
 }
 
 // ===== Event Listeners =====
@@ -1218,10 +1259,26 @@ function setupEventListeners() {
         'geminiClearBtn': clearGeminiResult
     };
     
+    let attachedCount = 0;
     for (const [id, handler] of Object.entries(handlers)) {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('click', handler);
+        if (el) {
+            el.addEventListener('click', function(e) {
+                console.log(`🖱️ Button clicked: ${id}`);
+                try {
+                    handler(e);
+                } catch (err) {
+                    console.error(`❌ Error in handler for ${id}:`, err);
+                    showAlert('เกิดข้อผิดพลาด: ' + err.message, 'danger');
+                }
+            });
+            attachedCount++;
+            console.log(`✅ Event listener attached: ${id}`);
+        } else {
+            console.warn(`⚠️ Element not found: ${id}`);
+        }
     }
+    console.log(`📝 Total event listeners attached: ${attachedCount}/${Object.keys(handlers).length}`);
     
     document.querySelectorAll('input[name="predictionMode"]').forEach(input => {
         input.addEventListener('change', updatePredictionModeUI);
@@ -1669,7 +1726,7 @@ function displayResults(data) {
     const predSubtitle = document.getElementById('graduationPredictionSubtitle');
     
     if (reasonCard) {
-        const gradAnalysis = data.graduation_analysis;
+        // Use gradAnalysis already defined above
         let reasonHtml = '';
         
         // ตรวจสอบสถานะจบ/ไม่จบจาก graduation_analysis
@@ -1868,7 +1925,7 @@ function displayResults(data) {
     `;
     
     // Graduation Analysis Card
-    const gradAnalysis = data.graduation_analysis;
+    // Use gradAnalysis already defined above
     if (gradAnalysis) {
         const analysisCard = document.getElementById('graduationAnalysisCard');
         analysisCard.style.display = 'block';
