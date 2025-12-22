@@ -1,202 +1,476 @@
 {% extends "base.html" %}
 
-{% block title %}หน้าหลัก - {{ super() }}{% endblock %}
+{% block title %}หน้าหลัก - ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}
 
 {% block custom_css %}
-.hero-section {
-    padding: 100px 0 50px 0;
-    text-align: center;
-    color: white;
-}
-
-.hero-section h1 {
-    font-size: 3.5rem;
-    font-weight: 700;
-    margin-bottom: 20px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-}
-
-.feature-card {
-    background: white;
-    border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    padding: 40px 30px;
-    text-align: center;
-    transition: all 0.3s ease;
-    height: 100%;
-    border: none;
-    overflow: hidden;
-    position: relative;
-}
-
-.feature-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 5px;
-    background: var(--primary-gradient);
-}
-
-.feature-card i {
-    font-size: 3rem;
-    margin-bottom: 20px;
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.stats-section {
-    background: rgba(255,255,255,0.1);
-    backdrop-filter: blur(10px);
-    padding: 60px 0;
-    margin: 50px 0;
-    border-radius: 20px;
-}
-
-.stat-item {
-    text-align: center;
-    color: white;
-}
-
-.stat-number {
-    font-size: 3rem;
-    font-weight: 700;
-    margin-bottom: 10px;
-    display: block;
-}
+<style>
+    /* Hero Section */
+    .hero-section {
+        padding: 4rem 0;
+        text-align: center;
+    }
+    
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 800;
+        color: white;
+        text-shadow: 0 2px 15px rgba(0,0,0,0.2);
+        margin-bottom: 1rem;
+        line-height: 1.2;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.25rem;
+        color: rgba(255,255,255,0.9);
+        max-width: 700px;
+        margin: 0 auto 2rem;
+    }
+    
+    .hero-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    /* Stats Section */
+    .stats-section {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-xl);
+        padding: 2.5rem;
+        margin-bottom: 3rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 1.75rem;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--primary);
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: var(--gray-600);
+        font-weight: 500;
+    }
+    
+    /* Features Section */
+    .section-title {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .section-title h2 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: white;
+        margin-bottom: 0.5rem;
+    }
+    
+    .section-title p {
+        color: rgba(255,255,255,0.8);
+        font-size: 1.125rem;
+    }
+    
+    .feature-card {
+        background: white;
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-lg);
+        height: 100%;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border: none;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-8px);
+        box-shadow: var(--shadow-xl);
+    }
+    
+    .feature-card .card-body {
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .feature-card .feature-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 1.5rem;
+        font-size: 2.5rem;
+    }
+    
+    .feature-card h5 {
+        font-weight: 700;
+        color: var(--gray-800);
+        margin-bottom: 1rem;
+    }
+    
+    .feature-card p {
+        color: var(--gray-600);
+        margin-bottom: 1.5rem;
+        min-height: 60px;
+    }
+    
+    /* Process Section */
+    .process-section {
+        background: white;
+        border-radius: var(--radius-xl);
+        padding: 3rem;
+        margin-top: 3rem;
+    }
+    
+    .process-step {
+        text-align: center;
+        padding: 1.5rem;
+        position: relative;
+    }
+    
+    .process-step::after {
+        content: '';
+        position: absolute;
+        top: 50px;
+        right: -50%;
+        width: 100%;
+        height: 2px;
+        background: var(--gray-300);
+        z-index: 0;
+    }
+    
+    .process-step:last-child::after {
+        display: none;
+    }
+    
+    .step-number {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0 auto 1rem;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .step-title {
+        font-weight: 700;
+        color: var(--gray-800);
+        margin-bottom: 0.5rem;
+    }
+    
+    .step-desc {
+        color: var(--gray-600);
+        font-size: 0.9rem;
+    }
+    
+    /* CTA Section */
+    .cta-section {
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        border-radius: var(--radius-xl);
+        padding: 3rem;
+        text-align: center;
+        color: white;
+        margin-top: 3rem;
+    }
+    
+    .cta-section h3 {
+        font-weight: 700;
+        margin-bottom: 1rem;
+    }
+    
+    .cta-section p {
+        opacity: 0.9;
+        margin-bottom: 1.5rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    @media (max-width: 768px) {
+        .hero-title {
+            font-size: 2rem;
+        }
+        
+        .process-step::after {
+            display: none;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
+<!-- Hero Section -->
 <section class="hero-section">
-    <div class="container">
-        <h1>ระบบทำนายความสำเร็จของนักศึกษา</h1>
-        <p class="lead">ใช้ปัญญาประดิษฐ์และการเรียนรู้ของเครื่องเพื่อวิเคราะห์และทำนายผลการเรียนของนักศึกษา</p>
-        <a href="#features" class="btn btn-light btn-lg rounded-pill">
-            <i class="bi bi-arrow-down-circle"></i> เริ่มต้นใช้งาน
+    <h1 class="hero-title">
+        <i class="bi bi-mortarboard-fill me-2"></i><br class="d-md-none">
+        ระบบทำนายความสำเร็จของนักศึกษา
+    </h1>
+    <p class="hero-subtitle">
+        ใช้ปัญญาประดิษฐ์และการเรียนรู้ของเครื่องเพื่อวิเคราะห์และทำนายผลการเรียนของนักศึกษา
+        ช่วยให้สามารถวางแผนและให้คำปรึกษาได้อย่างมีประสิทธิภาพ
+    </p>
+    <div class="hero-buttons">
+        <a href="{{ url_for('curriculum_prediction_form') }}" class="btn btn-light btn-lg">
+            <i class="bi bi-person-check"></i> ทดสอบการทำนาย
+        </a>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-lg">
+            <i class="bi bi-cpu"></i> ฝึกโมเดล AI
         </a>
     </div>
 </section>
 
+<!-- Stats Section -->
 <section class="stats-section">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-3 col-sm-6 mb-4">
-                <div class="stat-item">
-                    <span class="stat-number" data-count="95">0</span>
-                    <span class="stat-label">ความแม่นยำ (%)</span>
+    <div class="row g-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-item">
+                <div class="stat-icon bg-primary text-white">
+                    <i class="bi bi-graph-up"></i>
+                </div>
+                <div class="stat-number" data-count="95">0</div>
+                <div class="stat-label">ความแม่นยำ (%)</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-item">
+                <div class="stat-icon bg-success text-white">
+                    <i class="bi bi-people-fill"></i>
+                </div>
+                <div class="stat-number" data-count="10000">0</div>
+                <div class="stat-label">ข้อมูลนักศึกษา</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-item">
+                <div class="stat-icon bg-info text-white">
+                    <i class="bi bi-journal-bookmark-fill"></i>
+                </div>
+                <div class="stat-number" data-count="50">0</div>
+                <div class="stat-label">รายวิชาที่วิเคราะห์</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-item">
+                <div class="stat-icon bg-warning text-white">
+                    <i class="bi bi-calendar3"></i>
+                </div>
+                <div class="stat-number" data-count="4">0</div>
+                <div class="stat-label">ปีการศึกษา</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section class="features-section">
+    <div class="section-title">
+        <h2><i class="bi bi-grid-3x3-gap-fill me-2"></i>ฟีเจอร์หลักของระบบ</h2>
+        <p>เครื่องมือครบครันสำหรับการวิเคราะห์และทำนายผลการเรียน</p>
+    </div>
+    
+    <div class="row g-4">
+        <!-- Feature 1: Train Model -->
+        <div class="col-lg-4 col-md-6">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-primary">
+                        <i class="bi bi-cpu-fill"></i>
+                    </div>
+                    <h5>ฝึกโมเดล AI</h5>
+                    <p>อัปโหลดข้อมูลนักศึกษาเพื่อฝึกโมเดล AI ที่สามารถทำนายผลการเรียนได้อย่างแม่นยำ</p>
+                    <a href="{{ url_for('index') }}" class="btn btn-primary w-100">
+                        <i class="bi bi-play-circle me-1"></i> เริ่มฝึกโมเดล
+                    </a>
                 </div>
             </div>
-            <div class="col-md-3 col-sm-6 mb-4">
-                <div class="stat-item">
-                    <span class="stat-number" data-count="10000">0</span>
-                    <span class="stat-label">ข้อมูลนักศึกษา</span>
+        </div>
+        
+        <!-- Feature 2: Individual Prediction -->
+        <div class="col-lg-4 col-md-6">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-success">
+                        <i class="bi bi-person-check-fill"></i>
+                    </div>
+                    <h5>ทดสอบรายบุคคล</h5>
+                    <p>กรอกเกรดรายวิชาเพื่อทำนายผลการเรียนพร้อมคำแนะนำการปรับปรุง</p>
+                    <a href="{{ url_for('curriculum_prediction_form') }}" class="btn btn-success w-100">
+                        <i class="bi bi-search me-1"></i> เริ่มทำนาย
+                    </a>
                 </div>
             </div>
-            <div class="col-md-3 col-sm-6 mb-4">
-                <div class="stat-item">
-                    <span class="stat-number" data-count="50">0</span>
-                    <span class="stat-label">รายวิชาที่วิเคราะห์</span>
+        </div>
+        
+        <!-- Feature 3: Batch Prediction -->
+        <div class="col-lg-4 col-md-6">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-info">
+                        <i class="bi bi-file-earmark-spreadsheet-fill"></i>
+                    </div>
+                    <h5>ทำนายจากไฟล์</h5>
+                    <p>อัปโหลดไฟล์ CSV หรือ Excel เพื่อทำนายผลการเรียนของนักศึกษาหลายคน</p>
+                    <a href="{{ url_for('predict_batch_page') }}" class="btn btn-info w-100">
+                        <i class="bi bi-upload me-1"></i> อัปโหลดไฟล์
+                    </a>
                 </div>
             </div>
-            <div class="col-md-3 col-sm-6 mb-4">
-                <div class="stat-item">
-                    <span class="stat-number" data-count="4">0</span>
-                    <span class="stat-label">ปีการศึกษา</span>
+        </div>
+        
+        <!-- Feature 4: Subject Analysis -->
+        <div class="col-lg-4 col-md-6">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-warning">
+                        <i class="bi bi-bar-chart-fill"></i>
+                    </div>
+                    <h5>วิเคราะห์รายวิชา</h5>
+                    <p>วิเคราะห์ผลการเรียนในแต่ละรายวิชา ความยากง่าย และอัตราการผ่าน</p>
+                    <a href="{{ url_for('index') }}#analyze" class="btn btn-warning w-100">
+                        <i class="bi bi-clipboard-data me-1"></i> ดูการวิเคราะห์
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Feature 5: Curriculum Analysis -->
+        <div class="col-lg-4 col-md-6">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-secondary">
+                        <i class="bi bi-diagram-3-fill"></i>
+                    </div>
+                    <h5>วิเคราะห์หลักสูตร</h5>
+                    <p>ระบบทำนายขั้นสูงที่คำนึงถึงเงื่อนไขวิชาก่อนเรียนและแผนการเรียน</p>
+                    <a href="{{ url_for('curriculum_page') }}" class="btn btn-secondary w-100">
+                        <i class="bi bi-bezier2 me-1"></i> ทำนาย Prerequisite
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Feature 6: Model Management -->
+        <div class="col-lg-4 col-md-6">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-dark">
+                        <i class="bi bi-folder-fill"></i>
+                    </div>
+                    <h5>จัดการโมเดล</h5>
+                    <p>จัดการโมเดล AI ที่ฝึกไว้ ดูประสิทธิภาพ และเปรียบเทียบโมเดล</p>
+                    <a href="{{ url_for('models_page') }}" class="btn btn-dark w-100">
+                        <i class="bi bi-gear me-1"></i> จัดการโมเดล
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<section id="features" class="py-5">
-    <div class="container">
-        <div class="row g-4">
-            {% set features = [
-                {
-                    'icon': 'bi-cpu-fill',
-                    'title': 'เทรนโมเดล AI',
-                    'description': 'อัปโหลดข้อมูลนักศึกษาเพื่อฝึกโมเดล AI ที่สามารถทำนายผลการเรียนได้อย่างแม่นยำ',
-                    'url': url_for('index'),
-                    'color': 'primary'
-                },
-                {
-                    'icon': 'bi-person-check-fill',
-                    'title': 'ทดสอบรายบุคคล',
-                    'description': 'กรอกเกรดรายวิชาเพื่อทำนายผลการเรียนพร้อมคำแนะนำการปรับปรุง',
-                    'url': url_for('curriculum_prediction_form'),
-                    'color': 'success'
-                },
-                {
-                    'icon': 'bi-file-earmark-spreadsheet-fill',
-                    'title': 'ทำนายจากไฟล์',
-                    'description': 'อัปโหลดไฟล์ CSV หรือ Excel เพื่อทำนายผลการเรียนของนักศึกษาหลายคน',
-                    'url': url_for('predict_batch_page'),
-                    'color': 'info'
-                },
-                {
-                    'icon': 'bi-graph-up-arrow',
-                    'title': 'วิเคราะห์รายวิชา',
-                    'description': 'วิเคราะห์ผลการเรียนในแต่ละรายวิชา ความยากง่าย และอัตราการผ่าน',
-                    'url': url_for('index') + '#analyze',
-                    'color': 'warning'
-                },
-                {
-                    'icon': 'bi-diagram-3-fill',
-                    'title': 'ทำนายตาม Prerequisite',
-                    'description': 'ระบบทำนายขั้นสูงที่คำนึงถึงเงื่อนไขวิชาก่อนเรียนและแผนการเรียน',
-                    'url': url_for('curriculum_page'),
-                    'color': 'dark'
-                },
-                {
-                    'icon': 'bi-folder-fill',
-                    'title': 'จัดการโมเดล',
-                    'description': 'จัดการโมเดล AI ที่ฝึกไว้ ดูประสิทธิภาพ และเปรียบเทียบโมเดล',
-                    'url': url_for('models_page'),
-                    'color': 'secondary'
-                }
-            ] %}
-            
-            {% for feature in features %}
-            <div class="col-lg-4 col-md-6">
-                <div class="card feature-card h-100">
-                    <div class="card-body text-center">
-                        <i class="{{ feature.icon }} display-1 text-{{ feature.color }} mb-3"></i>
-                        <h5 class="card-title">{{ feature.title }}</h5>
-                        <p class="card-text">{{ feature.description }}</p>
-                        <a href="{{ feature.url }}" class="btn btn-{{ feature.color }} rounded-pill">
-                            <i class="bi bi-arrow-right-circle"></i> เริ่มใช้งาน
-                        </a>
-                    </div>
-                </div>
+<!-- Process Section -->
+<section class="process-section">
+    <div class="text-center mb-4">
+        <h3 class="fw-bold text-primary">
+            <i class="bi bi-signpost-split-fill me-2"></i>ขั้นตอนการใช้งาน
+        </h3>
+        <p class="text-muted">ใช้งานง่ายเพียง 4 ขั้นตอน</p>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-3 col-6">
+            <div class="process-step">
+                <div class="step-number">1</div>
+                <h6 class="step-title">อัปโหลดข้อมูล</h6>
+                <p class="step-desc">อัปโหลดไฟล์ข้อมูลผลการเรียน</p>
             </div>
-            {% endfor %}
         </div>
+        <div class="col-md-3 col-6">
+            <div class="process-step">
+                <div class="step-number">2</div>
+                <h6 class="step-title">ฝึกโมเดล</h6>
+                <p class="step-desc">ระบบจะฝึก AI จากข้อมูล</p>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="process-step">
+                <div class="step-number">3</div>
+                <h6 class="step-title">ทำนายผล</h6>
+                <p class="step-desc">กรอกเกรดเพื่อทำนาย</p>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="process-step">
+                <div class="step-number">4</div>
+                <h6 class="step-title">รับคำแนะนำ</h6>
+                <p class="step-desc">ดูผลลัพธ์และคำแนะนำ</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section">
+    <h3><i class="bi bi-rocket-takeoff-fill me-2"></i>พร้อมเริ่มต้นใช้งานหรือยัง?</h3>
+    <p>เริ่มต้นใช้งานระบบทำนายความสำเร็จของนักศึกษาตอนนี้เลย ฟรี!</p>
+    <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <a href="{{ url_for('curriculum_prediction_form') }}" class="btn btn-light btn-lg">
+            <i class="bi bi-play-fill"></i> ทดลองใช้งาน
+        </a>
+        <a href="{{ url_for('status_page') }}" class="btn btn-outline-light btn-lg">
+            <i class="bi bi-activity"></i> ดูสถานะระบบ
+        </a>
     </div>
 </section>
 {% endblock %}
 
 {% block custom_js %}
+<script>
+// Animate stats when visible
 function animateStats() {
     const statNumbers = document.querySelectorAll('.stat-number[data-count]');
     statNumbers.forEach(stat => {
         const target = parseInt(stat.getAttribute('data-count'));
         let current = 0;
-        const increment = target / 100;
+        const increment = target / 50;
         const updateStat = () => {
             if (current < target) {
                 current += increment;
-                stat.textContent = Math.ceil(current);
-                setTimeout(updateStat, 20);
+                stat.textContent = Math.ceil(current).toLocaleString();
+                setTimeout(updateStat, 30);
             } else {
-                stat.textContent = target;
+                stat.textContent = target.toLocaleString();
             }
         };
         updateStat();
     });
 }
+
+// Intersection Observer for stats animation
 const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -204,9 +478,13 @@ const observer = new IntersectionObserver((entries) => {
             observer.unobserve(entry.target);
         }
     });
-});
+}, { threshold: 0.3 });
+
 document.addEventListener('DOMContentLoaded', function() {
     const statsSection = document.querySelector('.stats-section');
-    if (statsSection) observer.observe(statsSection);
+    if (statsSection) {
+        observer.observe(statsSection);
+    }
 });
+</script>
 {% endblock %}
