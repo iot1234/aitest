@@ -518,33 +518,33 @@ class ProductionConfig(Config):
     ML_CONFIG: Dict[str, Any] = Config.ML_CONFIG.copy()
     ML_CONFIG.update({
         'n_jobs': 1,  # Single thread to prevent ShutdownExecutorError with Gunicorn
-        'cv_folds': 5, # Reduce for faster training and less memory usage
+        'cv_folds': 3, # Reduce for faster training and less memory usage
     })
 
     MODEL_HYPERPARAMETERS: Dict[str, Dict[str, List[Any]]] = {
         'RandomForest': {
-            'n_estimators': [100, 200],  # Reduced
-            'max_depth': [5, 10],    # Reduced
-            'min_samples_split': [2, 5],
-            'min_samples_leaf': [1, 2],
-            'max_features': ['sqrt', None],
+            'n_estimators': [100], 
+            'max_depth': [10],    
+            'min_samples_split': [2],
+            'min_samples_leaf': [2],
+            'max_features': ['sqrt'],
             'bootstrap': [True],
-            'class_weight': ['balanced', None]
+            'class_weight': ['balanced']
         },
         'GradientBoosting': {
-            'n_estimators': [100, 200], # Reduced
+            'n_estimators': [100],
             'learning_rate': [0.1],
-            'max_depth': [3, 5],
-            'subsample': [0.8, 1.0],
+            'max_depth': [3],
+            'subsample': [0.8],
         },
         'LogisticRegression': {
-            'C': [1, 10], # Reduced
+            'C': [1],
             'penalty': ['l2'],
             'solver': ['liblinear'],
         },
         'XGBoost': {
-            'n_estimators': [100, 200],
-            'max_depth': [3, 5],
+            'n_estimators': [100],
+            'max_depth': [3],
         }
     }
     
