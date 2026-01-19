@@ -216,7 +216,7 @@ class Config:
         'max_features': 'sqrt',
         'bootstrap': True,
         'oob_score': True,
-        'n_jobs': 4,  # เปลี่ยนเป็นค่าที่แน่นอนเพื่อแก้ปัญหา
+        'n_jobs': 1,  # Single thread to prevent ShutdownExecutorError with Gunicorn workers
         'verbose': 0  # ปิด verbose เพื่อหลีกเลี่ยง rate limit
     }
 
@@ -517,7 +517,7 @@ class ProductionConfig(Config):
     # ML Config for Production
     ML_CONFIG: Dict[str, Any] = Config.ML_CONFIG.copy()
     ML_CONFIG.update({
-        'n_jobs': 4, # Fix for parallel processing on Railway
+        'n_jobs': 1,  # Single thread to prevent ShutdownExecutorError with Gunicorn
         'cv_folds': 5, # Reduce for faster training and less memory usage
     })
 
@@ -551,7 +551,7 @@ class ProductionConfig(Config):
     # Parallel Processing Config
     PARALLEL_CONFIG: Dict[str, Any] = Config.PARALLEL_CONFIG.copy()
     PARALLEL_CONFIG.update({
-        'n_jobs': 4, # Fix for parallel processing
+        'n_jobs': 1,  # Single thread for Gunicorn worker compatibility
         'backend': 'threading',
     })
 

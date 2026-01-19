@@ -1561,7 +1561,7 @@ def train_ensemble_model(X, y):
                 min_samples_split=2,
                 min_samples_leaf=1,
                 random_state=42,
-                n_jobs=-1,
+                n_jobs=1,  # Single thread for Gunicorn compatibility
                 class_weight='balanced'
             )
             rf.fit(X_train, y_train)

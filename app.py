@@ -1701,8 +1701,86 @@ class S3Storage:
         
         return deleted
 
+# Global Training Status
+TRAINING_STATUS = {
+    'status': 'idle',
+    'message': '',
+    'progress': 0,
+    'result': None,
+    'error': None
+}
+
 # Create global storage instance
 storage = S3Storage()
+
+# ==========================================
+# Sync Models from R2 at Startup
+# ==========================================
+def sync_models_from_r2():
+    """Download models from R2 to local storage for faster access"""
+    if storage.use_local:
+        logger.info("📂 R2 not connected, skipping model sync")
+        return 0
+    
+    try:
+        logger.info("🔄 Syncing models from R2 to local storage...")
+        model_folder = app.config['MODEL_FOLDER']
+        
+        if not os.path.exists(model_folder):
+            os.makedirs(model_folder, exist_ok=True)
+        
+        # List R2 models
+        r2_models = []
+        response = storage.s3_client.list_objects_v2(
+            Bucket=storage.bucket_name,
+            Prefix='models/'
+        )
+        
+        if 'Contents' in response:
+            r2_models = [obj['Key'].replace('models/', '') 
+                        for obj in response['Contents'] 
+                        if obj['Key'].endswith('.joblib')]
+        
+        synced_count = 0
+        for model_filename in r2_models:
+            local_path = os.path.join(model_folder, model_filename)
+            
+            # Skip if already exists locally
+            if os.path.exists(local_path):
+                continue
+            
+            try:
+                s3_key = f"models/{model_filename}"
+                storage.s3_client.download_file(
+                    Bucket=storage.bucket_name,
+                    Key=s3_key,
+                    Filename=local_path
+                )
+                synced_count += 1
+                logger.info(f"  ✅ Downloaded {model_filename}")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Failed to download {model_filename}: {e}")
+        
+        logger.info(f"✅ Synced {synced_count} models from R2")
+        return synced_count
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Model sync failed: {e}")
+        return 0
+
+# Run model sync at startup
+try:
+    sync_models_from_r2()
+except Exception as e:
+    logger.warning(f"Model sync at startup failed: {e}")
+
+# ===============================
+# TRAINING STATUS ROUTE
+# ===============================
+@app.route('/training_status')
+def get_training_status():
+    return jsonify(TRAINING_STATUS)
+
 
 # ===============================
 # ENHANCED API ROUTES
