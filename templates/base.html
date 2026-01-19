@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}</title>
-    
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <!-- Animation Libraries -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
-    
+
     <style>
         :root {
             /* Modern Color Palette */
@@ -19,11 +22,11 @@
             --primary-dark: #4338ca;
             --primary-light: #818cf8;
             --primary-bg: #eef2ff;
-            
+
             --secondary: #0d9488;
             --secondary-dark: #0f766e;
             --secondary-light: #2dd4bf;
-            
+
             --success: #10b981;
             --success-light: #34d399;
             --warning: #f59e0b;
@@ -32,7 +35,7 @@
             --danger-light: #f87171;
             --info: #0ea5e9;
             --info-light: #38bdf8;
-            
+
             /* Neutral Colors */
             --gray-50: #f9fafb;
             --gray-100: #f3f4f6;
@@ -44,7 +47,7 @@
             --gray-700: #374151;
             --gray-800: #1f2937;
             --gray-900: #111827;
-            
+
             /* Shadows & Effects */
             --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
             --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
@@ -54,7 +57,7 @@
             --glass-bg: rgba(255, 255, 255, 0.7);
             --glass-border: rgba(255, 255, 255, 0.5);
             --glass-blur: blur(12px);
-            
+
             /* Border Radius */
             --radius-sm: 0.5rem;
             --radius: 0.75rem;
@@ -62,11 +65,11 @@
             --radius-xl: 1.5rem;
             --radius-2xl: 2rem;
         }
-        
+
         * {
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Sarabun', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
@@ -79,11 +82,19 @@
         }
 
         @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
         }
-        
+
         /* Glassmorphism Utilities */
         .glass {
             background: var(--glass-bg);
@@ -98,7 +109,7 @@
             border: 1px solid rgba(255, 255, 255, 0.6);
             box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
         }
-        
+
         /* Top Bar */
         .top-bar {
             background: rgba(17, 24, 39, 0.9);
@@ -106,20 +117,20 @@
             padding: 0.5rem 0;
             font-size: 0.875rem;
             color: var(--gray-300);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .top-bar a {
             color: var(--gray-300);
             text-decoration: none;
             transition: color 0.3s;
         }
-        
+
         .top-bar a:hover {
             color: white;
-            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         }
-        
+
         /* Navigation */
         .navbar {
             background: rgba(255, 255, 255, 0.8) !important;
@@ -130,7 +141,7 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.3);
             transition: all 0.3s ease;
         }
-        
+
         .navbar-brand {
             font-weight: 800;
             font-size: 1.5rem;
@@ -139,7 +150,7 @@
             align-items: center;
             gap: 0.75rem;
         }
-        
+
         .navbar-brand .brand-icon {
             width: 45px;
             height: 45px;
@@ -157,7 +168,7 @@
         .navbar-brand:hover .brand-icon {
             transform: rotate(10deg) scale(1.05);
         }
-        
+
         .navbar-nav .nav-link {
             font-weight: 600;
             color: var(--gray-600) !important;
@@ -168,19 +179,19 @@
             position: relative;
             overflow: hidden;
         }
-        
+
         .navbar-nav .nav-link:hover {
             color: var(--primary) !important;
             background: rgba(79, 70, 229, 0.1);
             transform: translateY(-2px);
         }
-        
+
         .navbar-nav .nav-link.active {
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             color: white !important;
             box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
         }
-        
+
         .dropdown-menu {
             border: none;
             border-radius: var(--radius-lg);
@@ -193,23 +204,30 @@
         }
 
         @keyframes fadeInDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        
+
         .dropdown-item {
             border-radius: var(--radius);
             padding: 0.75rem 1rem;
             font-weight: 500;
             transition: all 0.2s;
         }
-        
+
         .dropdown-item:hover {
             background: var(--primary-bg);
             color: var(--primary);
             padding-left: 1.5rem;
         }
-        
+
         .dropdown-item i {
             width: 1.5rem;
             transition: transform 0.2s;
@@ -218,14 +236,14 @@
         .dropdown-item:hover i {
             transform: scale(1.2);
         }
-        
+
         /* Main Content */
         .main-content {
             padding-top: 3rem;
             padding-bottom: 5rem;
             min-height: calc(100vh - 200px);
         }
-        
+
         /* Card Styles */
         .card {
             background: rgba(255, 255, 255, 0.9);
@@ -236,12 +254,12 @@
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             backdrop-filter: blur(10px);
         }
-        
+
         .card:hover {
             transform: translateY(-10px);
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
-        
+
         .card-header {
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             color: white;
@@ -259,24 +277,35 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(rgba(255,255,255,0.2), transparent);
+            background: linear-gradient(rgba(255, 255, 255, 0.2), transparent);
         }
-        
-        .card-header.bg-success { background: linear-gradient(135deg, var(--success), var(--success-light)) !important; }
-        .card-header.bg-warning { background: linear-gradient(135deg, var(--warning), var(--warning-light)) !important; }
-        .card-header.bg-danger { background: linear-gradient(135deg, var(--danger), var(--danger-light)) !important; }
-        .card-header.bg-info { background: linear-gradient(135deg, var(--info), var(--info-light)) !important; }
-        
+
+        .card-header.bg-success {
+            background: linear-gradient(135deg, var(--success), var(--success-light)) !important;
+        }
+
+        .card-header.bg-warning {
+            background: linear-gradient(135deg, var(--warning), var(--warning-light)) !important;
+        }
+
+        .card-header.bg-danger {
+            background: linear-gradient(135deg, var(--danger), var(--danger-light)) !important;
+        }
+
+        .card-header.bg-info {
+            background: linear-gradient(135deg, var(--info), var(--info-light)) !important;
+        }
+
         .card-body {
             padding: 2rem;
         }
-        
+
         .card-footer {
             background: rgba(249, 250, 251, 0.8);
             border-top: 1px solid rgba(229, 231, 235, 0.5);
             padding: 1.25rem 2rem;
         }
-        
+
         /* Buttons */
         .btn {
             font-weight: 600;
@@ -308,52 +337,77 @@
         .btn:hover::before {
             width: 100%;
         }
-        
+
         .btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             color: white;
             box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
         }
-        
+
         .btn-primary:hover {
             transform: translateY(-3px) scale(1.02);
             box-shadow: 0 8px 25px rgba(79, 70, 229, 0.5);
         }
-        
+
         .btn-success {
             background: linear-gradient(135deg, var(--success), var(--success-light));
             color: white;
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
         }
-        
+
         .btn-success:hover {
             transform: translateY(-3px) scale(1.02);
             box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
         }
-        
-        /* Other buttons follow same pattern with their colors */
-        .btn-warning { background: linear-gradient(135deg, var(--warning), var(--warning-light)); color: white; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
-        .btn-warning:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 8px 25px rgba(245, 158, 11, 0.5); }
-        
-        .btn-danger { background: linear-gradient(135deg, var(--danger), var(--danger-light)); color: white; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
-        .btn-danger:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5); }
 
-        .btn-info { background: linear-gradient(135deg, var(--info), var(--info-light)); color: white; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4); }
-        .btn-info:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 8px 25px rgba(14, 165, 233, 0.5); }
+        /* Other buttons follow same pattern with their colors */
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning), var(--warning-light));
+            color: white;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.5);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), var(--danger-light));
+            color: white;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, var(--info), var(--info-light));
+            color: white;
+            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
+        }
+
+        .btn-info:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(14, 165, 233, 0.5);
+        }
 
         .btn-light {
             background: white;
             color: var(--gray-800);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
         }
-        
+
         .btn-light:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
         }
-        
+
         /* Forms */
-        .form-control, .form-select {
+        .form-control,
+        .form-select {
             border: 2px solid var(--gray-200);
             border-radius: var(--radius);
             padding: 0.875rem 1rem;
@@ -361,28 +415,29 @@
             transition: all 0.3s;
             background: rgba(255, 255, 255, 0.9);
         }
-        
-        .form-control:focus, .form-select:focus {
+
+        .form-control:focus,
+        .form-select:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
             background: white;
             transform: translateY(-1px);
         }
-        
+
         .form-label {
             font-weight: 600;
             color: var(--gray-700);
             margin-bottom: 0.5rem;
             font-size: 0.95rem;
         }
-        
+
         .input-group-text {
             background: var(--gray-50);
             border: 2px solid var(--gray-200);
             border-radius: var(--radius);
             color: var(--gray-500);
         }
-        
+
         /* Alerts */
         .alert {
             border: none;
@@ -397,15 +452,41 @@
         }
 
         @keyframes slideInRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
-        
-        .alert-success { background: #d1fae5; color: #065f46; border-left: 5px solid var(--success); }
-        .alert-danger { background: #fee2e2; color: #991b1b; border-left: 5px solid var(--danger); }
-        .alert-warning { background: #fef3c7; color: #92400e; border-left: 5px solid var(--warning); }
-        .alert-info { background: #dbeafe; color: #1e40af; border-left: 5px solid var(--primary); }
-        
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 5px solid var(--success);
+        }
+
+        .alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 5px solid var(--danger);
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 5px solid var(--warning);
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 5px solid var(--primary);
+        }
+
         /* Footer */
         .footer {
             background: rgba(17, 24, 39, 0.95);
@@ -413,9 +494,9 @@
             color: var(--gray-300);
             padding: 4rem 0 2rem;
             margin-top: 5rem;
-            border-top: 1px solid rgba(255,255,255,0.1);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
+
         .footer h5 {
             color: white;
             font-weight: 700;
@@ -434,7 +515,7 @@
             background: var(--primary);
             border-radius: 2px;
         }
-        
+
         .footer a {
             color: var(--gray-400);
             text-decoration: none;
@@ -442,12 +523,12 @@
             display: block;
             margin-bottom: 0.5rem;
         }
-        
+
         .footer a:hover {
             color: white;
             transform: translateX(5px);
         }
-        
+
         /* Loading Overlay */
         .loading-overlay {
             position: fixed;
@@ -464,20 +545,22 @@
             flex-direction: column;
             animation: fadeIn 0.3s;
         }
-        
+
         .spinner {
             width: 60px;
             height: 60px;
-            border: 5px solid rgba(255,255,255,0.1);
+            border: 5px solid rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             border-top-color: var(--primary);
             animation: spin 1s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite;
         }
-        
+
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
-        
+
         .loading-text {
             color: white;
             margin-top: 1.5rem;
@@ -488,56 +571,91 @@
         }
 
         @keyframes pulse {
-            0% { opacity: 0.6; }
-            50% { opacity: 1; }
-            100% { opacity: 0.6; }
+            0% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.6;
+            }
         }
-        
+
         /* Dark Mode */
         body.dark-mode {
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
             color: var(--gray-100);
         }
-        
+
         body.dark-mode .navbar {
             background: rgba(15, 23, 42, 0.9) !important;
             border-bottom-color: rgba(255, 255, 255, 0.1);
         }
-        
-        body.dark-mode .navbar-brand { color: white !important; }
-        body.dark-mode .navbar-nav .nav-link { color: var(--gray-300) !important; }
-        body.dark-mode .navbar-nav .nav-link:hover { background: rgba(255, 255, 255, 0.1); color: white !important; }
-        
+
+        body.dark-mode .navbar-brand {
+            color: white !important;
+        }
+
+        body.dark-mode .navbar-nav .nav-link {
+            color: var(--gray-300) !important;
+        }
+
+        body.dark-mode .navbar-nav .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white !important;
+        }
+
         body.dark-mode .card {
             background: rgba(30, 41, 59, 0.8);
             border-color: rgba(255, 255, 255, 0.1);
             color: var(--gray-100);
         }
-        
+
         body.dark-mode .form-control,
         body.dark-mode .form-select {
             background: rgba(15, 23, 42, 0.8);
             border-color: var(--gray-600);
             color: var(--gray-100);
         }
-        
+
         body.dark-mode .dropdown-menu {
             background: rgba(30, 41, 59, 0.95);
             border-color: var(--gray-700);
         }
-        
-        body.dark-mode .dropdown-item { color: var(--gray-300); }
-        body.dark-mode .dropdown-item:hover { background: var(--primary); color: white; }
+
+        body.dark-mode .dropdown-item {
+            color: var(--gray-300);
+        }
+
+        body.dark-mode .dropdown-item:hover {
+            background: var(--primary);
+            color: white;
+        }
 
         /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--gray-400); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--gray-600); }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
 
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-400);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gray-600);
+        }
     </style>
     {% block custom_css %}{% endblock %}
 </head>
+
 <body>
     <!-- Top Bar -->
     <div class="top-bar d-none d-md-block">
@@ -545,22 +663,24 @@
             <div class="row align-items-center">
                 <div class="col-md-6">
                     <small class="animate__animated animate__fadeInLeft">
-                        <i class="bi bi-geo-alt me-1 text-primary"></i> ระบบทำนายความสำเร็จของนักศึกษา | 
+                        <i class="bi bi-geo-alt me-1 text-primary"></i> ระบบทำนายความสำเร็จของนักศึกษา |
                         <i class="bi bi-clock me-1 ms-2 text-primary"></i> <span id="currentTime"></span>
                     </small>
                 </div>
                 <div class="col-md-6 text-end">
-                    <a href="{{ url_for('status_page') }}" class="me-3 animate__animated animate__fadeInRight" style="animation-delay: 0.1s;">
+                    <a href="{{ url_for('status_page') }}" class="me-3 animate__animated animate__fadeInRight"
+                        style="animation-delay: 0.1s;">
                         <i class="bi bi-activity me-1"></i> สถานะระบบ
                     </a>
-                    <button class="btn btn-sm btn-link text-gray-300 p-0 animate__animated animate__fadeInRight" style="animation-delay: 0.2s;" onclick="toggleDarkMode()" id="darkModeBtn">
+                    <button class="btn btn-sm btn-link text-gray-300 p-0 animate__animated animate__fadeInRight"
+                        style="animation-delay: 0.2s;" onclick="toggleDarkMode()" id="darkModeBtn">
                         <i class="bi bi-moon-fill"></i>
                     </button>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container">
@@ -569,15 +689,18 @@
                     <i class="bi bi-mortarboard-fill"></i>
                 </div>
                 <div class="brand-text d-none d-sm-block">
-                    <span class="d-block" style="font-size: 1.25rem; line-height: 1.2; letter-spacing: -0.5px;">Student Predictor</span>
-                    <small style="font-size: 0.7rem; font-weight: 500; color: var(--gray-500); letter-spacing: 0.5px;">AI-POWERED ANALYTICS</small>
+                    <span class="d-block" style="font-size: 1.25rem; line-height: 1.2; letter-spacing: -0.5px;">Student
+                        Predictor</span>
+                    <small
+                        style="font-size: 0.7rem; font-weight: 500; color: var(--gray-500); letter-spacing: 0.5px;">AI-POWERED
+                        ANALYTICS</small>
                 </div>
             </a>
-            
+
             <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            
+
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.1s;">
@@ -606,21 +729,8 @@
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="{{ url_for('curriculum_page') }}">
-                                    <i class="bi bi-diagram-3 me-2"></i> วิเคราะห์หลักสูตร (ปกติ)
-                                </a>
+                                <hr class="dropdown-divider">
                             </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('advanced_test_page') }}">
-                                    <i class="bi bi-graph-up-arrow me-2"></i> วิเคราะห์ขั้นสูง (Advanced)
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('predict_batch_page') }}">
-                                    <i class="bi bi-file-earmark-spreadsheet me-2"></i> ทำนายจากไฟล์
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('status_page') }}">
                                     <i class="bi bi-activity me-2"></i> สถานะระบบ
@@ -632,7 +742,7 @@
             </div>
         </div>
     </nav>
-    
+
     <!-- Main Content -->
     <main class="main-content">
         <div class="container">
@@ -640,14 +750,15 @@
             {% block content %}{% endblock %}
         </div>
     </main>
-    
+
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="row">
                 <div class="col-lg-4 mb-4 mb-lg-0" data-aos="fade-up">
                     <div class="d-flex align-items-center mb-3">
-                        <div class="brand-icon me-3" style="width: 40px; height: 40px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                        <div class="brand-icon me-3"
+                            style="width: 40px; height: 40px; background: rgba(255,255,255,0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                             <i class="bi bi-mortarboard-fill text-white fs-4"></i>
                         </div>
                         <div>
@@ -656,13 +767,19 @@
                         </div>
                     </div>
                     <p class="text-gray-400 mb-4">
-                        ระบบทำนายความสำเร็จของนักศึกษาด้วย AI และ Machine Learning 
+                        ระบบทำนายความสำเร็จของนักศึกษาด้วย AI และ Machine Learning
                         ช่วยให้สถาบันการศึกษาวางแผนและพัฒนาการเรียนการสอนได้อย่างมีประสิทธิภาพ
                     </p>
                     <div class="d-flex gap-2">
-                         <a href="#" class="btn btn-sm btn-outline-light rounded-circle p-2" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><i class="bi bi-facebook"></i></a>
-                         <a href="#" class="btn btn-sm btn-outline-light rounded-circle p-2" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><i class="bi bi-twitter-x"></i></a>
-                         <a href="#" class="btn btn-sm btn-outline-light rounded-circle p-2" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><i class="bi bi-github"></i></a>
+                        <a href="#" class="btn btn-sm btn-outline-light rounded-circle p-2"
+                            style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><i
+                                class="bi bi-facebook"></i></a>
+                        <a href="#" class="btn btn-sm btn-outline-light rounded-circle p-2"
+                            style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><i
+                                class="bi bi-twitter-x"></i></a>
+                        <a href="#" class="btn btn-sm btn-outline-light rounded-circle p-2"
+                            style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><i
+                                class="bi bi-github"></i></a>
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 mb-4 mb-lg-0" data-aos="fade-up" data-aos-delay="100">
@@ -687,34 +804,41 @@
                         พัฒนาด้วยเทคโนโลยี Machine Learning และ AI ระดับสูง
                     </p>
                     <div class="d-flex gap-2 flex-wrap">
-                        <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25"><i class="bi bi-cpu me-1"></i> AI/ML</span>
-                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25"><i class="bi bi-cloud me-1"></i> Cloud</span>
-                        <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25"><i class="bi bi-shield-check me-1"></i> Secure</span>
+                        <span
+                            class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25"><i
+                                class="bi bi-cpu me-1"></i> AI/ML</span>
+                        <span
+                            class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25"><i
+                                class="bi bi-cloud me-1"></i> Cloud</span>
+                        <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25"><i
+                                class="bi bi-shield-check me-1"></i> Secure</span>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom text-center mt-5 pt-4 border-top border-secondary border-opacity-25">
                 <p class="mb-0 text-gray-500">
-                    &copy; 2024 Student Predictor System. 
-                    Made with <i class="bi bi-heart-fill text-danger animate__animated animate__heartBeat animate__infinite"></i> for Education.
+                    &copy; 2024 Student Predictor System.
+                    Made with <i
+                        class="bi bi-heart-fill text-danger animate__animated animate__heartBeat animate__infinite"></i>
+                    for Education.
                 </p>
             </div>
         </div>
     </footer>
-    
+
     <!-- Loading Overlay -->
     <div class="loading-overlay d-none" id="loadingOverlay">
         <div class="spinner"></div>
         <div class="loading-text">กำลังประมวลผล...</div>
     </div>
-    
+
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-    
+
     <script>
         // Initialize AOS (optional; don't break app if CDN blocked)
         try {
@@ -735,10 +859,10 @@
         // Update current time
         function updateTime() {
             const now = new Date();
-            const options = { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
+            const options = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
@@ -750,7 +874,7 @@
         }
         updateTime();
         setInterval(updateTime, 60000);
-        
+
         // Dark Mode Toggle
         function toggleDarkMode() {
             document.body.classList.toggle('dark-mode');
@@ -758,7 +882,7 @@
             localStorage.setItem('darkMode', isDark);
             updateDarkModeBtn();
         }
-        
+
         function updateDarkModeBtn() {
             const btn = document.getElementById('darkModeBtn');
             if (btn) {
@@ -766,13 +890,13 @@
                 btn.innerHTML = isDark ? '<i class="bi bi-sun-fill text-warning"></i>' : '<i class="bi bi-moon-fill"></i>';
             }
         }
-        
+
         // Load dark mode preference
         if (localStorage.getItem('darkMode') === 'true') {
             document.body.classList.add('dark-mode');
             updateDarkModeBtn();
         }
-        
+
         // Loading functions
         function showLoading(message = 'กำลังประมวลผล...') {
             const overlay = document.getElementById('loadingOverlay');
@@ -781,26 +905,26 @@
                 overlay.classList.remove('d-none');
             }
         }
-        
+
         function hideLoading() {
             const overlay = document.getElementById('loadingOverlay');
             if (overlay) {
                 overlay.classList.add('d-none');
             }
         }
-        
+
         // Alert functions
         function showAlert(message, type = 'info', containerId = 'alertContainer') {
             const container = document.getElementById(containerId);
             if (!container) return;
-            
+
             const icons = {
                 success: 'check-circle-fill',
                 danger: 'exclamation-triangle-fill',
                 warning: 'exclamation-circle-fill',
                 info: 'info-circle-fill'
             };
-            
+
             const alertDiv = document.createElement('div');
             alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
             alertDiv.innerHTML = `
@@ -808,9 +932,9 @@
                 <span>${message}</span>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
-            
+
             container.insertBefore(alertDiv, container.firstChild);
-            
+
             setTimeout(() => {
                 if (alertDiv.parentNode) {
                     alertDiv.classList.remove('show');
@@ -818,9 +942,9 @@
                 }
             }, 5000);
         }
-        
+
         // Active nav link
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const currentPath = window.location.pathname;
             document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
                 if (link.getAttribute('href') === currentPath) {
@@ -828,8 +952,9 @@
                 }
             });
         });
-        
+
     </script>
     {% block custom_js %}{% endblock %}
 </body>
+
 </html>

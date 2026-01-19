@@ -14,13 +14,13 @@
         height: 100%;
         border: 1px solid var(--gray-200);
     }
-    
+
     .model-card:hover {
         transform: translateY(-8px);
         box-shadow: var(--shadow-xl);
         border-color: var(--primary-light);
     }
-    
+
     .model-card-header {
         background: linear-gradient(135deg, var(--primary), var(--primary-light));
         color: white;
@@ -30,25 +30,25 @@
         align-items: flex-start;
         position: relative;
     }
-    
+
     .model-card-header h6 {
         margin-bottom: 0.25rem;
         font-weight: 700;
         font-size: 1.1rem;
     }
-    
+
     .model-card-header small {
         opacity: 0.9;
         font-size: 0.8rem;
-        background: rgba(255,255,255,0.2);
+        background: rgba(255, 255, 255, 0.2);
         padding: 2px 8px;
         border-radius: 12px;
     }
-    
+
     .model-card-body {
         padding: 1.5rem;
     }
-    
+
     /* Metrics Grid */
     .metrics-mini-grid {
         display: grid;
@@ -56,7 +56,7 @@
         gap: 0.5rem;
         margin-bottom: 1.5rem;
     }
-    
+
     .metric-mini {
         text-align: center;
         padding: 0.75rem 0.25rem;
@@ -69,35 +69,46 @@
     .metric-mini:hover {
         transform: scale(1.05);
         background: white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
     }
-    
+
     .metric-mini-value {
         font-size: 1.1rem;
         font-weight: 800;
         line-height: 1;
         margin-bottom: 0.25rem;
     }
-    
-    .metric-mini-value.text-primary { color: var(--primary); }
-    .metric-mini-value.text-success { color: var(--success); }
-    .metric-mini-value.text-warning { color: var(--warning); }
-    .metric-mini-value.text-info { color: var(--info); }
-    
+
+    .metric-mini-value.text-primary {
+        color: var(--primary);
+    }
+
+    .metric-mini-value.text-success {
+        color: var(--success);
+    }
+
+    .metric-mini-value.text-warning {
+        color: var(--warning);
+    }
+
+    .metric-mini-value.text-info {
+        color: var(--info);
+    }
+
     .metric-mini-label {
         font-size: 0.65rem;
         color: var(--gray-500);
         font-weight: 600;
         text-transform: uppercase;
     }
-    
+
     /* Chart Container */
     .chart-container {
         height: 160px;
         margin-bottom: 1.5rem;
         position: relative;
     }
-    
+
     /* Score Badge */
     .score-badge {
         display: inline-flex;
@@ -107,15 +118,34 @@
         border-radius: 50px;
         font-weight: 700;
         font-size: 0.9rem;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
-    
-    .score-badge.bg-success { background: #d1fae5; color: #065f46; }
-    .score-badge.bg-primary { background: #dbeafe; color: #1e40af; }
-    .score-badge.bg-info { background: #e0f2fe; color: #0369a1; }
-    .score-badge.bg-warning { background: #fef3c7; color: #92400e; }
-    .score-badge.bg-danger { background: #fee2e2; color: #991b1b; }
-    
+
+    .score-badge.bg-success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .score-badge.bg-primary {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .score-badge.bg-info {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+
+    .score-badge.bg-warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .score-badge.bg-danger {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
     /* Model Actions */
     .model-actions {
         display: flex;
@@ -124,12 +154,12 @@
         padding-top: 1rem;
         border-top: 1px solid var(--gray-200);
     }
-    
+
     .model-actions .btn {
         flex: 1;
         border-radius: var(--radius);
     }
-    
+
     /* Comparison Section */
     .comparison-section {
         background: white;
@@ -139,7 +169,7 @@
         margin-bottom: 2rem;
         border: 1px solid var(--gray-200);
     }
-    
+
     .comparison-section h5 {
         font-weight: 700;
         color: var(--gray-800);
@@ -148,11 +178,11 @@
         align-items: center;
         gap: 0.5rem;
     }
-    
+
     .comparison-chart-wrapper {
         height: 350px;
     }
-    
+
     /* Comparison Table */
     .comparison-table {
         background: white;
@@ -161,18 +191,18 @@
         overflow: hidden;
         margin-bottom: 2rem;
     }
-    
+
     .comparison-table-header {
         background: linear-gradient(135deg, var(--dark), #2d3748);
         color: white;
         padding: 1.25rem 1.5rem;
     }
-    
+
     .comparison-table-header h5 {
         margin: 0;
         font-weight: 700;
     }
-    
+
     /* Empty State */
     .empty-state {
         text-align: center;
@@ -183,7 +213,7 @@
         box-shadow: var(--shadow-lg);
         border: 2px dashed var(--gray-300);
     }
-    
+
     .empty-state i {
         font-size: 5rem;
         color: var(--gray-300);
@@ -193,34 +223,42 @@
     }
 
     @keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
-        100% { transform: translateY(0px); }
+        0% {
+            transform: translateY(0px);
+        }
+
+        50% {
+            transform: translateY(-10px);
+        }
+
+        100% {
+            transform: translateY(0px);
+        }
     }
-    
+
     .empty-state h4 {
         color: var(--gray-700);
         font-weight: 700;
         margin-bottom: 0.5rem;
     }
-    
+
     .empty-state p {
         color: var(--gray-500);
         margin-bottom: 2rem;
     }
-    
+
     /* Header Actions */
     .header-actions {
         display: flex;
         gap: 1rem;
         flex-wrap: wrap;
     }
-    
+
     @media (max-width: 768px) {
         .metrics-mini-grid {
             grid-template-columns: repeat(2, 1fr);
         }
-        
+
         .header-actions {
             width: 100%;
             justify-content: center;
@@ -304,265 +342,225 @@
 
 {% block custom_js %}
 <script>
-let availableModels = [];
-let selectedModels = [];
-let comparisonChart = null;
+    let availableModels = [];
+    let selectedModels = [];
+    let comparisonChart = null;
 
-document.addEventListener('DOMContentLoaded', function() {
-    loadModels();
-});
+    document.addEventListener('DOMContentLoaded', function () {
+        loadModels();
+    });
 
-async function loadModels() {
-    try {
-        showLoading('กำลังโหลดโมเดล...');
-        const response = await fetch('/api/models');
-        const data = await response.json();
-        
-        if (data.success && data.models.length > 0) {
-            availableModels = data.models.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            displayModels(availableModels);
-            document.getElementById('emptyState').classList.add('d-none');
-            document.getElementById('modelsList').classList.remove('d-none');
-            document.getElementById('modelCountBadge').innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>${availableModels.length} โมเดลพร้อมใช้งาน`;
-        } else {
-            document.getElementById('emptyState').classList.remove('d-none');
-            document.getElementById('modelsList').classList.add('d-none');
-            document.getElementById('modelCountBadge').textContent = 'ไม่มีโมเดล';
+    async function loadModels() {
+        try {
+            showLoading('กำลังโหลดโมเดล...');
+            const response = await fetch('/api/models');
+            const data = await response.json();
+
+            if (data.success && data.models.length > 0) {
+                availableModels = data.models.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                displayModels(availableModels);
+                document.getElementById('emptyState').classList.add('d-none');
+                document.getElementById('modelsList').classList.remove('d-none');
+                document.getElementById('modelCountBadge').innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>${availableModels.length} โมเดลพร้อมใช้งาน`;
+            } else {
+                document.getElementById('emptyState').classList.remove('d-none');
+                document.getElementById('modelsList').classList.add('d-none');
+                document.getElementById('modelCountBadge').textContent = 'ไม่มีโมเดล';
+            }
+        } catch (error) {
+            showAlert('เกิดข้อผิดพลาดในการโหลดโมเดล', 'danger');
+        } finally {
+            hideLoading();
         }
-    } catch (error) {
-        showAlert('เกิดข้อผิดพลาดในการโหลดโมเดล', 'danger');
-    } finally {
-        hideLoading();
     }
-}
 
-function displayModels(models) {
-    const container = document.getElementById('modelsList');
-    container.innerHTML = '';
+    function displayModels(models) {
+        const container = document.getElementById('modelsList');
+        container.innerHTML = '';
 
-    models.forEach((model, index) => {
-        const accuracy = (model.performance.accuracy || 0) * 100;
-        const precision = (model.performance.precision || 0) * 100;
-        const recall = (model.performance.recall || 0) * 100;
-        const f1Score = (model.performance.f1_score || 0) * 100;
-        const averageScore = (accuracy + precision + recall + f1Score) / 4;
-        const createdDate = new Date(model.created_at).toLocaleDateString('th-TH');
+        models.forEach((model, index) => {
+            const accuracy = (model.performance.accuracy || 0) * 100;
+            const precision = (model.performance.precision || 0) * 100;
+            const recall = (model.performance.recall || 0) * 100;
+            const f1Score = (model.performance.f1_score || 0) * 100;
+            const averageScore = (accuracy + precision + recall + f1Score) / 4;
+            const createdDate = new Date(model.created_at).toLocaleDateString('th-TH');
 
-        const modelCard = document.createElement('div');
-        modelCard.className = 'col-lg-4 col-md-6';
-        modelCard.innerHTML = `
+            const modelCard = document.createElement('div');
+            modelCard.className = 'col-lg-4 col-md-6';
+            modelCard.innerHTML = `
             <div class="model-card">
                 <div class="model-card-header">
                     <div>
-                        <h6 class="text-truncate" style="max-width: 200px;" title="${model.filename}">${model.filename.replace('.joblib', '')}</h6>
-                        <small><i class="bi bi-database me-1"></i>${model.data_format || 'Standard'}</small>
-                    </div>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="model_${index}" 
-                               onchange="toggleModelSelection('${model.filename}', this.checked)">
+                        <h6 class="text-truncate" style="max-width: 250px;" title="${model.filename}">${model.filename.replace('.joblib', '')}</h6>
                     </div>
                 </div>
-                <div class="model-card-body">
-                    <div class="metrics-mini-grid">
-                        <div class="metric-mini">
-                            <div class="metric-mini-value text-success">${accuracy.toFixed(0)}%</div>
-                            <div class="metric-mini-label">ACC</div>
-                        </div>
-                        <div class="metric-mini">
-                            <div class="metric-mini-value text-primary">${precision.toFixed(0)}%</div>
-                            <div class="metric-mini-label">PREC</div>
-                        </div>
-                        <div class="metric-mini">
-                            <div class="metric-mini-value text-warning">${recall.toFixed(0)}%</div>
-                            <div class="metric-mini-label">REC</div>
-                        </div>
-                        <div class="metric-mini">
-                            <div class="metric-mini-value text-info">${f1Score.toFixed(0)}%</div>
-                            <div class="metric-mini-label">F1</div>
-                        </div>
-                    </div>
+                <div class="model-card-body text-center">
+                    <h5 class="text-muted mb-4">
+                        <i class="bi bi-calendar-event me-2"></i>สร้างเมื่อ
+                    </h5>
+                    <p class="fs-4 fw-bold text-primary mb-4">${createdDate}</p>
                     
-                    <div class="chart-container">
-                        <canvas id="chart_${index}"></canvas>
-                    </div>
-                    
-                    <div class="text-center mb-3">
-                        <div class="score-badge ${getScoreBadgeClass(averageScore)}">
-                            <i class="bi bi-trophy-fill me-1"></i>
-                            Score: ${averageScore.toFixed(1)}
-                        </div>
-                    </div>
-                    
-                    <small class="text-muted d-block text-center mb-3" style="font-size: 0.75rem;">
-                        <i class="bi bi-clock me-1"></i> ${createdDate}
-                    </small>
-                    
-                    <div class="model-actions">
-                        <a href="{{ url_for('curriculum_page') }}?model=${model.filename}" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-play-fill"></i> ทดสอบ
-                        </a>
-                        <button class="btn btn-outline-danger btn-sm" onclick="deleteModel('${model.filename}')">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
+                    <button class="btn btn-danger w-100 rounded-pill" onclick="deleteModel('${model.filename}')">
+                        <i class="bi bi-trash me-2"></i> ลบโมเดล
+                    </button>
                 </div>
             </div>
         `;
 
-        container.appendChild(modelCard);
-        // Delay chart creation slightly for layout
-        setTimeout(() => createPerformanceChart(`chart_${index}`, model.performance), 100 + (index * 50));
-    });
-}
+            container.appendChild(modelCard);
+            // Chart creation removed as per UI simplification
+        });
+    }
 
-function createPerformanceChart(canvasId, performance) {
-    const ctx = document.getElementById(canvasId);
-    if (!ctx) return;
-    
-    const existingChart = Chart.getChart(canvasId);
-    if (existingChart) existingChart.destroy();
-    
-    new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-            datasets: [{
-                label: 'Performance',
-                data: [
-                    (performance.accuracy || 0) * 100,
-                    (performance.precision || 0) * 100,
-                    (performance.recall || 0) * 100,
-                    (performance.f1_score || 0) * 100
-                ],
-                backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                borderColor: '#4f46e5',
-                borderWidth: 2,
-                pointBackgroundColor: '#4f46e5'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: { display: false },
-                    grid: { color: 'rgba(0,0,0,0.05)' }
-                }
+    function createPerformanceChart(canvasId, performance) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const existingChart = Chart.getChart(canvasId);
+        if (existingChart) existingChart.destroy();
+
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+                datasets: [{
+                    label: 'Performance',
+                    data: [
+                        (performance.accuracy || 0) * 100,
+                        (performance.precision || 0) * 100,
+                        (performance.recall || 0) * 100,
+                        (performance.f1_score || 0) * 100
+                    ],
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: '#4f46e5',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#4f46e5'
+                }]
             },
-            plugins: {
-                legend: { display: false }
-            }
-        }
-    });
-}
-
-function getScoreBadgeClass(score) {
-    if (score >= 90) return 'bg-success text-white';
-    if (score >= 80) return 'bg-primary text-white';
-    if (score >= 70) return 'bg-info text-dark';
-    if (score >= 60) return 'bg-warning text-dark';
-    return 'bg-danger text-white';
-}
-
-function toggleModelSelection(filename, checked) {
-    if (checked) {
-        if (!selectedModels.includes(filename)) {
-            selectedModels.push(filename);
-        }
-    } else {
-        selectedModels = selectedModels.filter(f => f !== filename);
-    }
-    
-    const compareBtn = document.getElementById('compareBtn');
-    compareBtn.disabled = selectedModels.length < 2;
-    compareBtn.innerHTML = selectedModels.length < 2 
-        ? '<i class="bi bi-bar-chart-line me-1"></i> เปรียบเทียบ'
-        : `<i class="bi bi-bar-chart-line me-1"></i> เปรียบเทียบ (${selectedModels.length})`;
-        
-    if (selectedModels.length < 2) {
-        document.getElementById('comparisonChartContainer').classList.add('d-none');
-        document.getElementById('comparisonTableContainer').classList.add('d-none');
-    }
-}
-
-async function compareSelectedModels() {
-    if (selectedModels.length < 2) {
-        showAlert('กรุณาเลือกอย่างน้อย 2 โมเดลเพื่อเปรียบเทียบ', 'warning');
-        return;
-    }
-    
-    const selectedModelData = availableModels.filter(m => selectedModels.includes(m.filename));
-    displayComparisonChart(selectedModelData);
-    displayComparisonTable(selectedModelData);
-    displayComparisonStats(selectedModelData);
-    
-    const chartContainer = document.getElementById('comparisonChartContainer');
-    chartContainer.classList.remove('d-none');
-    document.getElementById('comparisonTableContainer').classList.remove('d-none');
-    
-    setTimeout(() => {
-        chartContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
-}
-
-function displayComparisonChart(models) {
-    const ctx = document.getElementById('comparisonChart');
-    
-    const existingChart = Chart.getChart('comparisonChart');
-    if (existingChart) existingChart.destroy();
-    if (comparisonChart) comparisonChart.destroy();
-    
-    const colors = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-    
-    const datasets = models.map((model, index) => ({
-        label: model.filename.replace('.joblib', ''),
-        data: [
-            (model.performance.accuracy || 0) * 100,
-            (model.performance.precision || 0) * 100,
-            (model.performance.recall || 0) * 100,
-            (model.performance.f1_score || 0) * 100
-        ],
-        backgroundColor: colors[index % colors.length] + '33',
-        borderColor: colors[index % colors.length],
-        pointBackgroundColor: colors[index % colors.length],
-        borderWidth: 2
-    }));
-
-    comparisonChart = new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-            datasets: datasets
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: { stepSize: 20 }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { display: false },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
                 }
-            },
-            plugins: {
-                legend: { position: 'bottom' }
             }
-        }
-    });
-}
+        });
+    }
 
-function displayComparisonTable(models) {
-    const tbody = document.querySelector('#comparisonTable tbody');
-    tbody.innerHTML = '';
-    
-    models.forEach(model => {
-        const performance = model.performance || {};
-        const avgScore = ((performance.accuracy + performance.precision + performance.recall + performance.f1_score) / 4) * 100;
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
+    function getScoreBadgeClass(score) {
+        if (score >= 90) return 'bg-success text-white';
+        if (score >= 80) return 'bg-primary text-white';
+        if (score >= 70) return 'bg-info text-dark';
+        if (score >= 60) return 'bg-warning text-dark';
+        return 'bg-danger text-white';
+    }
+
+    function toggleModelSelection(filename, checked) {
+        if (checked) {
+            if (!selectedModels.includes(filename)) {
+                selectedModels.push(filename);
+            }
+        } else {
+            selectedModels = selectedModels.filter(f => f !== filename);
+        }
+
+        const compareBtn = document.getElementById('compareBtn');
+        compareBtn.disabled = selectedModels.length < 2;
+        compareBtn.innerHTML = selectedModels.length < 2
+            ? '<i class="bi bi-bar-chart-line me-1"></i> เปรียบเทียบ'
+            : `<i class="bi bi-bar-chart-line me-1"></i> เปรียบเทียบ (${selectedModels.length})`;
+
+        if (selectedModels.length < 2) {
+            document.getElementById('comparisonChartContainer').classList.add('d-none');
+            document.getElementById('comparisonTableContainer').classList.add('d-none');
+        }
+    }
+
+    async function compareSelectedModels() {
+        if (selectedModels.length < 2) {
+            showAlert('กรุณาเลือกอย่างน้อย 2 โมเดลเพื่อเปรียบเทียบ', 'warning');
+            return;
+        }
+
+        const selectedModelData = availableModels.filter(m => selectedModels.includes(m.filename));
+        displayComparisonChart(selectedModelData);
+        displayComparisonTable(selectedModelData);
+        displayComparisonStats(selectedModelData);
+
+        const chartContainer = document.getElementById('comparisonChartContainer');
+        chartContainer.classList.remove('d-none');
+        document.getElementById('comparisonTableContainer').classList.remove('d-none');
+
+        setTimeout(() => {
+            chartContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
+
+    function displayComparisonChart(models) {
+        const ctx = document.getElementById('comparisonChart');
+
+        const existingChart = Chart.getChart('comparisonChart');
+        if (existingChart) existingChart.destroy();
+        if (comparisonChart) comparisonChart.destroy();
+
+        const colors = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+        const datasets = models.map((model, index) => ({
+            label: model.filename.replace('.joblib', ''),
+            data: [
+                (model.performance.accuracy || 0) * 100,
+                (model.performance.precision || 0) * 100,
+                (model.performance.recall || 0) * 100,
+                (model.performance.f1_score || 0) * 100
+            ],
+            backgroundColor: colors[index % colors.length] + '33',
+            borderColor: colors[index % colors.length],
+            pointBackgroundColor: colors[index % colors.length],
+            borderWidth: 2
+        }));
+
+        comparisonChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { stepSize: 20 }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    function displayComparisonTable(models) {
+        const tbody = document.querySelector('#comparisonTable tbody');
+        tbody.innerHTML = '';
+
+        models.forEach(model => {
+            const performance = model.performance || {};
+            const avgScore = ((performance.accuracy + performance.precision + performance.recall + performance.f1_score) / 4) * 100;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
             <td class="fw-bold ps-4">${model.filename.replace('.joblib', '')}</td>
             <td>
                 <div class="d-flex gap-1 flex-wrap">
@@ -578,27 +576,27 @@ function displayComparisonTable(models) {
                 <span class="badge rounded-pill ${getScoreBadgeClass(avgScore)}">${avgScore.toFixed(1)}</span>
             </td>
         `;
-        tbody.appendChild(row);
-    });
-}
+            tbody.appendChild(row);
+        });
+    }
 
-function displayComparisonStats(models) {
-    const statsContainer = document.getElementById('comparisonStats');
-    
-    // Find best model
-    let bestModel = models[0];
-    let bestScore = 0;
-    
-    models.forEach(model => {
-        const p = model.performance;
-        const score = ((p.accuracy || 0) + (p.precision || 0) + (p.recall || 0) + (p.f1_score || 0)) / 4;
-        if (score > bestScore) {
-            bestScore = score;
-            bestModel = model;
-        }
-    });
-    
-    statsContainer.innerHTML = `
+    function displayComparisonStats(models) {
+        const statsContainer = document.getElementById('comparisonStats');
+
+        // Find best model
+        let bestModel = models[0];
+        let bestScore = 0;
+
+        models.forEach(model => {
+            const p = model.performance;
+            const score = ((p.accuracy || 0) + (p.precision || 0) + (p.recall || 0) + (p.f1_score || 0)) / 4;
+            if (score > bestScore) {
+                bestScore = score;
+                bestModel = model;
+            }
+        });
+
+        statsContainer.innerHTML = `
         <h6 class="fw-bold text-primary mb-4">🏆 ผลการเปรียบเทียบ</h6>
         
         <div class="mb-4">
@@ -626,35 +624,35 @@ function displayComparisonStats(models) {
             </div>
         </div>
     `;
-}
-
-async function deleteModel(filename) {
-    if (!confirm(`คุณแน่ใจหรือไม่ที่จะลบโมเดล '${filename}'?`)) return;
-    
-    try {
-        showLoading('กำลังลบโมเดล...');
-        const response = await fetch(`/api/models/${filename}`, { method: 'DELETE' });
-        const result = await response.json();
-        
-        if (result.success) {
-            showAlert('ลบโมเดลสำเร็จ', 'success');
-            // Remove from selected if present
-            selectedModels = selectedModels.filter(f => f !== filename);
-            // Hide comparison if needed
-            if (selectedModels.length < 2) {
-                document.getElementById('comparisonChartContainer').classList.add('d-none');
-                document.getElementById('comparisonTableContainer').classList.add('d-none');
-            }
-            // Reload list
-            loadModels();
-        } else {
-            showAlert('เกิดข้อผิดพลาด: ' + result.error, 'danger');
-        }
-    } catch (error) {
-        showAlert('เกิดข้อผิดพลาดในการลบโมเดล', 'danger');
-    } finally {
-        hideLoading();
     }
-}
+
+    async function deleteModel(filename) {
+        if (!confirm(`คุณแน่ใจหรือไม่ที่จะลบโมเดล '${filename}'?`)) return;
+
+        try {
+            showLoading('กำลังลบโมเดล...');
+            const response = await fetch(`/api/models/${filename}`, { method: 'DELETE' });
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert('ลบโมเดลสำเร็จ', 'success');
+                // Remove from selected if present
+                selectedModels = selectedModels.filter(f => f !== filename);
+                // Hide comparison if needed
+                if (selectedModels.length < 2) {
+                    document.getElementById('comparisonChartContainer').classList.add('d-none');
+                    document.getElementById('comparisonTableContainer').classList.add('d-none');
+                }
+                // Reload list
+                loadModels();
+            } else {
+                showAlert('เกิดข้อผิดพลาด: ' + result.error, 'danger');
+            }
+        } catch (error) {
+            showAlert('เกิดข้อผิดพลาดในการลบโมเดล', 'danger');
+        } finally {
+            hideLoading();
+        }
+    }
 </script>
 {% endblock %}
