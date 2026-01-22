@@ -2417,7 +2417,21 @@ def train_model():
         logger.info(f"📁 Processing file: {filename}")
 
         # อ่านไฟล์
-        file_extension = filename.rsplit('.', 1)[1].lower()
+        # Handle missing extension gracefully
+        if '.' in filename:
+            file_extension = filename.rsplit('.', 1)[1].lower()
+        else:
+            # ลองเดา extension จากชื่อไฟล์
+            if 'xlsx' in filename.lower():
+                file_extension = 'xlsx'
+            elif 'xls' in filename.lower():
+                file_extension = 'xls'
+            elif 'csv' in filename.lower():
+                file_extension = 'csv'
+            else:
+                # ลองอ่านเป็น Excel ก่อน
+                file_extension = 'xlsx'
+        
         df = None
         if file_extension == 'csv':
             encodings = app.config['DATA_CONFIG']['fallback_encodings']
@@ -5512,8 +5526,19 @@ def upload_file():
         # สร้าง filename ที่ปลอดภัย
         from werkzeug.utils import secure_filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # เก็บ extension ก่อน เพราะ secure_filename อาจลบจุดออก
+        original_filename = file.filename
+        file_ext = ''
+        if '.' in original_filename:
+            file_ext = '.' + original_filename.rsplit('.', 1)[1].lower()
+        
         safe_filename = secure_filename(file.filename)
-        filename_on_disk = f"{timestamp}_{safe_filename}"
+        # ถ้า secure_filename ลบ extension ออก ให้เพิ่มกลับ
+        if file_ext and not safe_filename.lower().endswith(file_ext):
+            filename_on_disk = f"{timestamp}_{safe_filename}{file_ext}"
+        else:
+            filename_on_disk = f"{timestamp}_{safe_filename}"
         
         # ใช้ absolute path
         upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
