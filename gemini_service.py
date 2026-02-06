@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class GeminiService:
     def __init__(self):
         self.api_key = os.getenv('GEMINI_API_KEY')
-        self.model_name = os.getenv('GEMINI_MODEL_NAME', 'gemini-1.5-flash')
+        self.model_name = os.getenv('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
         self.is_configured = False
         
         if self.api_key:
