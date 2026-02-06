@@ -48,3 +48,5 @@ Models/
 # Temporary files
 /tmp/
 *.tmp
+tmpclaude-*
+nul

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}เข้าสู่ระบบ - ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}
+
+{% block custom_css %}
+<style>
+    .login-container {
+        max-width: 450px;
+        margin: 4rem auto;
+    }
+    .login-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: var(--radius-xl, 24px);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        overflow: hidden;
+    }
+    .login-header {
+        background: linear-gradient(135deg, var(--primary, #4f46e5), var(--primary-light, #818cf8));
+        color: white;
+        padding: 2.5rem;
+        text-align: center;
+    }
+    .login-header .icon-circle {
+        width: 80px;
+        height: 80px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 2.5rem;
+    }
+    .login-body {
+        padding: 2.5rem;
+    }
+    .login-body .form-control {
+        padding: 1rem 1.25rem;
+        border-radius: var(--radius, 12px);
+        border: 2px solid var(--gray-200, #e5e7eb);
+        font-size: 1rem;
+    }
+    .login-body .form-control:focus {
+        border-color: var(--primary, #4f46e5);
+        box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
+    }
+    .btn-login {
+        background: linear-gradient(135deg, var(--primary, #4f46e5), var(--primary-light, #818cf8));
+        border: none;
+        color: white;
+        font-weight: 700;
+        transition: all 0.3s;
+    }
+    .btn-login:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
+        color: white;
+    }
+    [data-theme="dark"] .login-card {
+        background: rgba(30, 30, 40, 0.95);
+    }
+    [data-theme="dark"] .login-body .form-control {
+        background: rgba(255,255,255,0.05);
+        border-color: rgba(255,255,255,0.1);
+        color: #e5e7eb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-container" data-aos="fade-up">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="icon-circle">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <h3 class="fw-bold mb-1">เข้าสู่ระบบผู้ดูแล</h3>
+            <p class="mb-0 opacity-75">Admin Login</p>
+        </div>
+        <div class="login-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('login_page') }}">
+                <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+                <div class="mb-4">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-person me-1"></i> ชื่อผู้ใช้
+                    </label>
+                    <input type="text" name="username" class="form-control"
+                           placeholder="กรอกชื่อผู้ใช้" required autofocus>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-key me-1"></i> รหัสผ่าน
+                    </label>
+                    <input type="password" name="password" class="form-control"
+                           placeholder="กรอกรหัสผ่าน" required>
+                </div>
+                <button type="submit" class="btn btn-login w-100 py-3 rounded-pill fw-bold">
+                    <i class="bi bi-box-arrow-in-right me-2"></i> เข้าสู่ระบบ
+                </button>
+            </form>
+            <div class="text-center mt-4">
+                <a href="{{ url_for('main_page') }}" class="text-muted text-decoration-none">
+                    <i class="bi bi-arrow-left me-1"></i> กลับหน้าหลัก
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

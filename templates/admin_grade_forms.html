@@ -1,0 +1,1203 @@
+{% extends "base.html" %}
+
+{% block title %}แบบฟอร์มเก็บเกรด - ระบบทำนายความสำเร็จของนักศึกษา{% endblock %}
+
+{% block custom_css %}
+<style>
+    .hero-header {
+        background: linear-gradient(135deg, #0ea5e9 0%, #2dd4bf 100%);
+        border-radius: 24px;
+        padding: 3rem 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(14, 165, 233, 0.4);
+    }
+    .hero-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        animation: rotate 20s linear infinite;
+    }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+    .hero-header h1 { font-size: 2.5rem; font-weight: 800; color: white; position: relative; z-index: 1; }
+    .hero-header p { color: rgba(255,255,255,0.9); font-size: 1.1rem; position: relative; z-index: 1; margin-bottom: 0; }
+
+    .glass-card {
+        background: rgba(255,255,255,0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+        border: 1px solid rgba(255,255,255,0.3);
+    }
+
+    .session-card {
+        background: rgba(255,255,255,0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+        border: 1px solid rgba(255,255,255,0.3);
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+    .session-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+    }
+    .session-card .card-top {
+        padding: 1.5rem 1.5rem 1rem;
+    }
+    .session-card .card-actions {
+        padding: 1rem 1.5rem;
+        background: rgba(249,250,251,0.8);
+        border-top: 1px solid rgba(229,231,235,0.5);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .status-badge {
+        padding: 0.3rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .status-open { background: #d1fae5; color: #059669; }
+    .status-closed { background: #fee2e2; color: #dc2626; }
+    .status-expired { background: #f3f4f6; color: #6b7280; }
+
+    .term-tag {
+        display: inline-block;
+        background: #eef2ff;
+        color: #4f46e5;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin: 0.15rem;
+    }
+
+    .btn-action {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.8rem;
+        border-radius: 10px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        border: none;
+        transition: all 0.2s;
+    }
+    .btn-action:hover { transform: translateY(-2px); }
+
+    .summary-card {
+        text-align: center;
+        padding: 1.5rem 1rem;
+        border-radius: 16px;
+    }
+    .summary-card .number {
+        font-size: 2.2rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .summary-card .label {
+        font-size: 0.8rem;
+        color: var(--gray-500, #6b7280);
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+
+    .results-table { overflow: hidden; }
+    .results-table th {
+        background: var(--gray-50, #f9fafb);
+        font-weight: 700;
+        white-space: nowrap;
+        font-size: 0.85rem;
+    }
+    .results-table td { vertical-align: middle; font-size: 0.9rem; }
+
+    .risk-badge {
+        padding: 0.3rem 0.7rem;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .risk-high { background: #fee2e2; color: #dc2626; }
+    .risk-medium { background: #fef3c7; color: #d97706; }
+    .risk-low { background: #d1fae5; color: #059669; }
+
+    .student-detail { display: none; background: var(--gray-50, #f9fafb); }
+    .student-detail.show { display: table-row; }
+    .detail-cell { padding: 1rem 1.5rem; }
+
+    .chart-container { max-width: 380px; margin: 0 auto; }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+    .empty-state .icon { font-size: 4rem; color: var(--gray-300); margin-bottom: 1rem; }
+
+    .modal-content {
+        border: none;
+        border-radius: 20px;
+        overflow: hidden;
+    }
+    .modal-header {
+        background: linear-gradient(135deg, #0ea5e9, #2dd4bf);
+        color: white;
+        border: none;
+        padding: 1.5rem;
+    }
+    .modal-header .btn-close { filter: brightness(0) invert(1); }
+    .modal-body { padding: 2rem; }
+    .modal-footer { border-top: 1px solid rgba(229,231,235,0.5); padding: 1rem 2rem; }
+
+    .term-checkbox-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+    .term-checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.75rem;
+        border: 2px solid var(--gray-200);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    .term-checkbox-item:hover { border-color: var(--primary); background: rgba(79,70,229,0.05); }
+    .term-checkbox-item.checked { border-color: var(--primary); background: #eef2ff; }
+    .term-checkbox-item input[type="checkbox"] { accent-color: var(--primary); width: 18px; height: 18px; }
+
+    .toast-container {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        z-index: 10000;
+    }
+
+    #predictionModelPicker .modal-content { border-radius: 20px; }
+
+    body.dark-mode .session-card,
+    body.dark-mode .glass-card {
+        background: rgba(30, 30, 40, 0.95);
+        border-color: rgba(255,255,255,0.05);
+    }
+    body.dark-mode .session-card .card-actions { background: rgba(255,255,255,0.03); }
+    body.dark-mode .term-tag { background: rgba(79,70,229,0.2); color: #a5b4fc; }
+    body.dark-mode .term-checkbox-item { border-color: var(--gray-600); color: var(--gray-200); }
+    body.dark-mode .term-checkbox-item:hover,
+    body.dark-mode .term-checkbox-item.checked { background: rgba(79,70,229,0.15); }
+    body.dark-mode .results-table th { background: rgba(255,255,255,0.05); }
+    body.dark-mode .student-detail { background: rgba(255,255,255,0.03); }
+    body.dark-mode .modal-content { background: #1e1e2e; color: var(--gray-100); }
+    body.dark-mode .modal-body { background: #1e1e2e; }
+    body.dark-mode .modal-footer { background: #1e1e2e; border-color: rgba(255,255,255,0.1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Header -->
+<div class="hero-header" data-aos="fade-down">
+    <h1><i class="bi bi-clipboard2-data-fill me-2"></i>แบบฟอร์มเก็บเกรด</h1>
+    <p>สร้างแบบฟอร์มสำหรับเก็บข้อมูลเกรดจากนักศึกษา วิเคราะห์ และทำนายผลการเรียนแบบอัตโนมัติ</p>
+</div>
+
+<!-- Create Session Button -->
+<div class="d-flex justify-content-between align-items-center mb-4" data-aos="fade-up">
+    <h5 class="fw-bold mb-0"><i class="bi bi-collection me-2 text-primary"></i>รายการ Session ทั้งหมด</h5>
+    <button class="btn btn-primary rounded-pill" onclick="openCreateModal()">
+        <i class="bi bi-plus-lg me-1"></i> สร้าง Session ใหม่
+    </button>
+</div>
+
+<!-- Sessions List -->
+<div id="sessionsList" data-aos="fade-up">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3 text-muted">กำลังโหลดข้อมูล...</p>
+    </div>
+</div>
+
+<!-- Submissions Section (hidden by default) -->
+<div id="submissionsSection" class="d-none mt-4">
+    <div class="glass-card p-4 mb-4" data-aos="fade-up">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-people me-2 text-info"></i>ข้อมูลที่ส่งมา
+                <span id="submissionsTitle" class="text-muted fw-normal"></span>
+            </h5>
+            <button class="btn btn-light btn-sm rounded-pill" onclick="hideSubmissions()">
+                <i class="bi bi-x-lg me-1"></i> ปิด
+            </button>
+        </div>
+
+        <!-- Summary row -->
+        <div class="row g-3 mb-3" id="submissionsSummary"></div>
+
+        <!-- Export buttons -->
+        <div class="d-flex gap-2 mb-3" id="submissionsExportBtns"></div>
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="submissionsTable">
+                <thead>
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>รหัสนักศึกษา</th>
+                        <th>ชื่อนักศึกษา</th>
+                        <th>GPA</th>
+                        <th>ส่งเมื่อ</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="submissionsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Results Section (hidden by default) -->
+<div id="predictionSection" class="d-none mt-4">
+    <div class="glass-card p-4 mb-4" data-aos="fade-up">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5 class="fw-bold mb-0"><i class="bi bi-bar-chart me-2 text-primary"></i>สรุปผลการทำนาย</h5>
+            <button class="btn btn-light btn-sm rounded-pill" onclick="hidePrediction()">
+                <i class="bi bi-x-lg me-1"></i> ปิด
+            </button>
+        </div>
+        <div class="row g-3" id="predSummaryCards"></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6" data-aos="fade-right">
+            <div class="glass-card p-4 h-100">
+                <h5 class="fw-bold mb-3"><i class="bi bi-pie-chart me-2 text-success"></i>สัดส่วนผ่าน/ไม่ผ่าน</h5>
+                <div class="chart-container">
+                    <canvas id="predPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6" data-aos="fade-left">
+            <div class="glass-card p-4 h-100">
+                <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-line me-2 text-info"></i>การกระจายความน่าจะเป็น</h5>
+                <div class="chart-container">
+                    <canvas id="predBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-table me-2"></i>ผลลัพธ์รายบุคคล</h5>
+        <button class="btn btn-success rounded-pill" onclick="downloadPredictionCSV()">
+            <i class="bi bi-download me-2"></i> ดาวน์โหลด CSV
+        </button>
+    </div>
+
+    <!-- Prediction Results Table -->
+    <div class="results-table glass-card p-0 mb-4" data-aos="fade-up">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="predResultsTable">
+                <thead>
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>รหัสนักศึกษา</th>
+                        <th>GPA</th>
+                        <th>ความน่าจะเป็น</th>
+                        <th>สถานะ</th>
+                        <th>ระดับความเสี่ยง</th>
+                        <th>คำแนะนำ</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="predResultsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create Session Modal -->
+<div class="modal fade" id="createModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-plus-circle me-2"></i>สร้าง Session ใหม่</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Session Name -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><i class="bi bi-tag me-1"></i> ชื่อ Session <span class="text-danger">*</span></label>
+                    <input type="text" id="sessionTitle" class="form-control" placeholder="เช่น เก็บเกรดนักศึกษารุ่น 63" required>
+                </div>
+
+                <!-- Description -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><i class="bi bi-card-text me-1"></i> คำอธิบาย</label>
+                    <textarea id="sessionDesc" class="form-control" rows="2" placeholder="คำอธิบายเพิ่มเติม (ไม่บังคับ)"></textarea>
+                </div>
+
+                <!-- Term Selection -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><i class="bi bi-calendar3 me-1"></i> เลือกเทอม <span class="text-danger">*</span></label>
+                    <div class="term-checkbox-grid" id="termCheckboxes">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Show Prediction Toggle -->
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="showPredictionToggle" onchange="togglePredictionOptions()">
+                        <label class="form-check-label fw-bold" for="showPredictionToggle">
+                            <i class="bi bi-eye me-1"></i> แสดงผลทำนายให้นักศึกษา
+                        </label>
+                    </div>
+                    <small class="text-muted">เมื่อเปิด นักศึกษาจะเห็นผลทำนายทันทีหลังส่งแบบฟอร์ม</small>
+                </div>
+
+                <!-- Model Selection (conditional) -->
+                <div class="mb-3 d-none" id="modelSelectWrapper">
+                    <label class="form-label fw-bold"><i class="bi bi-cpu me-1"></i> เลือกโมเดลสำหรับทำนาย</label>
+                    <select id="createModelSelect" class="form-select">
+                        <option value="">กำลังโหลด...</option>
+                    </select>
+                </div>
+
+                <!-- Expiry -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold"><i class="bi bi-clock-history me-1"></i> วันหมดอายุ</label>
+                    <input type="datetime-local" id="sessionExpiry" class="form-control">
+                    <small class="text-muted">เว้นว่างหากไม่ต้องการกำหนดวันหมดอายุ</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" class="btn btn-primary rounded-pill" onclick="createSession()">
+                    <i class="bi bi-check-lg me-1"></i> สร้าง Session
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Model Picker Modal -->
+<div class="modal fade" id="predictionModelPicker" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="bi bi-cpu me-2"></i>เลือกโมเดลสำหรับทำนาย</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <select id="predModelSelect" class="form-select form-select-lg">
+                    <option value="">กำลังโหลด...</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light rounded-pill" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" class="btn btn-primary rounded-pill" id="confirmPredictionBtn">
+                    <i class="bi bi-lightning me-1"></i> เริ่มทำนาย
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+{% endblock %}
+
+{% block custom_js %}
+<script>
+// ==========================================
+// Data & State
+// ==========================================
+const coursesData = JSON.parse('{{ coursesData | safe }}');
+const allTermsData = JSON.parse('{{ allTermsData | safe }}');
+let sessionsCache = [];
+let currentViewSessionId = null;
+let predPieChartInstance = null;
+let predBarChartInstance = null;
+let predictionResults = null;
+
+// ==========================================
+// Initialization
+// ==========================================
+document.addEventListener('DOMContentLoaded', function() {
+    buildTermCheckboxes();
+    loadSessions();
+});
+
+// ==========================================
+// Term Helpers
+// ==========================================
+function getTermLabel(idx) {
+    const year = Math.floor(idx / 2) + 1;
+    const term = (idx % 2) + 1;
+    return `ปี ${year} เทอม ${term}`;
+}
+
+function buildTermCheckboxes() {
+    const container = document.getElementById('termCheckboxes');
+    let html = '';
+    for (let i = 0; i < 8; i++) {
+        html += `
+            <label class="term-checkbox-item" id="termItem${i}" onclick="toggleTermCheck(${i})">
+                <input type="checkbox" id="termCb${i}" value="${i}" onclick="event.stopPropagation(); updateTermItemStyle(${i})">
+                ${getTermLabel(i)}
+            </label>`;
+    }
+    container.innerHTML = html;
+}
+
+function toggleTermCheck(idx) {
+    const cb = document.getElementById('termCb' + idx);
+    cb.checked = !cb.checked;
+    updateTermItemStyle(idx);
+}
+
+function updateTermItemStyle(idx) {
+    const cb = document.getElementById('termCb' + idx);
+    const item = document.getElementById('termItem' + idx);
+    if (cb.checked) {
+        item.classList.add('checked');
+    } else {
+        item.classList.remove('checked');
+    }
+}
+
+// ==========================================
+// Status Badge
+// ==========================================
+function getStatusBadge(session) {
+    if (session.expires_at) {
+        try {
+            const expires = new Date(session.expires_at);
+            if (new Date() > expires) {
+                return '<span class="status-badge status-expired"><i class="bi bi-clock"></i> หมดอายุ</span>';
+            }
+        } catch(e) {}
+    }
+    if (session.is_active) {
+        return '<span class="status-badge status-open"><i class="bi bi-circle-fill" style="font-size:0.5rem"></i> เปิด</span>';
+    }
+    return '<span class="status-badge status-closed"><i class="bi bi-circle-fill" style="font-size:0.5rem"></i> ปิด</span>';
+}
+
+function isSessionExpired(session) {
+    if (!session.expires_at) return false;
+    try {
+        return new Date() > new Date(session.expires_at);
+    } catch(e) { return false; }
+}
+
+// ==========================================
+// Load Sessions
+// ==========================================
+async function loadSessions() {
+    try {
+        const res = await fetch('/api/grade-forms/sessions');
+        const data = await res.json();
+        if (data.success) {
+            sessionsCache = data.sessions || [];
+            renderSessionsList(sessionsCache);
+        } else {
+            document.getElementById('sessionsList').innerHTML =
+                `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${data.error || 'เกิดข้อผิดพลาด'}</div>`;
+        }
+    } catch(e) {
+        document.getElementById('sessionsList').innerHTML =
+            `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้</div>`;
+    }
+}
+
+function renderSessionsList(sessions) {
+    const container = document.getElementById('sessionsList');
+    if (!sessions || sessions.length === 0) {
+        container.innerHTML = `
+            <div class="glass-card empty-state">
+                <div class="icon"><i class="bi bi-clipboard2-plus"></i></div>
+                <h5 class="fw-bold text-muted">ยังไม่มี Session</h5>
+                <p class="text-muted mb-3">สร้าง Session ใหม่เพื่อเริ่มเก็บข้อมูลเกรดจากนักศึกษา</p>
+                <button class="btn btn-primary rounded-pill" onclick="openCreateModal()">
+                    <i class="bi bi-plus-lg me-1"></i> สร้าง Session ใหม่
+                </button>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = '<div class="row g-4">' +
+        sessions.map(s => `<div class="col-lg-6 col-xl-4">${renderSessionCard(s)}</div>`).join('') +
+        '</div>';
+}
+
+function renderSessionCard(session) {
+    // Parse term_indices
+    let termIndices = [];
+    try {
+        termIndices = typeof session.term_indices === 'string' ? JSON.parse(session.term_indices) : (session.term_indices || []);
+    } catch(e) { termIndices = []; }
+
+    const termLabels = termIndices.map(i => `<span class="term-tag">${getTermLabel(i)}</span>`).join('');
+    const statusBadge = getStatusBadge(session);
+    const submissionCount = session.submission_count || 0;
+    const isActive = session.is_active ? true : false;
+    const expired = isSessionExpired(session);
+
+    let createdAt = '';
+    try {
+        const d = new Date(session.created_at);
+        createdAt = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch(e) { createdAt = session.created_at || ''; }
+
+    return `
+        <div class="session-card">
+            <div class="card-top">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="fw-bold mb-0" style="font-size:1.05rem;">${escapeHtml(session.title)}</h6>
+                    ${statusBadge}
+                </div>
+                ${session.description ? `<p class="text-muted small mb-2">${escapeHtml(session.description)}</p>` : ''}
+                <div class="mb-2">${termLabels}</div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted"><i class="bi bi-calendar3 me-1"></i>${createdAt}</small>
+                    <span class="badge bg-primary bg-opacity-10 text-primary fw-bold">
+                        <i class="bi bi-people me-1"></i>${submissionCount} คำตอบ
+                    </span>
+                </div>
+            </div>
+            <div class="card-actions">
+                <button class="btn btn-action btn-outline-primary" onclick="copyFormLink('${session.token}')" title="คัดลอกลิงก์">
+                    <i class="bi bi-link-45deg"></i> คัดลอกลิงก์
+                </button>
+                <button class="btn btn-action btn-outline-info" onclick="viewSubmissions(${session.id})" title="ดูข้อมูล">
+                    <i class="bi bi-eye"></i> ดูข้อมูล
+                </button>
+                <button class="btn btn-action btn-outline-success" onclick="exportSubmissions(${session.id}, 'wide')" title="Export CSV">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+                </button>
+                <button class="btn btn-action btn-outline-secondary" onclick="exportTemplate(${session.id})" title="ดาวน์โหลดเทมเพลต">
+                    <i class="bi bi-download"></i> เทมเพลต
+                </button>
+                <button class="btn btn-action btn-outline-warning" onclick="runPrediction(${session.id})" title="ทำนาย">
+                    <i class="bi bi-lightning"></i> ทำนาย
+                </button>
+                <button class="btn btn-action ${isActive && !expired ? 'btn-outline-danger' : 'btn-outline-success'}"
+                        onclick="toggleSession(${session.id}, ${isActive})" title="${isActive ? 'ปิด' : 'เปิด'}">
+                    <i class="bi bi-${isActive ? 'pause-circle' : 'play-circle'}"></i> ${isActive ? 'ปิด' : 'เปิด'}
+                </button>
+                <button class="btn btn-action btn-outline-danger" onclick="deleteSession(${session.id})" title="ลบ">
+                    <i class="bi bi-trash"></i> ลบ
+                </button>
+            </div>
+        </div>`;
+}
+
+// ==========================================
+// Create Session
+// ==========================================
+function openCreateModal() {
+    // Reset form
+    document.getElementById('sessionTitle').value = '';
+    document.getElementById('sessionDesc').value = '';
+    document.getElementById('showPredictionToggle').checked = false;
+    document.getElementById('sessionExpiry').value = '';
+    document.getElementById('modelSelectWrapper').classList.add('d-none');
+    // Uncheck all terms
+    for (let i = 0; i < 8; i++) {
+        const cb = document.getElementById('termCb' + i);
+        if (cb) { cb.checked = false; updateTermItemStyle(i); }
+    }
+    loadModelsForSelect();
+    const modal = new bootstrap.Modal(document.getElementById('createModal'));
+    modal.show();
+}
+
+function togglePredictionOptions() {
+    const toggle = document.getElementById('showPredictionToggle');
+    const wrapper = document.getElementById('modelSelectWrapper');
+    if (toggle.checked) {
+        wrapper.classList.remove('d-none');
+        loadModelsForSelect();
+    } else {
+        wrapper.classList.add('d-none');
+    }
+}
+
+async function loadModelsForSelect() {
+    try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+
+        const selects = [document.getElementById('createModelSelect'), document.getElementById('predModelSelect')];
+        selects.forEach(select => {
+            if (!select) return;
+            select.innerHTML = '<option value="">-- เลือกโมเดล --</option>';
+            if (data.success && data.models && data.models.length > 0) {
+                data.models.forEach(m => {
+                    const acc = m.performance && m.performance.accuracy
+                        ? ` (Accuracy: ${(m.performance.accuracy * 100).toFixed(1)}%)` : '';
+                    const opt = document.createElement('option');
+                    opt.value = m.filename;
+                    opt.textContent = m.filename + acc;
+                    select.appendChild(opt);
+                });
+            } else {
+                select.innerHTML = '<option value="">ไม่พบโมเดล - กรุณาฝึกโมเดลก่อน</option>';
+            }
+        });
+    } catch(e) {
+        console.error('Error loading models:', e);
+    }
+}
+
+async function createSession() {
+    const title = document.getElementById('sessionTitle').value.trim();
+    if (!title) {
+        showAlert('กรุณากรอกชื่อ Session', 'warning');
+        return;
+    }
+
+    // Gather selected terms
+    const termIndices = [];
+    for (let i = 0; i < 8; i++) {
+        const cb = document.getElementById('termCb' + i);
+        if (cb && cb.checked) termIndices.push(i);
+    }
+    if (termIndices.length === 0) {
+        showAlert('กรุณาเลือกเทอมอย่างน้อย 1 เทอม', 'warning');
+        return;
+    }
+
+    const showPrediction = document.getElementById('showPredictionToggle').checked;
+    const modelFilename = showPrediction ? document.getElementById('createModelSelect').value : '';
+    if (showPrediction && !modelFilename) {
+        showAlert('กรุณาเลือกโมเดลสำหรับแสดงผลทำนาย', 'warning');
+        return;
+    }
+
+    const expiryVal = document.getElementById('sessionExpiry').value;
+
+    const body = {
+        title: title,
+        description: document.getElementById('sessionDesc').value.trim(),
+        term_indices: termIndices,
+        show_prediction: showPrediction,
+        model_filename: modelFilename,
+        expires_at: expiryVal || null
+    };
+
+    showLoading('กำลังสร้าง Session...');
+    try {
+        const res = await fetch('/api/grade-forms/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        hideLoading();
+
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('createModal')).hide();
+            showAlert('สร้าง Session สำเร็จ!', 'success');
+            loadSessions();
+        } else {
+            showAlert(data.error || 'เกิดข้อผิดพลาด', 'danger');
+        }
+    } catch(e) {
+        hideLoading();
+        showAlert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ' + e.message, 'danger');
+    }
+}
+
+// ==========================================
+// Copy Form Link
+// ==========================================
+function copyFormLink(token) {
+    const url = window.location.origin + '/form/' + token;
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('คัดลอกลิงก์สำเร็จ!', 'success');
+    }).catch(() => {
+        // Fallback
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('คัดลอกลิงก์สำเร็จ!', 'success');
+    });
+}
+
+function showToast(message, type) {
+    const container = document.getElementById('toastContainer');
+    const icons = { success: 'check-circle-fill', danger: 'exclamation-triangle-fill', warning: 'exclamation-circle-fill', info: 'info-circle-fill' };
+    const colors = { success: '#10b981', danger: '#ef4444', warning: '#f59e0b', info: '#0ea5e9' };
+
+    const toastEl = document.createElement('div');
+    toastEl.className = 'toast show';
+    toastEl.setAttribute('role', 'alert');
+    toastEl.innerHTML = `
+        <div class="toast-body d-flex align-items-center gap-2"
+             style="background:white; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.15); padding:1rem 1.5rem; border-left:4px solid ${colors[type] || colors.info};">
+            <i class="bi bi-${icons[type] || 'info-circle-fill'}" style="color:${colors[type] || colors.info}; font-size:1.2rem;"></i>
+            <span class="fw-bold">${message}</span>
+        </div>`;
+    container.appendChild(toastEl);
+    setTimeout(() => { toastEl.remove(); }, 3000);
+}
+
+// ==========================================
+// View Submissions
+// ==========================================
+async function viewSubmissions(sessionId) {
+    currentViewSessionId = sessionId;
+    showLoading('กำลังโหลดข้อมูล...');
+    try {
+        const res = await fetch(`/api/grade-forms/sessions/${sessionId}/submissions`);
+        const data = await res.json();
+        hideLoading();
+
+        if (data.success) {
+            const session = sessionsCache.find(s => s.id === sessionId);
+            const titleText = session ? ` - ${session.title}` : '';
+            document.getElementById('submissionsTitle').textContent = titleText;
+            renderSubmissionsTable(data.submissions || [], sessionId);
+            document.getElementById('submissionsSection').classList.remove('d-none');
+            setTimeout(() => {
+                document.getElementById('submissionsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        } else {
+            showAlert(data.error || 'เกิดข้อผิดพลาด', 'danger');
+        }
+    } catch(e) {
+        hideLoading();
+        showAlert('ไม่สามารถโหลดข้อมูลได้: ' + e.message, 'danger');
+    }
+}
+
+function renderSubmissionsTable(submissions, sessionId) {
+    const tbody = document.getElementById('submissionsBody');
+    const summaryDiv = document.getElementById('submissionsSummary');
+    const exportDiv = document.getElementById('submissionsExportBtns');
+
+    if (!submissions || submissions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">ยังไม่มีข้อมูลที่ส่งมา</td></tr>`;
+        summaryDiv.innerHTML = '';
+        exportDiv.innerHTML = '';
+        return;
+    }
+
+    // Summary
+    const totalCount = submissions.length;
+    const gpas = submissions.map(s => s.gpa).filter(g => g !== null && g !== undefined && !isNaN(g));
+    const avgGpa = gpas.length ? (gpas.reduce((a, b) => a + b, 0) / gpas.length).toFixed(2) : '-';
+
+    summaryDiv.innerHTML = `
+        <div class="col-6 col-md-3">
+            <div class="summary-card glass-card">
+                <div class="number text-primary">${totalCount}</div>
+                <div class="label">จำนวนคำตอบ</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="summary-card glass-card">
+                <div class="number text-info">${avgGpa}</div>
+                <div class="label">GPA เฉลี่ย</div>
+            </div>
+        </div>`;
+
+    exportDiv.innerHTML = `
+        <button class="btn btn-success btn-sm rounded-pill" onclick="exportSubmissions(${sessionId}, 'wide')">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export Wide CSV
+        </button>
+        <button class="btn btn-info btn-sm rounded-pill" onclick="exportSubmissions(${sessionId}, 'long')">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export Long CSV
+        </button>`;
+
+    // Table
+    tbody.innerHTML = submissions.map((sub, i) => {
+        let submittedAt = '';
+        try {
+            const d = new Date(sub.submitted_at || sub.created_at);
+            submittedAt = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch(e) { submittedAt = sub.submitted_at || ''; }
+
+        const gpaDisplay = (sub.gpa !== null && sub.gpa !== undefined && !isNaN(sub.gpa)) ? Number(sub.gpa).toFixed(2) : '-';
+
+        return `
+            <tr>
+                <td class="ps-3 fw-bold text-muted">${i + 1}</td>
+                <td class="fw-bold">${escapeHtml(sub.student_id || '')}</td>
+                <td>${escapeHtml(sub.student_name || '-')}</td>
+                <td>${gpaDisplay}</td>
+                <td><small class="text-muted">${submittedAt}</small></td>
+                <td>
+                    <button class="btn btn-outline-danger btn-sm" onclick="deleteSubmission(${sessionId}, ${sub.id})" title="ลบ">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
+    }).join('');
+}
+
+function hideSubmissions() {
+    document.getElementById('submissionsSection').classList.add('d-none');
+    currentViewSessionId = null;
+}
+
+// ==========================================
+// Delete Submission
+// ==========================================
+async function deleteSubmission(sessionId, subId) {
+    if (!confirm('ต้องการลบข้อมูลนี้หรือไม่?')) return;
+
+    try {
+        const res = await fetch(`/api/grade-forms/sessions/${sessionId}/submissions/${subId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('ลบข้อมูลสำเร็จ', 'success');
+            viewSubmissions(sessionId);
+            loadSessions(); // Refresh counts
+        } else {
+            showAlert(data.error || 'เกิดข้อผิดพลาด', 'danger');
+        }
+    } catch(e) {
+        showAlert('เกิดข้อผิดพลาด: ' + e.message, 'danger');
+    }
+}
+
+// ==========================================
+// Export
+// ==========================================
+function exportSubmissions(sessionId, format) {
+    window.open(`/api/grade-forms/sessions/${sessionId}/export?format=${format}`, '_blank');
+}
+
+function exportTemplate(sessionId) {
+    window.open(`/api/grade-forms/sessions/${sessionId}/export-template`, '_blank');
+}
+
+// ==========================================
+// Run Prediction
+// ==========================================
+function runPrediction(sessionId) {
+    currentViewSessionId = sessionId;
+    loadModelsForSelect();
+    const modal = new bootstrap.Modal(document.getElementById('predictionModelPicker'));
+    modal.show();
+
+    // Set up confirm button
+    const btn = document.getElementById('confirmPredictionBtn');
+    btn.onclick = async function() {
+        const modelFile = document.getElementById('predModelSelect').value;
+        if (!modelFile) {
+            showAlert('กรุณาเลือกโมเดล', 'warning');
+            return;
+        }
+        modal.hide();
+        await executePrediction(sessionId, modelFile);
+    };
+}
+
+async function executePrediction(sessionId, modelFilename) {
+    showLoading('กำลังทำนายผลการเรียน...');
+    try {
+        const res = await fetch(`/api/grade-forms/sessions/${sessionId}/run-prediction`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_filename: modelFilename })
+        });
+        const data = await res.json();
+        hideLoading();
+
+        if (data.success) {
+            predictionResults = data;
+            renderPredictionResults(data);
+            document.getElementById('predictionSection').classList.remove('d-none');
+            setTimeout(() => {
+                document.getElementById('predictionSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        } else {
+            showAlert(data.error || 'เกิดข้อผิดพลาดในการทำนาย', 'danger');
+        }
+    } catch(e) {
+        hideLoading();
+        showAlert('ไม่สามารถทำนายได้: ' + e.message, 'danger');
+    }
+}
+
+// ==========================================
+// Prediction Results Rendering
+// ==========================================
+function renderPredictionResults(data) {
+    const s = data.summary;
+    if (!s) return;
+
+    // Summary cards
+    const cardsContainer = document.getElementById('predSummaryCards');
+    cardsContainer.innerHTML = `
+        <div class="col-6 col-md-2"><div class="summary-card glass-card">
+            <div class="number text-primary">${s.total_students}</div>
+            <div class="label">นักศึกษาทั้งหมด</div>
+        </div></div>
+        <div class="col-6 col-md-2"><div class="summary-card glass-card">
+            <div class="number text-success">${s.pass_count}</div>
+            <div class="label">ผ่าน (${s.pass_percentage}%)</div>
+        </div></div>
+        <div class="col-6 col-md-2"><div class="summary-card glass-card">
+            <div class="number text-danger">${s.fail_count}</div>
+            <div class="label">ไม่ผ่าน (${s.fail_percentage}%)</div>
+        </div></div>
+        <div class="col-6 col-md-2"><div class="summary-card glass-card">
+            <div class="number text-info">${s.avg_gpa}</div>
+            <div class="label">GPA เฉลี่ย</div>
+        </div></div>
+        <div class="col-6 col-md-2"><div class="summary-card glass-card">
+            <div class="number text-warning">${(s.avg_probability * 100).toFixed(1)}%</div>
+            <div class="label">ความน่าจะเป็นเฉลี่ย</div>
+        </div></div>
+        <div class="col-6 col-md-2"><div class="summary-card glass-card">
+            <div class="number text-danger">${s.risk_distribution ? s.risk_distribution.high : 0}</div>
+            <div class="label">เสี่ยงสูง</div>
+        </div></div>`;
+
+    // Pie chart
+    renderPredPieChart(s);
+
+    // Bar chart
+    renderPredBarChart(s);
+
+    // Results table
+    renderPredResultsTable(data.results || []);
+}
+
+function renderPredPieChart(s) {
+    if (predPieChartInstance) predPieChartInstance.destroy();
+    const ctx = document.getElementById('predPieChart').getContext('2d');
+    predPieChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['ผ่าน (จบการศึกษา)', 'ไม่ผ่าน (เสี่ยง)'],
+            datasets: [{
+                data: [s.pass_count, s.fail_count],
+                backgroundColor: ['#10b981', '#ef4444'],
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 20, font: { size: 13 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => `${ctx.label}: ${ctx.parsed} คน (${(ctx.parsed / s.total_students * 100).toFixed(1)}%)`
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderPredBarChart(s) {
+    if (predBarChartInstance) predBarChartInstance.destroy();
+    const dist = s.probability_distribution;
+    if (!dist || !dist.length) return;
+
+    const ctx = document.getElementById('predBarChart').getContext('2d');
+    predBarChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dist.map(d => d.range),
+            datasets: [{
+                label: 'จำนวนนักศึกษา',
+                data: dist.map(d => d.count),
+                backgroundColor: ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#10b981'],
+                borderRadius: 8,
+                borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function renderPredResultsTable(results) {
+    const tbody = document.getElementById('predResultsBody');
+    tbody.innerHTML = '';
+    results.forEach((r, i) => {
+        const isPass = r.prediction === 'ผ่าน';
+        const statusColor = isPass ? 'success' : 'danger';
+        const statusIcon = isPass ? 'check-circle-fill' : 'x-circle-fill';
+        const riskClass = r.risk_level === 'สูง' ? 'risk-high' : r.risk_level === 'ปานกลาง' ? 'risk-medium' : 'risk-low';
+        const prob = (r.probability * 100).toFixed(1);
+
+        const mainRow = document.createElement('tr');
+        mainRow.style.cursor = 'pointer';
+        mainRow.onclick = () => togglePredDetail(i);
+        mainRow.innerHTML = `
+            <td class="ps-3 fw-bold text-muted">${i + 1}</td>
+            <td class="fw-bold">${r.student_id}</td>
+            <td>${r.gpa.toFixed(2)}</td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="progress flex-grow-1" style="height: 8px; min-width: 60px;">
+                        <div class="progress-bar bg-${statusColor}" style="width: ${prob}%"></div>
+                    </div>
+                    <span class="fw-bold" style="min-width: 50px;">${prob}%</span>
+                </div>
+            </td>
+            <td><span class="badge bg-${statusColor}"><i class="bi bi-${statusIcon} me-1"></i>${r.prediction}</span></td>
+            <td><span class="risk-badge ${riskClass}">${r.risk_level}</span></td>
+            <td class="small text-muted" style="max-width: 200px;">${r.recommendation || ''}</td>
+            <td><i class="bi bi-chevron-down text-muted"></i></td>`;
+        tbody.appendChild(mainRow);
+
+        const detailRow = document.createElement('tr');
+        detailRow.className = 'student-detail';
+        detailRow.id = `pred-detail-${i}`;
+        detailRow.innerHTML = `
+            <td colspan="8" class="detail-cell">
+                <div class="row g-3">
+                    <div class="col-md-3"><strong>หน่วยกิตรวม:</strong> ${r.total_credits || '-'}</div>
+                    <div class="col-md-3"><strong>วิชาทั้งหมด:</strong> ${r.total_courses || '-'} วิชา</div>
+                    <div class="col-md-3"><strong>วิชาตก (F):</strong> <span class="text-danger fw-bold">${r.failed_count || 0}</span></div>
+                    <div class="col-md-3"><strong>ความมั่นใจ:</strong> ${r.confidence ? (r.confidence * 100).toFixed(1) + '%' : '-'}</div>
+                </div>
+            </td>`;
+        tbody.appendChild(detailRow);
+    });
+}
+
+function togglePredDetail(index) {
+    const row = document.getElementById(`pred-detail-${index}`);
+    if (row) row.classList.toggle('show');
+}
+
+function hidePrediction() {
+    document.getElementById('predictionSection').classList.add('d-none');
+    predictionResults = null;
+}
+
+function downloadPredictionCSV() {
+    if (!predictionResults || !predictionResults.results || !predictionResults.results.length) return;
+
+    const headers = ['STUDENT_ID', 'GPA', 'TOTAL_CREDITS', 'TOTAL_COURSES', 'FAILED_COUNT',
+                     'PROBABILITY', 'PREDICTION', 'CONFIDENCE', 'RISK_LEVEL', 'RECOMMENDATION'];
+    let csv = '\uFEFF' + headers.join(',') + '\n';
+
+    predictionResults.results.forEach(r => {
+        csv += [
+            r.student_id,
+            r.gpa,
+            r.total_credits || '',
+            r.total_courses || '',
+            r.failed_count || 0,
+            (r.probability * 100).toFixed(2) + '%',
+            r.prediction,
+            r.confidence ? (r.confidence * 100).toFixed(2) + '%' : '',
+            r.risk_level,
+            '"' + (r.recommendation || '').replace(/"/g, '""') + '"'
+        ].join(',') + '\n';
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `grade_form_prediction_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// Toggle Session
+// ==========================================
+async function toggleSession(sessionId, isActive) {
+    const action = isActive ? 'ปิด' : 'เปิด';
+    if (!confirm(`ต้องการ${action} Session นี้หรือไม่?`)) return;
+
+    try {
+        const res = await fetch(`/api/grade-forms/sessions/${sessionId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: !isActive })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`${action} Session สำเร็จ`, 'success');
+            loadSessions();
+        } else {
+            showAlert(data.error || 'เกิดข้อผิดพลาด', 'danger');
+        }
+    } catch(e) {
+        showAlert('เกิดข้อผิดพลาด: ' + e.message, 'danger');
+    }
+}
+
+// ==========================================
+// Delete Session
+// ==========================================
+async function deleteSession(sessionId) {
+    if (!confirm('ต้องการลบ Session นี้หรือไม่?\n\nข้อมูลทั้งหมดรวมถึงคำตอบที่ส่งมาจะถูกลบอย่างถาวร')) return;
+
+    showLoading('กำลังลบ Session...');
+    try {
+        const res = await fetch(`/api/grade-forms/sessions/${sessionId}`, { method: 'DELETE' });
+        const data = await res.json();
+        hideLoading();
+
+        if (data.success) {
+            showToast('ลบ Session สำเร็จ', 'success');
+            // Hide related sections if viewing this session
+            if (currentViewSessionId === sessionId) {
+                hideSubmissions();
+                hidePrediction();
+            }
+            loadSessions();
+        } else {
+            showAlert(data.error || 'เกิดข้อผิดพลาด', 'danger');
+        }
+    } catch(e) {
+        hideLoading();
+        showAlert('เกิดข้อผิดพลาด: ' + e.message, 'danger');
+    }
+}
+
+// ==========================================
+// Utilities
+// ==========================================
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+</script>
+{% endblock %}

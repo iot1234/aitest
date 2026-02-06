@@ -33,7 +33,12 @@ from flask import (
     jsonify,
     render_template,
     send_from_directory,
+    session,
+    redirect,
+    url_for,
+    flash,
 )
+from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -64,6 +69,8 @@ from werkzeug.utils import secure_filename
 
 import config
 import math
+import secrets
+import grade_form_db
 
 try:
     import google.generativeai as genai
@@ -1163,6 +1170,46 @@ ACTIVE_CONFIG = config.get_config()
 app = Flask(__name__)
 app.config.from_object(ACTIVE_CONFIG)
 
+# Initialize grade form database at module level (for WSGI/Gunicorn)
+grade_form_db.init_db()
+
+# ==========================================
+# ADMIN AUTHENTICATION CONFIGURATION
+# ==========================================
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+_admin_password_hash = os.environ.get('ADMIN_PASSWORD_HASH', '')
+if not _admin_password_hash:
+    _plain_password = os.environ.get('ADMIN_PASSWORD', 'admin')
+    _admin_password_hash = generate_password_hash(_plain_password)
+    logger.info(f"Admin auth configured for user: {ADMIN_USERNAME}")
+ADMIN_PASSWORD_HASH = _admin_password_hash
+
+# Login attempt rate limiter (per IP)
+_login_attempts = {}  # {ip: (count, last_attempt_time)}
+
+def admin_required(f):
+    """Decorator to require admin login for protected routes."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('is_admin'):
+            if request.path.startswith('/api/') or request.is_json:
+                return jsonify({
+                    'success': False,
+                    'error': 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
+                    'login_url': '/login'
+                }), 401
+            return redirect(url_for('login_page', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.context_processor
+def inject_auth_state():
+    """Make auth state available in all templates."""
+    return {
+        'is_admin': session.get('is_admin', False),
+        'admin_username': session.get('admin_username', '')
+    }
+
 COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COURSES_DATA', [])}
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
@@ -1778,6 +1825,7 @@ except Exception as e:
 # TRAINING STATUS ROUTE
 # ===============================
 @app.route('/training_status')
+@admin_required
 def get_training_status():
     return jsonify(TRAINING_STATUS)
 
@@ -2395,6 +2443,7 @@ def train_ensemble_model(X, y):
 # ==========================================
 
 @app.route('/train', methods=['POST'])
+@admin_required
 def train_model():
     """Handles model training with the uploaded file."""
     try:
@@ -2947,6 +2996,7 @@ def list_models():
         return jsonify({'success': False, 'error': f'An error occurred while listing models: {str(e)}'}), 500
 
 @app.route('/api/models/<filename>', methods=['DELETE'])
+@admin_required
 def delete_model(filename):
     """Deletes a specified model file."""
     try:
@@ -4985,7 +5035,58 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
     )
 
 # Flask Routes (Keep all other routes unchanged)
+
+# ==========================================
+# AUTHENTICATION ROUTES
+# ==========================================
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    """Admin login page and handler."""
+    if session.get('is_admin'):
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        # Rate limiting
+        client_ip = request.remote_addr
+        attempts = _login_attempts.get(client_ip, (0, datetime.min))
+        if attempts[0] >= 5 and (datetime.now() - attempts[1]).total_seconds() < 300:
+            flash('เข้าสู่ระบบล้มเหลวหลายครั้ง กรุณารอ 5 นาที', 'danger')
+            return render_template('login.html'), 429
+
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
+            session.permanent = True
+            session['is_admin'] = True
+            session['admin_username'] = username
+            session['login_time'] = datetime.now().isoformat()
+            _login_attempts.pop(client_ip, None)
+            logger.info(f"Admin login successful: {username}")
+
+            next_url = request.args.get('next') or request.form.get('next')
+            if next_url and next_url.startswith('/'):
+                return redirect(next_url)
+            return redirect(url_for('index'))
+        else:
+            _login_attempts[client_ip] = (attempts[0] + 1, datetime.now())
+            logger.warning(f"Failed login attempt for: {username} from {client_ip}")
+            flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'danger')
+            return render_template('login.html'), 401
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    """Admin logout."""
+    session.clear()
+    flash('ออกจากระบบเรียบร้อยแล้ว', 'success')
+    return redirect(url_for('main_page'))
+
+
 @app.route('/')
+@admin_required
 def index():
     """Main page for uploading and training models."""
     return render_template('index.html')
@@ -5017,6 +5118,7 @@ def curriculum_prediction_form():
 
 
 @app.route('/status')
+@admin_required
 def status_page():
     """หน้าแสดงสถานะระบบ"""
     return render_template('status.html')
@@ -5504,6 +5606,7 @@ def gemini_predict_route():
         }), 500
 
 @app.route('/upload', methods=['POST'])
+@admin_required
 def upload_file():
     """Handles file upload and basic data format detection."""
     try:
@@ -5616,6 +5719,7 @@ def upload_file():
 
 # Keep all other routes unchanged...
 @app.route('/analyze', methods=['POST'])
+@admin_required
 def analyze_subjects():
     """Analyzes subjects from a CSV/Excel file (for Subject-based data)."""
     try:
@@ -6375,6 +6479,7 @@ def model_status():
 
 
 @app.route('/api/sync-models', methods=['POST'])
+@admin_required
 def sync_local_models_to_storage():
     """Sync local models to cloud storage"""
     try:
@@ -6562,9 +6667,855 @@ def advanced_test_page():
 
 @app.route('/predict-batch')
 def predict_batch_page():
-    return render_template('index.html')
+    """Page for batch prediction from uploaded file."""
+    return render_template('predict_batch.html')
+
+
+# ==========================================
+# BATCH PREDICTION HELPERS
+# ==========================================
+def _detect_batch_columns(df):
+    """Detect common column names in batch prediction file."""
+    col_map = {}
+    columns_lower = {col: col.lower().strip() for col in df.columns}
+
+    for col, lower in columns_lower.items():
+        if lower in ['student_id', 'studentid', 'id', 'student_no', 'studentno',
+                      'dummy studentno', 'dummy_studentno']:
+            col_map['student_id'] = col
+            break
+
+    for col, lower in columns_lower.items():
+        if lower in ['course_code', 'course_id', 'coursecode', 'courseid',
+                      'subject_code', 'subject_id', 'course']:
+            col_map['course_code'] = col
+            break
+
+    for col, lower in columns_lower.items():
+        if lower in ['grade', 'grades']:
+            col_map['grade'] = col
+            break
+
+    for col, lower in columns_lower.items():
+        if lower in ['credit', 'credits']:
+            col_map['credit'] = col
+            break
+
+    return col_map
+
+
+def _calc_prob_distribution(probabilities):
+    """Calculate probability distribution for chart data."""
+    bins = [
+        {'range': '0-20%', 'min': 0, 'max': 0.2, 'count': 0},
+        {'range': '21-40%', 'min': 0.2, 'max': 0.4, 'count': 0},
+        {'range': '41-60%', 'min': 0.4, 'max': 0.6, 'count': 0},
+        {'range': '61-80%', 'min': 0.6, 'max': 0.8, 'count': 0},
+        {'range': '81-100%', 'min': 0.8, 'max': 1.01, 'count': 0},
+    ]
+    for p in probabilities:
+        for b in bins:
+            if b['min'] <= p < b['max']:
+                b['count'] += 1
+                break
+    return [{'range': b['range'], 'count': b['count']} for b in bins]
+
+
+def _run_batch_prediction_on_df(df, model_filename):
+    """Core batch prediction logic. df must have columns: STUDENT_ID, COURSE_CODE, GRADE, CREDIT.
+    Returns dict: {success, results, summary, errors}."""
+    import traceback
+
+    grade_mapping = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
+
+    # Load model
+    loaded_model_data = storage.load_model(model_filename)
+    if not loaded_model_data:
+        return {'success': False, 'error': f'ไม่พบโมเดล: {model_filename}'}
+
+    models_dict = loaded_model_data.get('models', {})
+    scaler = loaded_model_data.get('scaler', None)
+    feature_names = loaded_model_data.get('feature_columns',
+                     loaded_model_data.get('feature_names', []))
+    course_profiles = loaded_model_data.get('course_profiles', {})
+
+    engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping)
+    engineer.course_profiles = course_profiles
+
+    predictor = ContextAwarePredictor(
+        feature_engineer=engineer,
+        models=models_dict,
+        scaler=scaler,
+        feature_names=feature_names
+    )
+
+    unique_students = df['STUDENT_ID'].unique()
+
+    MAX_BATCH = 500
+    if len(unique_students) > MAX_BATCH:
+        return {
+            'success': False,
+            'error': f'จำนวนนักศึกษามากเกินไป ({len(unique_students)} คน) รองรับสูงสุด {MAX_BATCH} คน'
+        }
+
+    results = []
+    errors = []
+
+    for student_id in unique_students:
+        try:
+            student_df = df[df['STUDENT_ID'] == student_id].copy()
+
+            student_grades = []
+            student_credits = []
+            total_courses = len(student_df)
+            failed_count = 0
+
+            for _, row in student_df.iterrows():
+                grade = str(row['GRADE']).strip().upper()
+                gp = grade_mapping.get(grade, None)
+                credit = float(row['CREDIT']) if pd.notna(row.get('CREDIT')) else 3.0
+
+                if gp is not None:
+                    student_grades.append(gp)
+                    student_credits.append(credit)
+                    if grade == 'F':
+                        failed_count += 1
+
+            # Calculate GPA
+            if student_credits:
+                total_points = sum(g * c for g, c in zip(student_grades, student_credits))
+                total_credit = sum(student_credits)
+                gpa = total_points / total_credit if total_credit > 0 else 0
+            else:
+                gpa = 0
+                total_credit = 0
+
+            # Build transcript for predictor
+            transcript_rows = []
+            for _, row in student_df.iterrows():
+                grade = str(row['GRADE']).strip().upper()
+                gp = grade_mapping.get(grade, 0)
+                credit = float(row['CREDIT']) if pd.notna(row.get('CREDIT')) else 3.0
+                transcript_rows.append({
+                    'Dummy StudentNO': str(student_id),
+                    'COURSE_CODE': str(row['COURSE_CODE']),
+                    'CREDIT': credit,
+                    'GRADE': grade,
+                    'GRADE_POINT': gp,
+                })
+
+            transcript_df = pd.DataFrame(transcript_rows)
+
+            # Predict
+            try:
+                prediction_result = predictor.predict_graduation_probability(transcript_df)
+                prob_pass = prediction_result.get('probability', 0.5)
+                confidence = prediction_result.get('confidence', 0.5)
+            except Exception:
+                # Fallback: simple heuristic if model fails
+                prob_pass = min(1.0, max(0.0, (gpa - 1.0) / 2.0)) if gpa > 0 else 0.3
+                confidence = 0.3
+
+            prediction = 'ผ่าน' if prob_pass >= 0.5 else 'ไม่ผ่าน'
+
+            if prob_pass >= 0.8:
+                risk_level = 'ต่ำ'
+            elif prob_pass >= 0.5:
+                risk_level = 'ปานกลาง'
+            else:
+                risk_level = 'สูง'
+
+            # Recommendation
+            if prediction == 'ไม่ผ่าน' and gpa < 2.0:
+                recommendation = 'GPA ต่ำกว่าเกณฑ์ ควรปรึกษาอาจารย์ที่ปรึกษาทันที'
+            elif prediction == 'ไม่ผ่าน' and failed_count >= 3:
+                recommendation = f'มีวิชาตก {failed_count} วิชา ควรลงทะเบียนเรียนซ้ำ'
+            elif prediction == 'ไม่ผ่าน':
+                recommendation = 'มีความเสี่ยง ควรปรับปรุงผลการเรียนและพบอาจารย์ที่ปรึกษา'
+            elif prediction == 'ผ่าน' and gpa >= 3.0:
+                recommendation = 'ผลการเรียนดี ควรรักษามาตรฐาน'
+            elif prediction == 'ผ่าน':
+                recommendation = 'มีแนวโน้มจบการศึกษา ควรตั้งใจเรียนต่อ'
+            else:
+                recommendation = 'ควรติดตามผลการเรียนอย่างใกล้ชิด'
+
+            results.append({
+                'student_id': str(student_id),
+                'gpa': round(gpa, 2),
+                'total_credits': round(total_credit, 1),
+                'total_courses': total_courses,
+                'failed_count': failed_count,
+                'probability': round(float(prob_pass), 4),
+                'prediction': prediction,
+                'confidence': round(float(confidence), 4),
+                'risk_level': risk_level,
+                'recommendation': recommendation
+            })
+
+        except Exception as student_err:
+            errors.append({
+                'student_id': str(student_id),
+                'error': str(student_err)
+            })
+            logger.warning(f"Batch prediction error for student {student_id}: {student_err}")
+
+    # Summary
+    if results:
+        passed = [r for r in results if r['prediction'] == 'ผ่าน']
+        failed = [r for r in results if r['prediction'] == 'ไม่ผ่าน']
+        all_gpas = [r['gpa'] for r in results]
+        all_probs = [r['probability'] for r in results]
+
+        summary = {
+            'total_students': len(results),
+            'pass_count': len(passed),
+            'pass_percentage': round(len(passed) / len(results) * 100, 1),
+            'fail_count': len(failed),
+            'fail_percentage': round(len(failed) / len(results) * 100, 1),
+            'avg_gpa': round(sum(all_gpas) / len(all_gpas), 2),
+            'min_gpa': round(min(all_gpas), 2),
+            'max_gpa': round(max(all_gpas), 2),
+            'avg_probability': round(sum(all_probs) / len(all_probs), 4),
+            'risk_distribution': {
+                'high': len([r for r in results if r['risk_level'] == 'สูง']),
+                'medium': len([r for r in results if r['risk_level'] == 'ปานกลาง']),
+                'low': len([r for r in results if r['risk_level'] == 'ต่ำ'])
+            },
+            'probability_distribution': _calc_prob_distribution(all_probs)
+        }
+    else:
+        summary = {'total_students': 0}
+
+    return {
+        'success': True,
+        'results': results,
+        'summary': summary,
+        'errors': errors,
+        'model_used': model_filename
+    }
+
+
+# ==========================================
+# BATCH PREDICTION API
+# ==========================================
+@app.route('/api/predict_batch', methods=['POST'])
+def predict_batch():
+    """
+    Batch prediction API: accepts a CSV/Excel file with transcript data,
+    processes each unique student, and returns predictions.
+    """
+    import traceback
+    try:
+        # 1. Validate file upload
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'ไม่พบไฟล์ในคำขอ'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'ไม่ได้เลือกไฟล์'}), 400
+
+        if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
+            return jsonify({'success': False, 'error': 'รองรับเฉพาะไฟล์ .csv, .xlsx, .xls'}), 400
+
+        model_filename = request.form.get('model_filename')
+        if not model_filename:
+            return jsonify({'success': False, 'error': 'กรุณาเลือกโมเดลสำหรับการทำนาย'}), 400
+
+        # 2. Save and read file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        original_ext = ''
+        if '.' in file.filename:
+            original_ext = '.' + file.filename.rsplit('.', 1)[1].lower()
+        safe_name = secure_filename(file.filename)
+        if original_ext and not safe_name.lower().endswith(original_ext):
+            temp_filename = f"batch_{timestamp}_{safe_name}{original_ext}"
+        else:
+            temp_filename = f"batch_{timestamp}_{safe_name}"
+
+        upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, temp_filename)
+        file.save(filepath)
+
+        try:
+            df = None
+            if filepath.lower().endswith('.csv'):
+                for enc in ['utf-8-sig', 'utf-8', 'cp874', 'tis-620', 'iso-8859-1']:
+                    try:
+                        df = pd.read_csv(filepath, encoding=enc)
+                        break
+                    except Exception:
+                        continue
+            else:
+                df = pd.read_excel(filepath, engine='openpyxl')
+
+            if df is None or df.empty:
+                return jsonify({'success': False, 'error': 'ไม่สามารถอ่านไฟล์ได้ หรือไฟล์ว่าง'}), 400
+        finally:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+        # 3. Detect columns and normalize to standard names
+        col_map = _detect_batch_columns(df)
+        if not col_map.get('student_id') or not col_map.get('course_code') or not col_map.get('grade'):
+            return jsonify({
+                'success': False,
+                'error': 'ไม่พบคอลัมน์ที่จำเป็น: STUDENT_ID, COURSE_CODE, GRADE',
+                'detected_columns': df.columns.tolist(),
+                'hint': 'ไฟล์ต้องมีคอลัมน์ STUDENT_ID, COURSE_CODE, GRADE (และ CREDIT ถ้ามี)'
+            }), 400
+
+        # Normalize column names for the helper function
+        normalized_df = pd.DataFrame()
+        normalized_df['STUDENT_ID'] = df[col_map['student_id']]
+        normalized_df['COURSE_CODE'] = df[col_map['course_code']]
+        normalized_df['GRADE'] = df[col_map['grade']]
+        if col_map.get('credit'):
+            normalized_df['CREDIT'] = df[col_map['credit']]
+        else:
+            normalized_df['CREDIT'] = 3.0
+
+        # 4. Run prediction using shared helper
+        result = _run_batch_prediction_on_df(normalized_df, model_filename)
+
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+
+    except Exception as e:
+        logger.error(f"Batch prediction error: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
+
+
+# ==========================================
+# GRADE COLLECTION FORM SYSTEM
+# ==========================================
+
+@app.route('/admin/grade-forms')
+@admin_required
+def admin_grade_forms_page():
+    """Admin dashboard for managing grade collection forms."""
+    courses_json = json.dumps(app.config.get('COURSES_DATA', []))
+    terms_json = json.dumps(app.config.get('ALL_TERMS_DATA', []))
+    return render_template('admin_grade_forms.html',
+                           coursesData=courses_json,
+                           allTermsData=terms_json)
+
+
+@app.route('/api/grade-forms/sessions', methods=['GET'])
+@admin_required
+def api_list_grade_sessions():
+    """List all grade collection sessions."""
+    try:
+        sessions = grade_form_db.list_sessions()
+        return jsonify({'success': True, 'sessions': sessions})
+    except Exception as e:
+        logger.error(f"Error listing grade form sessions: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions', methods=['POST'])
+@admin_required
+def api_create_grade_session():
+    """Create a new grade collection session."""
+    try:
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        if not title:
+            return jsonify({'success': False, 'error': 'กรุณากรอกชื่อ session'}), 400
+
+        term_indices = data.get('term_indices', [])
+        all_terms = app.config.get('ALL_TERMS_DATA', [])
+        if not term_indices or not all(isinstance(i, int) and 0 <= i < len(all_terms) for i in term_indices):
+            return jsonify({'success': False, 'error': 'กรุณาเลือกเทอมอย่างน้อย 1 เทอม'}), 400
+
+        sess = grade_form_db.create_session(
+            title=title,
+            description=data.get('description', ''),
+            term_indices=term_indices,
+            show_prediction=data.get('show_prediction', False),
+            model_filename=data.get('model_filename', ''),
+            expires_at=data.get('expires_at')
+        )
+        form_url = f"/form/{sess['token']}"
+        return jsonify({'success': True, 'session': sess, 'form_url': form_url})
+    except Exception as e:
+        logger.error(f"Error creating grade form session: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>', methods=['PUT'])
+@admin_required
+def api_update_grade_session(session_id):
+    """Update a grade collection session."""
+    try:
+        data = request.get_json()
+        grade_form_db.update_session(session_id, **data)
+        sess = grade_form_db.get_session_by_id(session_id)
+        return jsonify({'success': True, 'session': sess})
+    except Exception as e:
+        logger.error(f"Error updating grade form session: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>', methods=['DELETE'])
+@admin_required
+def api_delete_grade_session(session_id):
+    """Delete a grade collection session and all its submissions."""
+    try:
+        grade_form_db.delete_session(session_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Error deleting grade form session: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>/submissions', methods=['GET'])
+@admin_required
+def api_get_grade_submissions(session_id):
+    """Get all submissions for a session."""
+    try:
+        submissions = grade_form_db.get_submissions(session_id)
+        # Parse grades_json for each submission
+        for sub in submissions:
+            if isinstance(sub.get('grades_json'), str):
+                sub['grades'] = json.loads(sub['grades_json'])
+            else:
+                sub['grades'] = sub.get('grades_json', {})
+        return jsonify({'success': True, 'submissions': submissions})
+    except Exception as e:
+        logger.error(f"Error getting submissions: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>/submissions/<int:sub_id>', methods=['DELETE'])
+@admin_required
+def api_delete_grade_submission(session_id, sub_id):
+    """Delete a single submission."""
+    try:
+        grade_form_db.delete_submission(sub_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Error deleting submission: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>/export-template', methods=['GET'])
+@admin_required
+def api_export_grade_template(session_id):
+    """Generate and download an empty CSV template for a session."""
+    try:
+        sess = grade_form_db.get_session_by_id(session_id)
+        if not sess:
+            return jsonify({'success': False, 'error': 'ไม่พบ session'}), 404
+
+        term_indices = json.loads(sess['term_indices']) if isinstance(sess['term_indices'], str) else sess['term_indices']
+        all_terms = app.config.get('ALL_TERMS_DATA', [])
+        courses_data = app.config.get('COURSES_DATA', [])
+        course_lookup = {c['id']: c for c in courses_data}
+
+        # Collect courses for selected terms
+        course_ids = []
+        for idx in term_indices:
+            if 0 <= idx < len(all_terms):
+                course_ids.extend(all_terms[idx].get('ids', []))
+
+        # Build CSV header
+        import io
+        output = io.StringIO()
+        # BOM for Excel Thai support
+        output.write('\ufeff')
+        # Header: STUDENT_ID, STUDENT_NAME, then course columns
+        headers = ['STUDENT_ID', 'STUDENT_NAME']
+        for cid in course_ids:
+            course = course_lookup.get(cid, {})
+            name = course.get('thaiName', cid)
+            credit = course.get('credit', 3)
+            headers.append(f"{cid} {name} ({credit} หน่วยกิต)")
+        output.write(','.join(f'"{h}"' for h in headers) + '\n')
+        # Add one empty example row
+        output.write('"6301001","ชื่อ-นามสกุล"' + ',""' * len(course_ids) + '\n')
+
+        csv_content = output.getvalue()
+        from flask import Response
+        response = Response(csv_content, mimetype='text/csv; charset=utf-8')
+        safe_title = re.sub(r'[^\w\s-]', '', sess['title'])[:30]
+        response.headers['Content-Disposition'] = f'attachment; filename="template_{safe_title}.csv"'
+        return response
+    except Exception as e:
+        logger.error(f"Error exporting template: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>/export', methods=['GET'])
+@admin_required
+def api_export_grade_submissions(session_id):
+    """Export all submissions as CSV (wide or long format)."""
+    try:
+        fmt = request.args.get('format', 'wide')
+        sess = grade_form_db.get_session_by_id(session_id)
+        if not sess:
+            return jsonify({'success': False, 'error': 'ไม่พบ session'}), 404
+
+        submissions = grade_form_db.get_submissions(session_id)
+        if not submissions:
+            return jsonify({'success': False, 'error': 'ยังไม่มีข้อมูล'}), 404
+
+        courses_data = app.config.get('COURSES_DATA', [])
+
+        import io
+        output = io.StringIO()
+        output.write('\ufeff')  # BOM
+
+        if fmt == 'long':
+            # Long format: STUDENT_ID, STUDENT_NAME, COURSE_CODE, GRADE, CREDIT
+            output.write('STUDENT_ID,STUDENT_NAME,COURSE_CODE,GRADE,CREDIT\n')
+            credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
+            for sub in submissions:
+                grades = json.loads(sub['grades_json']) if isinstance(sub['grades_json'], str) else sub['grades_json']
+                for course_id, grade in grades.items():
+                    if grade and grade.strip():
+                        credit = credit_lookup.get(course_id, 3)
+                        name = sub.get('student_name', '').replace('"', '""')
+                        output.write(f'"{sub["student_id"]}","{name}","{course_id}","{grade}",{credit}\n')
+        else:
+            # Wide format: STUDENT_ID, STUDENT_NAME, GPA, [course columns]
+            term_indices = json.loads(sess['term_indices']) if isinstance(sess['term_indices'], str) else sess['term_indices']
+            all_terms = app.config.get('ALL_TERMS_DATA', [])
+            course_ids = []
+            for idx in term_indices:
+                if 0 <= idx < len(all_terms):
+                    course_ids.extend(all_terms[idx].get('ids', []))
+
+            headers = ['STUDENT_ID', 'STUDENT_NAME', 'GPA'] + course_ids
+            output.write(','.join(f'"{h}"' for h in headers) + '\n')
+            for sub in submissions:
+                grades = json.loads(sub['grades_json']) if isinstance(sub['grades_json'], str) else sub['grades_json']
+                name = sub.get('student_name', '').replace('"', '""')
+                row = [f'"{sub["student_id"]}"', f'"{name}"', str(round(sub.get('gpa', 0), 2))]
+                for cid in course_ids:
+                    row.append(f'"{grades.get(cid, "")}"')
+                output.write(','.join(row) + '\n')
+
+        csv_content = output.getvalue()
+        from flask import Response
+        response = Response(csv_content, mimetype='text/csv; charset=utf-8')
+        safe_title = re.sub(r'[^\w\s-]', '', sess['title'])[:30]
+        response.headers['Content-Disposition'] = f'attachment; filename="submissions_{safe_title}_{fmt}.csv"'
+        return response
+    except Exception as e:
+        logger.error(f"Error exporting submissions: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/sessions/<int:session_id>/run-prediction', methods=['POST'])
+@admin_required
+def api_run_grade_prediction(session_id):
+    """Run batch prediction on all submissions in a session."""
+    try:
+        data = request.get_json() or {}
+        model_filename = data.get('model_filename', '')
+
+        sess = grade_form_db.get_session_by_id(session_id)
+        if not sess:
+            return jsonify({'success': False, 'error': 'ไม่พบ session'}), 404
+
+        if not model_filename:
+            model_filename = sess.get('model_filename', '')
+        if not model_filename:
+            return jsonify({'success': False, 'error': 'กรุณาเลือกโมเดลสำหรับการทำนาย'}), 400
+
+        courses_data = app.config.get('COURSES_DATA', [])
+        long_rows = grade_form_db.export_submissions_as_long_format(session_id, courses_data)
+        if not long_rows:
+            return jsonify({'success': False, 'error': 'ยังไม่มีข้อมูลสำหรับทำนาย'}), 400
+
+        df = pd.DataFrame(long_rows)
+        result = _run_batch_prediction_on_df(df, model_filename)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error running prediction on grade form session: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# --- Public Grade Form Routes (no login required) ---
+
+@app.route('/form/<token>')
+def public_grade_form(token):
+    """Public page for students to fill in their grades."""
+    sess = grade_form_db.get_session(token)
+    if not sess:
+        return render_template('grade_form_public.html', error='ไม่พบแบบฟอร์มนี้'), 404
+
+    # Check if active
+    if not sess.get('is_active'):
+        return render_template('grade_form_public.html', error='แบบฟอร์มนี้ถูกปิดแล้ว')
+
+    # Check expiry
+    if sess.get('expires_at'):
+        try:
+            expires = datetime.fromisoformat(sess['expires_at'])
+            if datetime.now() > expires:
+                return render_template('grade_form_public.html', error='แบบฟอร์มนี้หมดอายุแล้ว')
+        except (ValueError, TypeError):
+            pass
+
+    # Resolve courses for the selected terms
+    term_indices = json.loads(sess['term_indices']) if isinstance(sess['term_indices'], str) else sess['term_indices']
+    all_terms = app.config.get('ALL_TERMS_DATA', [])
+    courses_data = app.config.get('COURSES_DATA', [])
+    grades_json = json.dumps(app.config.get('DATA_CONFIG', {}).get('grade_mapping', {}))
+
+    # Build resolved terms with full course info
+    resolved_terms = []
+    course_lookup = {c['id']: c for c in courses_data}
+    for idx in term_indices:
+        if 0 <= idx < len(all_terms):
+            term = all_terms[idx]
+            term_courses = []
+            for cid in term.get('ids', []):
+                course = course_lookup.get(cid)
+                if course:
+                    term_courses.append(course)
+            resolved_terms.append({
+                'year': term['year'],
+                'term': term['term'],
+                'courses': term_courses
+            })
+
+    return render_template('grade_form_public.html',
+                           session=sess,
+                           resolved_terms=json.dumps(resolved_terms),
+                           gradeMapping=grades_json,
+                           error=None)
+
+
+@app.route('/api/grade-forms/submit/<token>', methods=['POST'])
+def api_submit_student_grades(token):
+    """Student submits grades via the public form."""
+    try:
+        sess = grade_form_db.get_session(token)
+        if not sess:
+            return jsonify({'success': False, 'error': 'ไม่พบแบบฟอร์มนี้'}), 404
+        if not sess.get('is_active'):
+            return jsonify({'success': False, 'error': 'แบบฟอร์มนี้ถูกปิดแล้ว'}), 400
+        if sess.get('expires_at'):
+            try:
+                if datetime.now() > datetime.fromisoformat(sess['expires_at']):
+                    return jsonify({'success': False, 'error': 'แบบฟอร์มนี้หมดอายุแล้ว'}), 400
+            except (ValueError, TypeError):
+                pass
+
+        data = request.get_json()
+        student_id = str(data.get('student_id', '')).strip()
+        if not student_id:
+            return jsonify({'success': False, 'error': 'กรุณากรอกรหัสนักศึกษา'}), 400
+
+        student_name = str(data.get('student_name', '')).strip()
+        grades = data.get('grades', {})
+
+        # Validate grades
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        valid_grades = set(grade_mapping.keys())
+        for course_id, grade in grades.items():
+            if grade and grade.strip() and grade.strip().upper() not in valid_grades:
+                return jsonify({'success': False, 'error': f'เกรด "{grade}" ไม่ถูกต้องสำหรับวิชา {course_id}'}), 400
+
+        # Calculate GPA
+        courses_data = app.config.get('COURSES_DATA', [])
+        credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
+        total_points = 0
+        total_credits = 0
+        for course_id, grade in grades.items():
+            if grade and grade.strip():
+                grade_upper = grade.strip().upper()
+                gp = grade_mapping.get(grade_upper)
+                if gp is not None and grade_upper not in ('W', 'I', 'AU', 'S', 'U'):
+                    credit = credit_lookup.get(course_id, 3)
+                    total_points += gp * credit
+                    total_credits += credit
+
+        gpa = round(total_points / total_credits, 2) if total_credits > 0 else 0.0
+
+        # Save submission
+        ip_address = request.remote_addr or ''
+        submission = grade_form_db.submit_grades(
+            session_id=sess['id'],
+            student_id=student_id,
+            student_name=student_name,
+            grades_json=grades,
+            gpa=gpa,
+            total_credits=total_credits,
+            ip_address=ip_address
+        )
+
+        response_data = {
+            'success': True,
+            'message': 'บันทึกข้อมูลเรียบร้อยแล้ว',
+            'gpa': gpa,
+            'total_credits': total_credits,
+            'is_update': bool(data.get('is_update'))
+        }
+
+        # Run prediction if enabled
+        if sess.get('show_prediction') and sess.get('model_filename'):
+            try:
+                # Build long format for this student
+                long_rows = []
+                for course_id, grade in grades.items():
+                    if grade and grade.strip():
+                        long_rows.append({
+                            'STUDENT_ID': student_id,
+                            'COURSE_CODE': course_id,
+                            'GRADE': grade.strip().upper(),
+                            'CREDIT': credit_lookup.get(course_id, 3)
+                        })
+                if long_rows:
+                    pred_df = pd.DataFrame(long_rows)
+                    pred_result = _run_batch_prediction_on_df(pred_df, sess['model_filename'])
+                    if pred_result.get('success') and pred_result.get('results'):
+                        response_data['prediction'] = pred_result['results'][0]
+            except Exception as pred_err:
+                logger.warning(f"Prediction failed for student {student_id}: {pred_err}")
+
+        return jsonify(response_data)
+    except Exception as e:
+        logger.error(f"Error submitting grades: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/grade-forms/submit-file/<token>', methods=['POST'])
+def api_submit_grades_file(token):
+    """Student uploads CSV/Excel file with their grades."""
+    try:
+        sess = grade_form_db.get_session(token)
+        if not sess:
+            return jsonify({'success': False, 'error': 'ไม่พบแบบฟอร์มนี้'}), 404
+        if not sess.get('is_active'):
+            return jsonify({'success': False, 'error': 'แบบฟอร์มนี้ถูกปิดแล้ว'}), 400
+
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'ไม่พบไฟล์'}), 400
+
+        file = request.files['file']
+        student_id = request.form.get('student_id', '').strip()
+        student_name = request.form.get('student_name', '').strip()
+
+        if not student_id:
+            return jsonify({'success': False, 'error': 'กรุณากรอกรหัสนักศึกษา'}), 400
+
+        if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
+            return jsonify({'success': False, 'error': 'รองรับเฉพาะไฟล์ .csv, .xlsx, .xls'}), 400
+
+        # Save and read file
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        original_ext = ''
+        if '.' in file.filename:
+            original_ext = '.' + file.filename.rsplit('.', 1)[1].lower()
+        safe_name = secure_filename(file.filename)
+        if original_ext and not safe_name.lower().endswith(original_ext):
+            temp_filename = f"form_{timestamp}_{safe_name}{original_ext}"
+        else:
+            temp_filename = f"form_{timestamp}_{safe_name}"
+
+        upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+        filepath = os.path.join(upload_folder, temp_filename)
+        file.save(filepath)
+
+        try:
+            df = None
+            if filepath.lower().endswith('.csv'):
+                for enc in ['utf-8-sig', 'utf-8', 'cp874', 'tis-620', 'iso-8859-1']:
+                    try:
+                        df = pd.read_csv(filepath, encoding=enc)
+                        break
+                    except Exception:
+                        continue
+            else:
+                df = pd.read_excel(filepath, engine='openpyxl')
+
+            if df is None or df.empty:
+                return jsonify({'success': False, 'error': 'ไม่สามารถอ่านไฟล์ได้ หรือไฟล์ว่าง'}), 400
+        finally:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+        # Detect format: wide (course columns) or long (COURSE_CODE, GRADE)
+        courses_data = app.config.get('COURSES_DATA', [])
+        course_ids = {c['id'] for c in courses_data}
+        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
+        credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
+
+        grades = {}
+
+        # Check if it's long format (has COURSE_CODE and GRADE columns)
+        col_map = _detect_batch_columns(df)
+        if col_map.get('course_code') and col_map.get('grade'):
+            # Long format
+            for _, row in df.iterrows():
+                course_code = str(row[col_map['course_code']]).strip()
+                grade = str(row[col_map['grade']]).strip().upper()
+                if course_code in course_ids and grade in grade_mapping:
+                    grades[course_code] = grade
+        else:
+            # Wide format: column names contain course IDs
+            for col in df.columns:
+                col_str = str(col).strip()
+                # Extract course ID from column name (first part before space)
+                course_id = col_str.split(' ')[0].strip().strip('"')
+                if course_id in course_ids:
+                    grade_val = str(df.iloc[0][col]).strip().upper() if len(df) > 0 else ''
+                    if grade_val and grade_val in grade_mapping:
+                        grades[course_id] = grade_val
+
+        if not grades:
+            return jsonify({
+                'success': False,
+                'error': 'ไม่พบข้อมูลเกรดในไฟล์ กรุณาตรวจสอบรูปแบบไฟล์',
+                'detected_columns': df.columns.tolist()[:20]
+            }), 400
+
+        # Calculate GPA
+        total_points = 0
+        total_credits = 0
+        for course_id, grade in grades.items():
+            gp = grade_mapping.get(grade)
+            if gp is not None and grade not in ('W', 'I', 'AU', 'S', 'U'):
+                credit = credit_lookup.get(course_id, 3)
+                total_points += gp * credit
+                total_credits += credit
+
+        gpa = round(total_points / total_credits, 2) if total_credits > 0 else 0.0
+
+        # Save
+        ip_address = request.remote_addr or ''
+        submission = grade_form_db.submit_grades(
+            session_id=sess['id'],
+            student_id=student_id,
+            student_name=student_name,
+            grades_json=grades,
+            gpa=gpa,
+            total_credits=total_credits,
+            ip_address=ip_address
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'บันทึกข้อมูลเรียบร้อย ({len(grades)} วิชา)',
+            'gpa': gpa,
+            'total_credits': total_credits,
+            'grades_count': len(grades)
+        })
+    except Exception as e:
+        logger.error(f"Error submitting grade file: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/models')
+@admin_required
 def models_page():
     return render_template('model_management.html')
 @app.route('/predict_manual_input', methods=['POST'])
@@ -6859,13 +7810,16 @@ if __name__ == '__main__':
     logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     logger.info(f"Model folder: {app.config['MODEL_FOLDER']}")
     logger.info(f"S3 Storage: {'Enabled' if not storage.use_local else 'Disabled (using local)'}")
-    
+
     # สร้างโฟลเดอร์ถ้ายังไม่มี
     for folder in [app.config['UPLOAD_FOLDER'], app.config['MODEL_FOLDER']]:
         if not os.path.exists(folder):
             os.makedirs(folder)
             logger.info(f"✅ Created folder: {folder}")
-    
+
+    # Initialize grade form database
+    grade_form_db.init_db()
+
     # โหลดโมเดลที่มีอยู่
     load_existing_models()
     
