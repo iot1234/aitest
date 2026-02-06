@@ -6668,7 +6668,11 @@ def advanced_test_page():
 @app.route('/predict-batch')
 def predict_batch_page():
     """Page for batch prediction from uploaded file."""
-    return render_template('predict_batch.html')
+    courses_data = app.config.get('COURSES_DATA', [])
+    all_terms_data = app.config.get('ALL_TERMS_DATA', [])
+    return render_template('predict_batch.html',
+                           coursesData=json.dumps(courses_data, ensure_ascii=False),
+                           allTermsData=json.dumps(all_terms_data, ensure_ascii=False))
 
 
 # ==========================================
@@ -6701,7 +6705,89 @@ def _detect_batch_columns(df):
             col_map['credit'] = col
             break
 
+    for col, lower in columns_lower.items():
+        if lower in ['student_name', 'studentname', 'name', 'fullname', 'full_name']:
+            col_map['student_name'] = col
+            break
+
+    for col, lower in columns_lower.items():
+        if lower in ['gpa']:
+            col_map['gpa'] = col
+            break
+
     return col_map
+
+
+def _detect_file_format(df):
+    """Detect if file is Wide Format or Long Format.
+    Wide Format: columns are course IDs (e.g., 03-407-100-101)
+    Long Format: has STUDENT_ID, COURSE_CODE, GRADE columns
+    Returns: 'wide', 'long', or 'unknown'
+    """
+    col_map = _detect_batch_columns(df)
+
+    # Check for Long Format: must have student_id, course_code, grade
+    if col_map.get('student_id') and col_map.get('course_code') and col_map.get('grade'):
+        return 'long', col_map
+
+    # Check for Wide Format: columns look like course IDs (XX-XXX-XXX-XXX pattern)
+    course_pattern = re.compile(r'^\d{2}-\d{3}-\d{3}-\d{3}$')
+    courses_data = app.config.get('COURSES_DATA', [])
+    known_course_ids = {c['id'] for c in courses_data}
+
+    course_columns = []
+    for col in df.columns:
+        col_stripped = str(col).strip()
+        if course_pattern.match(col_stripped) or col_stripped in known_course_ids:
+            course_columns.append(col)
+
+    if len(course_columns) >= 3:  # At least 3 course columns to be considered wide format
+        return 'wide', {'course_columns': course_columns, **col_map}
+
+    return 'unknown', col_map
+
+
+def _convert_wide_to_long(df, col_info):
+    """Convert Wide Format DataFrame to Long Format (STUDENT_ID, COURSE_CODE, GRADE, CREDIT).
+    Wide Format has course IDs as column headers and grades as values.
+    """
+    courses_data = app.config.get('COURSES_DATA', [])
+    credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
+    course_columns = col_info.get('course_columns', [])
+
+    # Detect student_id column
+    student_id_col = col_info.get('student_id')
+    if not student_id_col:
+        # Try first column as student_id
+        student_id_col = df.columns[0]
+
+    student_name_col = col_info.get('student_name')
+
+    long_rows = []
+    student_names = {}
+
+    for _, row in df.iterrows():
+        student_id = str(row[student_id_col]).strip()
+        if not student_id or student_id.lower() in ['nan', 'none', '']:
+            continue
+
+        if student_name_col and pd.notna(row.get(student_name_col)):
+            student_names[student_id] = str(row[student_name_col]).strip()
+
+        for course_col in course_columns:
+            grade = str(row[course_col]).strip().upper() if pd.notna(row[course_col]) else ''
+            if grade and grade not in ['', 'NAN', 'NONE']:
+                course_id = str(course_col).strip()
+                credit = credit_lookup.get(course_id, 3)
+                long_rows.append({
+                    'STUDENT_ID': student_id,
+                    'COURSE_CODE': course_id,
+                    'GRADE': grade,
+                    'CREDIT': credit
+                })
+
+    result_df = pd.DataFrame(long_rows)
+    return result_df, student_names
 
 
 def _calc_prob_distribution(probabilities):
@@ -6901,8 +6987,10 @@ def _run_batch_prediction_on_df(df, model_filename):
 @app.route('/api/predict_batch', methods=['POST'])
 def predict_batch():
     """
-    Batch prediction API: accepts a CSV/Excel file with transcript data,
-    processes each unique student, and returns predictions.
+    Batch prediction API: accepts CSV/Excel in Wide Format or Long Format.
+    Wide Format: STUDENT_ID, STUDENT_NAME, GPA, [course_id columns with grades]
+    Long Format: STUDENT_ID, COURSE_CODE, GRADE, CREDIT
+    Auto-detects format and processes accordingly.
     """
     import traceback
     try:
@@ -6955,30 +7043,63 @@ def predict_batch():
             if os.path.exists(filepath):
                 os.remove(filepath)
 
-        # 3. Detect columns and normalize to standard names
-        col_map = _detect_batch_columns(df)
-        if not col_map.get('student_id') or not col_map.get('course_code') or not col_map.get('grade'):
+        # 3. Auto-detect file format
+        file_format, col_info = _detect_file_format(df)
+        student_names = {}
+
+        if file_format == 'wide':
+            # Wide Format: convert to long format
+            logger.info(f"Detected Wide Format with {len(col_info.get('course_columns', []))} course columns")
+            normalized_df, student_names = _convert_wide_to_long(df, col_info)
+            if normalized_df.empty:
+                return jsonify({
+                    'success': False,
+                    'error': 'ไม่พบข้อมูลเกรดในไฟล์ กรุณาตรวจสอบว่ามีเกรดกรอกอยู่',
+                    'detected_format': 'wide',
+                    'detected_columns': df.columns.tolist()[:20]
+                }), 400
+            detected_format_label = 'Wide Format (รหัสวิชาเป็นหัวคอลัมน์)'
+
+        elif file_format == 'long':
+            # Long Format: normalize columns
+            col_map = col_info
+            normalized_df = pd.DataFrame()
+            normalized_df['STUDENT_ID'] = df[col_map['student_id']]
+            normalized_df['COURSE_CODE'] = df[col_map['course_code']]
+            normalized_df['GRADE'] = df[col_map['grade']]
+            if col_map.get('credit'):
+                normalized_df['CREDIT'] = df[col_map['credit']]
+            else:
+                normalized_df['CREDIT'] = 3.0
+            # Collect student names if available
+            if col_map.get('student_name'):
+                for _, row in df.iterrows():
+                    sid = str(row[col_map['student_id']]).strip()
+                    name = str(row[col_map['student_name']]).strip() if pd.notna(row.get(col_map['student_name'])) else ''
+                    if sid and name:
+                        student_names[sid] = name
+            detected_format_label = 'Long Format (แต่ละแถว = 1 วิชา)'
+
+        else:
             return jsonify({
                 'success': False,
-                'error': 'ไม่พบคอลัมน์ที่จำเป็น: STUDENT_ID, COURSE_CODE, GRADE',
-                'detected_columns': df.columns.tolist(),
-                'hint': 'ไฟล์ต้องมีคอลัมน์ STUDENT_ID, COURSE_CODE, GRADE (และ CREDIT ถ้ามี)'
+                'error': 'ไม่สามารถระบุรูปแบบไฟล์ได้ กรุณาใช้รูปแบบ Wide Format หรือ Long Format',
+                'detected_columns': df.columns.tolist()[:20],
+                'hint': 'Wide Format: STUDENT_ID, [รหัสวิชาเป็นหัวคอลัมน์]\nLong Format: STUDENT_ID, COURSE_CODE, GRADE'
             }), 400
 
-        # Normalize column names for the helper function
-        normalized_df = pd.DataFrame()
-        normalized_df['STUDENT_ID'] = df[col_map['student_id']]
-        normalized_df['COURSE_CODE'] = df[col_map['course_code']]
-        normalized_df['GRADE'] = df[col_map['grade']]
-        if col_map.get('credit'):
-            normalized_df['CREDIT'] = df[col_map['credit']]
-        else:
-            normalized_df['CREDIT'] = 3.0
-
-        # 4. Run prediction using shared helper
+        # 4. Run prediction
         result = _run_batch_prediction_on_df(normalized_df, model_filename)
 
         if result.get('success'):
+            # Attach student names and detected format info
+            result['detected_format'] = detected_format_label
+            for r in result.get('results', []):
+                sid = r['student_id']
+                if sid in student_names:
+                    r['student_name'] = student_names[sid]
+                else:
+                    r['student_name'] = ''
             return jsonify(result)
         else:
             return jsonify(result), 400
@@ -6987,6 +7108,42 @@ def predict_batch():
         logger.error(f"Batch prediction error: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
+
+
+@app.route('/api/batch_template/<fmt>')
+def download_batch_template(fmt):
+    """Download a CSV template for batch prediction.
+    fmt: 'wide' or 'long'
+    """
+    import io
+    courses_data = app.config.get('COURSES_DATA', [])
+    all_terms = app.config.get('ALL_TERMS_DATA', [])
+
+    output = io.StringIO()
+    output.write('\ufeff')  # BOM for Thai Excel support
+
+    if fmt == 'wide':
+        # Wide format: STUDENT_ID, STUDENT_NAME, GPA, [course_id columns]
+        all_course_ids = []
+        for term in all_terms:
+            all_course_ids.extend(term.get('ids', []))
+        headers = ['STUDENT_ID', 'STUDENT_NAME', 'GPA'] + all_course_ids
+        output.write(','.join(f'"{h}"' for h in headers) + '\n')
+        # Example row
+        example = ['"6301001"', '"ชื่อ-นามสกุล"', '""'] + ['""'] * len(all_course_ids)
+        output.write(','.join(example) + '\n')
+    else:
+        # Long format
+        headers = ['STUDENT_ID', 'STUDENT_NAME', 'COURSE_CODE', 'GRADE', 'CREDIT']
+        output.write(','.join(f'"{h}"' for h in headers) + '\n')
+        output.write('"6301001","ชื่อ-นามสกุล","03-407-100-101","B+","3"\n')
+        output.write('"6301001","ชื่อ-นามสกุล","02-005-011-109","C+","3"\n')
+
+    csv_content = output.getvalue()
+    from flask import Response
+    response = Response(csv_content, mimetype='text/csv; charset=utf-8')
+    response.headers['Content-Disposition'] = f'attachment; filename="batch_template_{fmt}.csv"'
+    return response
 
 
 # ==========================================

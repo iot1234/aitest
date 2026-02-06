@@ -4,6 +4,17 @@
 
 {% block custom_css %}
 <style>
+    :root {
+        --gradient-primary: linear-gradient(135deg, #0ea5e9 0%, #2dd4bf 100%);
+        --gradient-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --gradient-danger: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        --gradient-warning: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --gradient-info: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        --gradient-dark: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        --glass-bg: rgba(255,255,255,0.95);
+        --glass-border: rgba(255,255,255,0.3);
+    }
+
     .hero-header {
         background: linear-gradient(135deg, #0ea5e9 0%, #2dd4bf 100%);
         border-radius: 24px;
@@ -22,12 +33,63 @@
         width: 200%;
         height: 200%;
         background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-        animation: rotate 20s linear infinite;
+        animation: pulse 4s ease-in-out infinite;
     }
-    @keyframes rotate { to { transform: rotate(360deg); } }
-    .hero-header h1 { font-size: 2.5rem; font-weight: 800; color: white; position: relative; z-index: 1; }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.3; }
+    }
+    .hero-header h1 { font-size: 2.5rem; font-weight: 800; color: white; position: relative; z-index: 1; text-shadow: 0 4px 20px rgba(0,0,0,0.2); }
     .hero-header p { color: rgba(255,255,255,0.9); font-size: 1.1rem; position: relative; z-index: 1; }
 
+    .glass-card {
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+        border: 1px solid var(--glass-border);
+        transition: all 0.3s ease;
+    }
+    .glass-card:hover {
+        box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+        transform: translateY(-2px);
+    }
+
+    /* Steps indicator */
+    .steps-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 0;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+    }
+    .step-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--gray-400, #9ca3af);
+        transition: all 0.3s;
+    }
+    .step-item.active { color: #0ea5e9; background: rgba(14, 165, 233, 0.1); }
+    .step-item.completed { color: #10b981; background: rgba(16, 185, 129, 0.1); }
+    .step-item .step-num {
+        width: 28px; height: 28px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; font-weight: 700;
+        background: var(--gray-200, #e5e7eb);
+        color: var(--gray-500, #6b7280);
+    }
+    .step-item.active .step-num { background: #0ea5e9; color: white; }
+    .step-item.completed .step-num { background: #10b981; color: white; }
+    .step-connector { width: 40px; height: 2px; background: var(--gray-200, #e5e7eb); align-self: center; }
+    .step-connector.completed { background: #10b981; }
+
+    /* Upload zone */
     .upload-zone {
         border: 3px dashed var(--gray-300, #d1d5db);
         border-radius: 20px;
@@ -38,21 +100,115 @@
         background: rgba(255,255,255,0.95);
     }
     .upload-zone:hover, .upload-zone.dragover {
-        border-color: var(--primary, #4f46e5);
-        background: rgba(79, 70, 229, 0.05);
+        border-color: #0ea5e9;
+        background: rgba(14, 165, 233, 0.05);
         transform: translateY(-2px);
     }
     .upload-zone .icon { font-size: 4rem; color: var(--gray-400, #9ca3af); margin-bottom: 1rem; }
+    .upload-zone.has-file { border-color: #10b981; border-style: solid; background: rgba(16, 185, 129, 0.05); }
+    .upload-zone.has-file .icon { color: #10b981; }
 
-    .glass-card {
-        background: rgba(255,255,255,0.95);
-        backdrop-filter: blur(20px);
+    /* Settings panel */
+    .settings-panel {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         border-radius: 20px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-        border: 1px solid rgba(255,255,255,0.3);
+        padding: 2rem;
+        color: white;
+        position: relative;
+        overflow: hidden;
     }
+    .settings-panel::before {
+        content: '';
+        position: absolute;
+        top: 0; right: 0;
+        width: 300px; height: 300px;
+        background: radial-gradient(circle, rgba(14,165,233,0.3) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+    }
+    .setting-item {
+        background: rgba(255,255,255,0.06);
+        border-radius: 14px;
+        padding: 1.25rem;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    .setting-item label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.8);
+        margin-bottom: 0.5rem;
+    }
+    .setting-item select, .setting-item input[type="text"] {
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.08);
+        color: white;
+        font-size: 0.9rem;
+    }
+    .setting-item select option { background: #1a1a2e; color: white; }
 
-    .results-table { overflow: hidden; }
+    /* Template download buttons */
+    .template-btn-group {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .template-btn {
+        flex: 1;
+        min-width: 200px;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        border-radius: 16px;
+        border: 2px solid var(--gray-200, #e5e7eb);
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+        color: inherit;
+    }
+    .template-btn:hover {
+        border-color: #0ea5e9;
+        background: rgba(14, 165, 233, 0.05);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        color: inherit;
+    }
+    .template-btn .icon-box {
+        width: 48px; height: 48px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+    .template-btn .icon-box.wide { background: rgba(14, 165, 233, 0.1); color: #0ea5e9; }
+    .template-btn .icon-box.long { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+    .template-btn .text-content strong { display: block; font-size: 0.95rem; }
+    .template-btn .text-content small { color: var(--gray-500, #6b7280); font-size: 0.8rem; }
+
+    /* File info */
+    .file-info-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: 14px;
+    }
+    .file-info-card .fi-icon { font-size: 1.5rem; color: #10b981; }
+    .file-info-card .remove-btn { color: #ef4444; cursor: pointer; margin-left: auto; font-size: 1.2rem; }
+    .file-info-card .remove-btn:hover { color: #dc2626; }
+
+    /* Results */
     .results-table th { background: var(--gray-50, #f9fafb); font-weight: 700; white-space: nowrap; font-size: 0.85rem; }
     .results-table td { vertical-align: middle; font-size: 0.9rem; }
     .risk-badge { padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.78rem; font-weight: 600; display: inline-block; }
@@ -70,149 +226,435 @@
 
     .chart-container { max-width: 380px; margin: 0 auto; }
 
-    [data-theme="dark"] .glass-card {
-        background: rgba(30, 30, 40, 0.95);
-        border-color: rgba(255,255,255,0.05);
+    /* Result hero */
+    .result-hero {
+        text-align: center;
+        padding: 2rem;
+        border-radius: 20px;
+        margin-bottom: 2rem;
     }
-    [data-theme="dark"] .upload-zone {
-        background: rgba(30, 30, 40, 0.95);
-        border-color: rgba(255,255,255,0.15);
+    .result-hero.success { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border: 2px solid #10b981; }
+    .result-hero.warning { background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 2px solid #f59e0b; }
+    .result-hero.danger { background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%); border: 2px solid #ef4444; }
+    .result-hero h2 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .result-hero.success h2 { color: #059669; }
+    .result-hero.warning h2 { color: #d97706; }
+    .result-hero.danger h2 { color: #dc2626; }
+
+    /* Probability bar */
+    .probability-bar {
+        height: 40px;
+        border-radius: 20px;
+        overflow: hidden;
+        display: flex;
+        margin: 1.5rem 0;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
     }
+    .probability-bar .pass {
+        background: var(--gradient-success);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-weight: 700;
+        transition: width 1s ease;
+    }
+    .probability-bar .fail {
+        background: var(--gradient-danger);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-weight: 700;
+        transition: width 1s ease;
+    }
+
+    /* Search and filter */
+    .filter-bar {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .search-box {
+        flex: 1;
+        min-width: 200px;
+        position: relative;
+    }
+    .search-box input {
+        width: 100%;
+        padding: 0.7rem 1rem 0.7rem 2.5rem;
+        border: 2px solid var(--gray-200, #e5e7eb);
+        border-radius: 12px;
+        font-size: 0.9rem;
+        transition: all 0.3s;
+    }
+    .search-box input:focus {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 4px rgba(14,165,233,0.1);
+        outline: none;
+    }
+    .search-box i {
+        position: absolute;
+        left: 0.8rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--gray-400, #9ca3af);
+    }
+    .filter-select {
+        padding: 0.7rem 1rem;
+        border: 2px solid var(--gray-200, #e5e7eb);
+        border-radius: 12px;
+        font-size: 0.9rem;
+        min-width: 150px;
+    }
+
+    /* Action buttons */
+    .btn-predict {
+        background: linear-gradient(135deg, #0ea5e9 0%, #2dd4bf 100%);
+        color: white;
+        padding: 1rem 3rem;
+        font-size: 1.1rem;
+        border-radius: 50px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .btn-predict:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 30px rgba(14,165,233,0.4);
+        color: white;
+    }
+
+    /* Format info cards */
+    .format-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+    .format-card {
+        border-radius: 16px;
+        padding: 1.5rem;
+        border: 2px solid var(--gray-200, #e5e7eb);
+    }
+    .format-card h6 { font-weight: 700; margin-bottom: 1rem; }
+    .format-card .badge-tag { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 8px; font-size: 0.75rem; font-weight: 600; }
+
+    /* Detected format badge */
+    .format-detected {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        background: rgba(14, 165, 233, 0.1);
+        color: #0ea5e9;
+    }
+
+    @media (max-width: 768px) {
+        .format-info { grid-template-columns: 1fr; }
+        .hero-header h1 { font-size: 1.75rem; }
+        .glass-card { padding: 1.5rem !important; }
+    }
+
+    /* Dark mode */
+    [data-theme="dark"] .glass-card { background: rgba(30,30,40,0.95); border-color: rgba(255,255,255,0.05); }
+    [data-theme="dark"] .upload-zone { background: rgba(30,30,40,0.95); border-color: rgba(255,255,255,0.15); }
     [data-theme="dark"] .results-table th { background: rgba(255,255,255,0.05); }
     [data-theme="dark"] .student-detail { background: rgba(255,255,255,0.03); }
+    [data-theme="dark"] .template-btn { background: rgba(30,30,40,0.95); border-color: rgba(255,255,255,0.1); color: #e5e7eb; }
+    [data-theme="dark"] .search-box input, [data-theme="dark"] .filter-select {
+        background: rgba(30,30,40,0.95); border-color: rgba(255,255,255,0.15); color: #e5e7eb;
+    }
+    [data-theme="dark"] .format-card { border-color: rgba(255,255,255,0.1); }
+    [data-theme="dark"] .file-info-card { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
 </style>
 {% endblock %}
 
 {% block content %}
+<div id="alertContainer"></div>
+
+<!-- Hero Header -->
 <div class="hero-header" data-aos="fade-down">
-    <h1><i class="bi bi-people-fill me-2"></i>ทำนายแบบกลุ่ม</h1>
+    <h1><i class="bi bi-people-fill me-2"></i>ระบบทำนายแบบกลุ่ม</h1>
     <p>อัปโหลดไฟล์ข้อมูลผลการเรียน (CSV/Excel) เพื่อทำนายความสำเร็จของนักศึกษาหลายคนพร้อมกัน</p>
 </div>
 
-<!-- Step 1: Model Selection -->
-<div class="glass-card p-4 mb-4" data-aos="fade-up">
-    <h5 class="fw-bold mb-3"><i class="bi bi-gear me-2 text-primary"></i>เลือกโมเดล AI</h5>
-    <select id="modelSelect" class="form-select form-select-lg">
-        <option value="">กำลังโหลดรายการโมเดล...</option>
-    </select>
+<!-- Steps Indicator -->
+<div class="steps-indicator" data-aos="fade-up">
+    <div class="step-item active" id="step1Indicator">
+        <span class="step-num">1</span> ตั้งค่า
+    </div>
+    <div class="step-connector" id="conn1"></div>
+    <div class="step-item" id="step2Indicator">
+        <span class="step-num">2</span> อัปโหลดไฟล์
+    </div>
+    <div class="step-connector" id="conn2"></div>
+    <div class="step-item" id="step3Indicator">
+        <span class="step-num">3</span> ผลลัพธ์
+    </div>
 </div>
 
-<!-- Step 2: File Upload -->
-<div class="glass-card p-4 mb-4" data-aos="fade-up" data-aos-delay="100">
-    <h5 class="fw-bold mb-3"><i class="bi bi-cloud-arrow-up me-2 text-info"></i>อัปโหลดไฟล์ข้อมูลนักศึกษา</h5>
-    <div class="upload-zone" id="uploadZone">
-        <div class="icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
-        <h5 class="fw-bold">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</h5>
-        <p class="text-muted mb-2">รองรับ CSV, XLSX, XLS (สูงสุด 500 นักศึกษา)</p>
-        <p class="text-muted small mb-0">
-            รูปแบบไฟล์: STUDENT_ID | COURSE_CODE | GRADE | CREDIT
-        </p>
-        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" class="d-none">
-    </div>
-    <div id="fileInfo" class="mt-3 d-none">
-        <div class="alert alert-info mb-0">
-            <i class="bi bi-file-earmark-check me-2"></i>
-            <span id="fileInfoText"></span>
+<!-- Step 1: Settings -->
+<div id="settingsSection">
+    <div class="settings-panel mb-4" data-aos="fade-up">
+        <div class="d-flex align-items-center gap-2 mb-3" style="position:relative;z-index:1;">
+            <i class="bi bi-gear-fill fs-4" style="color: #67e8f9;"></i>
+            <h5 class="fw-bold mb-0" style="color: white;">ตั้งค่าการทำนาย</h5>
+        </div>
+        <div class="settings-grid" style="position:relative;z-index:1;">
+            <div class="setting-item">
+                <label><i class="bi bi-cpu me-1"></i> โมเดล AI</label>
+                <select id="modelSelect">
+                    <option value="">กำลังโหลด...</option>
+                </select>
+            </div>
+            <div class="setting-item">
+                <label><i class="bi bi-sliders me-1"></i> เกณฑ์ผ่าน (ความน่าจะเป็น)</label>
+                <div class="d-flex align-items-center gap-2">
+                    <input type="range" id="thresholdRange" min="30" max="80" value="50" class="form-range" style="flex:1;">
+                    <span id="thresholdValue" class="fw-bold" style="min-width:45px;text-align:right;">50%</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label><i class="bi bi-sort-down me-1"></i> เรียงผลลัพธ์ตาม</label>
+                <select id="sortBy">
+                    <option value="risk_desc">ความเสี่ยง สูง → ต่ำ</option>
+                    <option value="risk_asc">ความเสี่ยง ต่ำ → สูง</option>
+                    <option value="gpa_desc">GPA สูง → ต่ำ</option>
+                    <option value="gpa_asc">GPA ต่ำ → สูง</option>
+                    <option value="prob_desc">ความน่าจะเป็น สูง → ต่ำ</option>
+                    <option value="prob_asc">ความน่าจะเป็น ต่ำ → สูง</option>
+                    <option value="name_asc">ชื่อ ก → ฮ</option>
+                </select>
+            </div>
         </div>
     </div>
-    <button id="predictBtn" class="btn btn-primary btn-lg w-100 mt-3 rounded-pill d-none" onclick="runBatchPrediction()">
-        <i class="bi bi-lightning me-2"></i> เริ่มทำนาย
-    </button>
-</div>
 
-<!-- File Format Guide -->
-<div class="glass-card p-4 mb-4" data-aos="fade-up" data-aos-delay="150">
-    <a class="text-decoration-none d-block" data-bs-toggle="collapse" href="#formatGuide" role="button">
-        <h5 class="fw-bold mb-0">
-            <i class="bi bi-question-circle me-2 text-warning"></i>รูปแบบไฟล์ที่รองรับ
-            <i class="bi bi-chevron-down float-end"></i>
-        </h5>
-    </a>
-    <div class="collapse mt-3" id="formatGuide">
-        <p class="text-muted mb-3">ไฟล์ต้องอยู่ในรูปแบบ Transcript (Long Format) แต่ละแถวคือ 1 วิชาของ 1 นักศึกษา</p>
-        <div class="table-responsive">
-            <table class="table table-bordered table-sm">
-                <thead class="table-light">
-                    <tr><th>STUDENT_ID</th><th>COURSE_CODE</th><th>GRADE</th><th>CREDIT</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td>6301001</td><td>03-407-100-101</td><td>B+</td><td>3</td></tr>
-                    <tr><td>6301001</td><td>02-005-011-109</td><td>C+</td><td>3</td></tr>
-                    <tr><td>6301001</td><td>02-005-030-101</td><td>B</td><td>3</td></tr>
-                    <tr><td>6301002</td><td>03-407-100-101</td><td>A</td><td>3</td></tr>
-                    <tr><td>6301002</td><td>02-005-011-109</td><td>F</td><td>3</td></tr>
-                </tbody>
-            </table>
+    <!-- Step 2: File Upload -->
+    <div class="glass-card p-4 mb-4" data-aos="fade-up" data-aos-delay="100">
+        <h5 class="fw-bold mb-3"><i class="bi bi-cloud-arrow-up me-2 text-info"></i>อัปโหลดไฟล์ข้อมูลนักศึกษา</h5>
+
+        <!-- Template Downloads -->
+        <div class="mb-4">
+            <p class="text-muted mb-2"><i class="bi bi-lightbulb me-1"></i> ดาวน์โหลดเทมเพลตเพื่อใช้เป็นตัวอย่างรูปแบบไฟล์:</p>
+            <div class="template-btn-group">
+                <a href="/api/batch_template/wide" class="template-btn" download>
+                    <div class="icon-box wide"><i class="bi bi-table"></i></div>
+                    <div class="text-content">
+                        <strong>Wide Format (แนะนำ)</strong>
+                        <small>รหัสวิชาเป็นหัวคอลัมน์ เหมือนตารางผลการเรียน</small>
+                    </div>
+                    <i class="bi bi-download ms-auto text-muted"></i>
+                </a>
+                <a href="/api/batch_template/long" class="template-btn" download>
+                    <div class="icon-box long"><i class="bi bi-list-ul"></i></div>
+                    <div class="text-content">
+                        <strong>Long Format</strong>
+                        <small>แต่ละแถว = 1 วิชาของ 1 นักศึกษา</small>
+                    </div>
+                    <i class="bi bi-download ms-auto text-muted"></i>
+                </a>
+            </div>
         </div>
-        <p class="text-muted small mb-0">
-            <i class="bi bi-info-circle me-1"></i> คอลัมน์ CREDIT ไม่จำเป็น (ถ้าไม่มี จะใช้ค่าเริ่มต้น 3 หน่วยกิต)
-        </p>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadZone">
+            <div class="icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
+            <h5 class="fw-bold">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</h5>
+            <p class="text-muted mb-2">รองรับ CSV, XLSX, XLS (สูงสุด 500 นักศึกษา)</p>
+            <p class="text-muted small mb-0">
+                <span class="badge bg-info bg-opacity-10 text-info me-1">Wide Format</span> รหัสวิชาเป็นหัวคอลัมน์
+                <span class="mx-2">|</span>
+                <span class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;">Long Format</span> STUDENT_ID, COURSE_CODE, GRADE
+            </p>
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" class="d-none">
+        </div>
+
+        <!-- File Info -->
+        <div id="fileInfo" class="mt-3 d-none">
+            <div class="file-info-card">
+                <i class="bi bi-file-earmark-check fi-icon"></i>
+                <div>
+                    <div class="fw-bold" id="fileInfoName">ชื่อไฟล์</div>
+                    <small class="text-muted" id="fileInfoSize">ขนาดไฟล์</small>
+                </div>
+                <span class="remove-btn" onclick="removeFile()" title="ลบไฟล์">
+                    <i class="bi bi-x-circle-fill"></i>
+                </span>
+            </div>
+        </div>
+
+        <!-- Run Prediction Button -->
+        <div class="text-center mt-4" id="predictBtnSection" style="display:none;">
+            <button class="btn-predict" onclick="runBatchPrediction()">
+                <i class="bi bi-lightning-charge-fill me-2"></i> เริ่มทำนายแบบกลุ่ม
+            </button>
+        </div>
+    </div>
+
+    <!-- Format Guide (collapsible) -->
+    <div class="glass-card p-4 mb-4" data-aos="fade-up" data-aos-delay="150">
+        <a class="text-decoration-none d-block" data-bs-toggle="collapse" href="#formatGuide" role="button">
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-question-circle me-2 text-warning"></i>รูปแบบไฟล์ที่รองรับ (ระบบตรวจจับอัตโนมัติ)
+                <i class="bi bi-chevron-down float-end"></i>
+            </h5>
+        </a>
+        <div class="collapse mt-3" id="formatGuide">
+            <div class="format-info">
+                <div class="format-card" style="border-color: rgba(14,165,233,0.3); background: rgba(14,165,233,0.03);">
+                    <h6><i class="bi bi-table me-1 text-info"></i> Wide Format <span class="badge-tag" style="background:rgba(14,165,233,0.1);color:#0ea5e9;">แนะนำ</span></h6>
+                    <p class="small text-muted mb-2">เหมือนตารางผลการเรียน — หัวคอลัมน์คือรหัสวิชา ค่าเกรดอยู่ในเซลล์</p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mb-0" style="font-size:0.8rem;">
+                            <thead class="table-light">
+                                <tr><th>STUDENT_ID</th><th>STUDENT_NAME</th><th>GPA</th><th>03-407-100-101</th><th>02-005-011-109</th><th>...</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>6301001</td><td>สมชาย</td><td>2.85</td><td>B+</td><td>C+</td><td>...</td></tr>
+                                <tr><td>6301002</td><td>สมหญิง</td><td>3.20</td><td>A</td><td>B</td><td>...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="format-card" style="border-color: rgba(168,85,247,0.3); background: rgba(168,85,247,0.03);">
+                    <h6><i class="bi bi-list-ul me-1" style="color:#a855f7;"></i> Long Format</h6>
+                    <p class="small text-muted mb-2">แต่ละแถวคือ 1 วิชาของ 1 นักศึกษา</p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm mb-0" style="font-size:0.8rem;">
+                            <thead class="table-light">
+                                <tr><th>STUDENT_ID</th><th>COURSE_CODE</th><th>GRADE</th><th>CREDIT</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>6301001</td><td>03-407-100-101</td><td>B+</td><td>3</td></tr>
+                                <tr><td>6301001</td><td>02-005-011-109</td><td>C+</td><td>3</td></tr>
+                                <tr><td>6301002</td><td>03-407-100-101</td><td>A</td><td>3</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <p class="text-muted small mt-3 mb-0">
+                <i class="bi bi-info-circle me-1"></i> ระบบจะตรวจจับรูปแบบไฟล์อัตโนมัติ ไม่ต้องระบุเอง &bull; เกรดที่รองรับ: A, B+, B, C+, C, D+, D, F, W, I, WF
+            </p>
+        </div>
     </div>
 </div>
 
 <!-- Results Section -->
 <div id="resultsSection" class="d-none">
-    <!-- Summary -->
+
+    <!-- Detected Format Info -->
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3" data-aos="fade-up">
+        <div class="format-detected" id="detectedFormatBadge">
+            <i class="bi bi-check-circle-fill"></i>
+            <span id="detectedFormatText">ตรวจพบรูปแบบ: Wide Format</span>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="resetForm()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> ทำนายใหม่
+        </button>
+    </div>
+
+    <!-- Summary Hero -->
+    <div id="resultHero" class="result-hero" data-aos="fade-up"></div>
+
+    <!-- Summary Stats -->
     <div class="glass-card p-4 mb-4" data-aos="fade-up">
         <h5 class="fw-bold mb-4"><i class="bi bi-bar-chart me-2 text-primary"></i>สรุปผลการทำนาย</h5>
         <div class="row g-3" id="summaryCards"></div>
+        <div class="probability-bar mt-4" id="summaryProbBar"></div>
     </div>
 
     <!-- Charts -->
     <div class="row g-4 mb-4">
-        <div class="col-md-6" data-aos="fade-right">
+        <div class="col-md-4" data-aos="fade-right">
             <div class="glass-card p-4 h-100">
-                <h5 class="fw-bold mb-3"><i class="bi bi-pie-chart me-2 text-success"></i>สัดส่วนผ่าน/ไม่ผ่าน</h5>
+                <h6 class="fw-bold mb-3"><i class="bi bi-pie-chart me-2 text-success"></i>สัดส่วนผ่าน/ไม่ผ่าน</h6>
                 <div class="chart-container">
                     <canvas id="pieChart"></canvas>
                 </div>
             </div>
         </div>
-        <div class="col-md-6" data-aos="fade-left">
+        <div class="col-md-4" data-aos="fade-up">
             <div class="glass-card p-4 h-100">
-                <h5 class="fw-bold mb-3"><i class="bi bi-bar-chart-line me-2 text-info"></i>การกระจายความน่าจะเป็น</h5>
+                <h6 class="fw-bold mb-3"><i class="bi bi-bar-chart-line me-2 text-info"></i>การกระจายความน่าจะเป็น</h6>
                 <div class="chart-container">
                     <canvas id="barChart"></canvas>
                 </div>
             </div>
         </div>
+        <div class="col-md-4" data-aos="fade-left">
+            <div class="glass-card p-4 h-100">
+                <h6 class="fw-bold mb-3"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>ระดับความเสี่ยง</h6>
+                <div class="chart-container">
+                    <canvas id="riskChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Download -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-bold mb-0"><i class="bi bi-table me-2"></i>ผลลัพธ์รายบุคคล</h5>
-        <button id="downloadCsvBtn" class="btn btn-success rounded-pill" onclick="downloadCSV()">
-            <i class="bi bi-download me-2"></i> ดาวน์โหลด CSV
-        </button>
-    </div>
+    <!-- Filter & Search & Table -->
+    <div class="glass-card p-4 mb-4" data-aos="fade-up">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h5 class="fw-bold mb-0"><i class="bi bi-table me-2"></i>ผลลัพธ์รายบุคคล</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm rounded-pill" onclick="downloadCSV()">
+                    <i class="bi bi-download me-1"></i> ดาวน์โหลด CSV
+                </button>
+                <button class="btn btn-outline-primary btn-sm rounded-pill" onclick="printResults()">
+                    <i class="bi bi-printer me-1"></i> พิมพ์
+                </button>
+            </div>
+        </div>
+        <div class="filter-bar mb-3">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" id="searchInput" placeholder="ค้นหารหัสนักศึกษา / ชื่อ..." oninput="filterResults()">
+            </div>
+            <select class="filter-select" id="filterRisk" onchange="filterResults()">
+                <option value="all">ทุกระดับความเสี่ยง</option>
+                <option value="สูง">เสี่ยงสูง</option>
+                <option value="ปานกลาง">ปานกลาง</option>
+                <option value="ต่ำ">เสี่ยงต่ำ</option>
+            </select>
+            <select class="filter-select" id="filterPrediction" onchange="filterResults()">
+                <option value="all">ทุกสถานะ</option>
+                <option value="ผ่าน">ผ่าน</option>
+                <option value="ไม่ผ่าน">ไม่ผ่าน</option>
+            </select>
+        </div>
+        <div class="small text-muted mb-2">
+            แสดง <span id="filteredCount" class="fw-bold">0</span> จาก <span id="totalCount" class="fw-bold">0</span> คน
+        </div>
 
-    <!-- Results Table -->
-    <div class="results-table glass-card p-0 mb-4" data-aos="fade-up">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0" id="resultsTable">
-                <thead>
-                    <tr>
-                        <th class="ps-3">#</th>
-                        <th>รหัสนักศึกษา</th>
-                        <th>GPA</th>
-                        <th>ความน่าจะเป็น</th>
-                        <th>สถานะ</th>
-                        <th>ระดับความเสี่ยง</th>
-                        <th>คำแนะนำ</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="resultsBody"></tbody>
-            </table>
+        <div class="results-table">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th class="ps-3">#</th>
+                            <th>รหัสนักศึกษา</th>
+                            <th>ชื่อ</th>
+                            <th>GPA</th>
+                            <th>ความน่าจะเป็น</th>
+                            <th>สถานะ</th>
+                            <th>ระดับความเสี่ยง</th>
+                            <th>คำแนะนำ</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <!-- Errors -->
     <div id="errorsSection" class="d-none mb-4">
-        <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            <strong>มีข้อผิดพลาดบางส่วน:</strong>
-            <ul id="errorsList" class="mb-0 mt-2"></ul>
+        <div class="glass-card p-4" style="border-left: 4px solid #f59e0b;">
+            <h6 class="fw-bold text-warning mb-2"><i class="bi bi-exclamation-triangle me-2"></i>ข้อผิดพลาดบางส่วน</h6>
+            <ul id="errorsList" class="mb-0 small"></ul>
         </div>
     </div>
 </div>
@@ -220,21 +662,37 @@
 
 {% block custom_js %}
 <script>
+// =========================================================
+// STATE
+// =========================================================
 let batchResults = null;
+let allResults = [];
 let pieChartInstance = null;
 let barChartInstance = null;
+let riskChartInstance = null;
+const coursesData = {{ coursesData|safe }};
+const allTermsData = {{ allTermsData|safe }};
+const courseLookup = {};
+coursesData.forEach(c => { courseLookup[c.id] = c; });
 
+// =========================================================
+// INITIALIZATION
+// =========================================================
 document.addEventListener('DOMContentLoaded', function() {
     loadModels();
     setupUploadZone();
+    setupThresholdSlider();
 });
 
+// =========================================================
+// MODEL LOADING
+// =========================================================
 async function loadModels() {
     try {
         const res = await fetch('/api/models');
         const data = await res.json();
         const select = document.getElementById('modelSelect');
-        select.innerHTML = '<option value="">-- เลือกโมเดล --</option>';
+        select.innerHTML = '<option value="">-- เลือกโมเดล AI --</option>';
         if (data.success && data.models && data.models.length > 0) {
             data.models.forEach(m => {
                 const acc = m.performance && m.performance.accuracy
@@ -244,8 +702,9 @@ async function loadModels() {
                 opt.textContent = m.filename + acc;
                 select.appendChild(opt);
             });
+            if (data.models.length === 1) select.selectedIndex = 1;
         } else {
-            select.innerHTML = '<option value="">ไม่พบโมเดล - กรุณาฝึกโมเดลก่อน</option>';
+            select.innerHTML = '<option value="">ไม่พบโมเดล — กรุณาฝึกโมเดลก่อน</option>';
         }
     } catch (e) {
         console.error('Error loading models:', e);
@@ -253,6 +712,20 @@ async function loadModels() {
     }
 }
 
+// =========================================================
+// THRESHOLD SLIDER
+// =========================================================
+function setupThresholdSlider() {
+    const slider = document.getElementById('thresholdRange');
+    const label = document.getElementById('thresholdValue');
+    slider.addEventListener('input', () => {
+        label.textContent = slider.value + '%';
+    });
+}
+
+// =========================================================
+// FILE UPLOAD
+// =========================================================
 function setupUploadZone() {
     const zone = document.getElementById('uploadZone');
     const input = document.getElementById('fileInput');
@@ -275,29 +748,60 @@ function setupUploadZone() {
 
 function handleFileSelected(file) {
     const info = document.getElementById('fileInfo');
-    const infoText = document.getElementById('fileInfoText');
-    const btn = document.getElementById('predictBtn');
+    const nameEl = document.getElementById('fileInfoName');
+    const sizeEl = document.getElementById('fileInfoSize');
+    const btnSection = document.getElementById('predictBtnSection');
+    const zone = document.getElementById('uploadZone');
 
-    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
     const sizeStr = file.size < 1024 * 1024
         ? (file.size / 1024).toFixed(1) + ' KB'
-        : sizeMB + ' MB';
+        : (file.size / 1024 / 1024).toFixed(2) + ' MB';
 
-    infoText.textContent = `ไฟล์: ${file.name} (${sizeStr})`;
+    nameEl.textContent = file.name;
+    sizeEl.textContent = sizeStr;
     info.classList.remove('d-none');
-    btn.classList.remove('d-none');
+    btnSection.style.display = 'block';
+    zone.classList.add('has-file');
+    updateSteps(2);
 }
 
+function removeFile() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfo').classList.add('d-none');
+    document.getElementById('predictBtnSection').style.display = 'none';
+    document.getElementById('uploadZone').classList.remove('has-file');
+    updateSteps(1);
+}
+
+// =========================================================
+// STEP INDICATOR
+// =========================================================
+function updateSteps(currentStep) {
+    for (let i = 1; i <= 3; i++) {
+        const step = document.getElementById(`step${i}Indicator`);
+        step.classList.remove('active', 'completed');
+        if (i < currentStep) step.classList.add('completed');
+        else if (i === currentStep) step.classList.add('active');
+    }
+    const c1 = document.getElementById('conn1');
+    const c2 = document.getElementById('conn2');
+    c1.classList.toggle('completed', currentStep >= 2);
+    c2.classList.toggle('completed', currentStep >= 3);
+}
+
+// =========================================================
+// BATCH PREDICTION
+// =========================================================
 async function runBatchPrediction() {
     const modelFile = document.getElementById('modelSelect').value;
     const fileInput = document.getElementById('fileInput');
 
     if (!modelFile) {
-        showAlert('กรุณาเลือกโมเดล', 'warning');
+        showAlert('กรุณาเลือกโมเดล AI ก่อนทำนาย', 'warning');
         return;
     }
     if (!fileInput.files.length) {
-        showAlert('กรุณาเลือกไฟล์', 'warning');
+        showAlert('กรุณาเลือกไฟล์ข้อมูลนักศึกษา', 'warning');
         return;
     }
 
@@ -305,7 +809,7 @@ async function runBatchPrediction() {
     formData.append('file', fileInput.files[0]);
     formData.append('model_filename', modelFile);
 
-    showLoading('กำลังทำนายผลการเรียน...');
+    showLoading('กำลังวิเคราะห์ข้อมูลและทำนายผลการเรียน...');
 
     try {
         const res = await fetch('/api/predict_batch', { method: 'POST', body: formData });
@@ -314,11 +818,24 @@ async function runBatchPrediction() {
 
         if (data.success) {
             batchResults = data;
-            renderResults(data);
+            allResults = data.results || [];
+
+            // Apply custom threshold
+            const threshold = parseInt(document.getElementById('thresholdRange').value) / 100;
+            allResults.forEach(r => {
+                r.prediction = r.probability >= threshold ? 'ผ่าน' : 'ไม่ผ่าน';
+                if (r.probability >= 0.8) r.risk_level = 'ต่ำ';
+                else if (r.probability >= threshold) r.risk_level = 'ปานกลาง';
+                else r.risk_level = 'สูง';
+            });
+
+            recalcSummary();
+            renderResults(batchResults);
+            updateSteps(3);
             document.getElementById('resultsSection').classList.remove('d-none');
             setTimeout(() => {
                 document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
+            }, 200);
         } else {
             let errMsg = data.error || 'เกิดข้อผิดพลาด';
             if (data.detected_columns) {
@@ -335,17 +852,92 @@ async function runBatchPrediction() {
     }
 }
 
+function recalcSummary() {
+    if (!allResults.length) return;
+    const passed = allResults.filter(r => r.prediction === 'ผ่าน');
+    const failed = allResults.filter(r => r.prediction === 'ไม่ผ่าน');
+    const gpas = allResults.map(r => r.gpa);
+    const probs = allResults.map(r => r.probability);
+
+    batchResults.summary = {
+        total_students: allResults.length,
+        pass_count: passed.length,
+        pass_percentage: Math.round(passed.length / allResults.length * 1000) / 10,
+        fail_count: failed.length,
+        fail_percentage: Math.round(failed.length / allResults.length * 1000) / 10,
+        avg_gpa: Math.round(gpas.reduce((a,b) => a+b, 0) / gpas.length * 100) / 100,
+        min_gpa: Math.round(Math.min(...gpas) * 100) / 100,
+        max_gpa: Math.round(Math.max(...gpas) * 100) / 100,
+        avg_probability: Math.round(probs.reduce((a,b) => a+b, 0) / probs.length * 10000) / 10000,
+        risk_distribution: {
+            high: allResults.filter(r => r.risk_level === 'สูง').length,
+            medium: allResults.filter(r => r.risk_level === 'ปานกลาง').length,
+            low: allResults.filter(r => r.risk_level === 'ต่ำ').length
+        },
+        probability_distribution: calcProbDist(probs)
+    };
+}
+
+function calcProbDist(probs) {
+    const bins = [
+        {range: '0-20%', min: 0, max: 0.2, count: 0},
+        {range: '21-40%', min: 0.2, max: 0.4, count: 0},
+        {range: '41-60%', min: 0.4, max: 0.6, count: 0},
+        {range: '61-80%', min: 0.6, max: 0.8, count: 0},
+        {range: '81-100%', min: 0.8, max: 1.01, count: 0},
+    ];
+    probs.forEach(p => {
+        for (const b of bins) {
+            if (p >= b.min && p < b.max) { b.count++; break; }
+        }
+    });
+    return bins.map(b => ({range: b.range, count: b.count}));
+}
+
+// =========================================================
+// RENDER RESULTS
+// =========================================================
 function renderResults(data) {
+    if (data.detected_format) {
+        document.getElementById('detectedFormatText').textContent = 'ตรวจพบรูปแบบ: ' + data.detected_format;
+    }
+    renderResultHero(data.summary);
     renderSummaryCards(data.summary);
+    renderSummaryProbBar(data.summary);
     renderPieChart(data.summary);
     renderBarChart(data.summary);
-    renderResultsTable(data.results);
+    renderRiskChart(data.summary);
+    sortAndRenderTable();
     renderErrors(data.errors);
 }
 
+function renderResultHero(s) {
+    const hero = document.getElementById('resultHero');
+    const passRate = s.pass_percentage;
+    let heroClass, icon, title, subtitle;
+    if (passRate >= 70) {
+        heroClass = 'success'; icon = 'check-circle-fill';
+        title = 'ผลลัพธ์ดี';
+        subtitle = `นักศึกษาส่วนใหญ่ (${passRate}%) มีแนวโน้มจบการศึกษา`;
+    } else if (passRate >= 40) {
+        heroClass = 'warning'; icon = 'exclamation-triangle-fill';
+        title = 'ต้องระวัง';
+        subtitle = `มีนักศึกษาเสี่ยง ${s.fail_count} คน จาก ${s.total_students} คน`;
+    } else {
+        heroClass = 'danger'; icon = 'x-circle-fill';
+        title = 'สถานการณ์น่าเป็นห่วง';
+        subtitle = `นักศึกษาส่วนใหญ่ (${s.fail_percentage}%) มีความเสี่ยงที่จะไม่จบการศึกษา`;
+    }
+    hero.className = `result-hero ${heroClass}`;
+    hero.innerHTML = `
+        <i class="bi bi-${icon} fs-1 text-${heroClass === 'success' ? 'success' : heroClass === 'warning' ? 'warning' : 'danger'}"></i>
+        <h2>${title}</h2>
+        <p class="mb-0">${subtitle}</p>
+    `;
+}
+
 function renderSummaryCards(s) {
-    const c = document.getElementById('summaryCards');
-    c.innerHTML = `
+    document.getElementById('summaryCards').innerHTML = `
         <div class="col-6 col-md-2"><div class="summary-card glass-card">
             <div class="number text-primary">${s.total_students}</div>
             <div class="label">นักศึกษาทั้งหมด</div>
@@ -373,29 +965,27 @@ function renderSummaryCards(s) {
     `;
 }
 
+function renderSummaryProbBar(s) {
+    const bar = document.getElementById('summaryProbBar');
+    bar.innerHTML = `
+        <div class="pass" style="width: ${s.pass_percentage}%">${s.pass_percentage > 10 ? 'ผ่าน ' + s.pass_percentage + '%' : ''}</div>
+        <div class="fail" style="width: ${s.fail_percentage}%">${s.fail_percentage > 10 ? 'ไม่ผ่าน ' + s.fail_percentage + '%' : ''}</div>
+    `;
+}
+
 function renderPieChart(s) {
     if (pieChartInstance) pieChartInstance.destroy();
-    const ctx = document.getElementById('pieChart').getContext('2d');
-    pieChartInstance = new Chart(ctx, {
+    pieChartInstance = new Chart(document.getElementById('pieChart').getContext('2d'), {
         type: 'doughnut',
         data: {
             labels: ['ผ่าน (จบการศึกษา)', 'ไม่ผ่าน (เสี่ยง)'],
-            datasets: [{
-                data: [s.pass_count, s.fail_count],
-                backgroundColor: ['#10b981', '#ef4444'],
-                borderWidth: 0,
-                hoverOffset: 10
-            }]
+            datasets: [{ data: [s.pass_count, s.fail_count], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0, hoverOffset: 10 }]
         },
         options: {
             responsive: true,
             plugins: {
-                legend: { position: 'bottom', labels: { padding: 20, font: { size: 13 } } },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => `${ctx.label}: ${ctx.parsed} คน (${(ctx.parsed / s.total_students * 100).toFixed(1)}%)`
-                    }
-                }
+                legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } },
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed} คน (${(ctx.parsed / s.total_students * 100).toFixed(1)}%)` } }
             }
         }
     });
@@ -404,33 +994,105 @@ function renderPieChart(s) {
 function renderBarChart(s) {
     if (barChartInstance) barChartInstance.destroy();
     const dist = s.probability_distribution;
-    const ctx = document.getElementById('barChart').getContext('2d');
-    barChartInstance = new Chart(ctx, {
+    barChartInstance = new Chart(document.getElementById('barChart').getContext('2d'), {
         type: 'bar',
         data: {
             labels: dist.map(d => d.range),
-            datasets: [{
-                label: 'จำนวนนักศึกษา',
-                data: dist.map(d => d.count),
+            datasets: [{ label: 'จำนวนนักศึกษา', data: dist.map(d => d.count),
                 backgroundColor: ['#ef4444', '#f59e0b', '#eab308', '#22c55e', '#10b981'],
-                borderRadius: 8,
-                borderSkipped: false
-            }]
+                borderRadius: 8, borderSkipped: false }]
         },
         options: {
             responsive: true,
             plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1 } },
-                x: { grid: { display: false } }
-            }
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { grid: { display: false } } }
         }
     });
 }
 
+function renderRiskChart(s) {
+    if (riskChartInstance) riskChartInstance.destroy();
+    riskChartInstance = new Chart(document.getElementById('riskChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['เสี่ยงสูง', 'ปานกลาง', 'เสี่ยงต่ำ'],
+            datasets: [{ data: [s.risk_distribution.high, s.risk_distribution.medium, s.risk_distribution.low],
+                backgroundColor: ['#ef4444', '#f59e0b', '#10b981'], borderWidth: 0, hoverOffset: 10 }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } } }
+        }
+    });
+}
+
+// =========================================================
+// SORTING
+// =========================================================
+function sortAndRenderTable() {
+    const sortBy = document.getElementById('sortBy').value;
+    const sorted = [...allResults];
+    switch (sortBy) {
+        case 'risk_desc': sorted.sort((a, b) => riskOrder(a.risk_level) - riskOrder(b.risk_level)); break;
+        case 'risk_asc': sorted.sort((a, b) => riskOrder(b.risk_level) - riskOrder(a.risk_level)); break;
+        case 'gpa_desc': sorted.sort((a, b) => b.gpa - a.gpa); break;
+        case 'gpa_asc': sorted.sort((a, b) => a.gpa - b.gpa); break;
+        case 'prob_desc': sorted.sort((a, b) => b.probability - a.probability); break;
+        case 'prob_asc': sorted.sort((a, b) => a.probability - b.probability); break;
+        case 'name_asc': sorted.sort((a, b) => (a.student_name || '').localeCompare(b.student_name || '')); break;
+    }
+    renderResultsTable(sorted);
+}
+
+function riskOrder(risk) {
+    if (risk === 'สูง') return 0;
+    if (risk === 'ปานกลาง') return 1;
+    return 2;
+}
+
+document.getElementById('sortBy').addEventListener('change', () => {
+    if (allResults.length) sortAndRenderTable();
+});
+
+// =========================================================
+// FILTER / SEARCH
+// =========================================================
+function filterResults() {
+    const query = document.getElementById('searchInput').value.trim().toLowerCase();
+    const riskFilter = document.getElementById('filterRisk').value;
+    const predFilter = document.getElementById('filterPrediction').value;
+    const rows = document.querySelectorAll('#resultsBody tr.main-row');
+    let visible = 0;
+
+    rows.forEach(row => {
+        const sid = row.dataset.studentId.toLowerCase();
+        const name = (row.dataset.studentName || '').toLowerCase();
+        const risk = row.dataset.riskLevel;
+        const pred = row.dataset.prediction;
+        const matchSearch = !query || sid.includes(query) || name.includes(query);
+        const matchRisk = riskFilter === 'all' || risk === riskFilter;
+        const matchPred = predFilter === 'all' || pred === predFilter;
+        const show = matchSearch && matchRisk && matchPred;
+        row.style.display = show ? '' : 'none';
+        const detailRow = row.nextElementSibling;
+        if (detailRow && detailRow.classList.contains('student-detail')) {
+            if (!show) { detailRow.style.display = 'none'; detailRow.classList.remove('show'); }
+            else { detailRow.style.display = ''; }
+        }
+        if (show) visible++;
+    });
+    document.getElementById('filteredCount').textContent = visible;
+}
+
+// =========================================================
+// RESULTS TABLE
+// =========================================================
 function renderResultsTable(results) {
     const tbody = document.getElementById('resultsBody');
     tbody.innerHTML = '';
+    document.getElementById('totalCount').textContent = results.length;
+    document.getElementById('filteredCount').textContent = results.length;
+
     results.forEach((r, i) => {
         const isPass = r.prediction === 'ผ่าน';
         const statusColor = isPass ? 'success' : 'danger';
@@ -439,12 +1101,18 @@ function renderResultsTable(results) {
         const prob = (r.probability * 100).toFixed(1);
 
         const mainRow = document.createElement('tr');
+        mainRow.className = 'main-row';
         mainRow.style.cursor = 'pointer';
+        mainRow.dataset.studentId = r.student_id;
+        mainRow.dataset.studentName = r.student_name || '';
+        mainRow.dataset.riskLevel = r.risk_level;
+        mainRow.dataset.prediction = r.prediction;
         mainRow.onclick = () => toggleDetail(i);
         mainRow.innerHTML = `
             <td class="ps-3 fw-bold text-muted">${i + 1}</td>
             <td class="fw-bold">${r.student_id}</td>
-            <td>${r.gpa.toFixed(2)}</td>
+            <td>${r.student_name || '-'}</td>
+            <td><span class="fw-bold ${r.gpa < 2.0 ? 'text-danger' : r.gpa >= 3.0 ? 'text-success' : ''}">${r.gpa.toFixed(2)}</span></td>
             <td>
                 <div class="d-flex align-items-center gap-2">
                     <div class="progress flex-grow-1" style="height: 8px; min-width: 60px;">
@@ -464,7 +1132,7 @@ function renderResultsTable(results) {
         detailRow.className = 'student-detail';
         detailRow.id = `detail-${i}`;
         detailRow.innerHTML = `
-            <td colspan="8" class="detail-cell">
+            <td colspan="9" class="detail-cell">
                 <div class="row g-3">
                     <div class="col-md-3"><strong>หน่วยกิตรวม:</strong> ${r.total_credits}</div>
                     <div class="col-md-3"><strong>วิชาทั้งหมด:</strong> ${r.total_courses} วิชา</div>
@@ -487,27 +1155,25 @@ function renderErrors(errors) {
         document.getElementById('errorsSection').classList.add('d-none');
         return;
     }
-    const list = document.getElementById('errorsList');
-    list.innerHTML = errors.map(e =>
+    document.getElementById('errorsList').innerHTML = errors.map(e =>
         `<li><strong>${e.student_id}:</strong> ${e.error}</li>`
     ).join('');
     document.getElementById('errorsSection').classList.remove('d-none');
 }
 
+// =========================================================
+// DOWNLOAD CSV
+// =========================================================
 function downloadCSV() {
-    if (!batchResults || !batchResults.results || !batchResults.results.length) return;
-
-    const headers = ['STUDENT_ID', 'GPA', 'TOTAL_CREDITS', 'TOTAL_COURSES', 'FAILED_COUNT',
+    if (!batchResults || !allResults.length) return;
+    const headers = ['STUDENT_ID', 'STUDENT_NAME', 'GPA', 'TOTAL_CREDITS', 'TOTAL_COURSES', 'FAILED_COUNT',
                      'PROBABILITY', 'PREDICTION', 'CONFIDENCE', 'RISK_LEVEL', 'RECOMMENDATION'];
     let csv = '\uFEFF' + headers.join(',') + '\n';
-
-    batchResults.results.forEach(r => {
+    allResults.forEach(r => {
         csv += [
             r.student_id,
-            r.gpa,
-            r.total_credits,
-            r.total_courses,
-            r.failed_count,
+            '"' + (r.student_name || '').replace(/"/g, '""') + '"',
+            r.gpa, r.total_credits, r.total_courses, r.failed_count,
             (r.probability * 100).toFixed(2) + '%',
             r.prediction,
             (r.confidence * 100).toFixed(2) + '%',
@@ -515,7 +1181,6 @@ function downloadCSV() {
             '"' + r.recommendation.replace(/"/g, '""') + '"'
         ].join(',') + '\n';
     });
-
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -525,6 +1190,23 @@ function downloadCSV() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+// =========================================================
+// PRINT & RESET
+// =========================================================
+function printResults() { window.print(); }
+
+function resetForm() {
+    document.getElementById('resultsSection').classList.add('d-none');
+    removeFile();
+    batchResults = null;
+    allResults = [];
+    document.getElementById('searchInput').value = '';
+    document.getElementById('filterRisk').value = 'all';
+    document.getElementById('filterPrediction').value = 'all';
+    updateSteps(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 </script>
 {% endblock %}
