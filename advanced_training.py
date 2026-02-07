@@ -642,7 +642,7 @@ class AdvancedFeatureEngineer:
             'Course_Selection_Strategy': 0
         }
 
-    def prepare_training_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
+    def prepare_training_data(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, Optional[np.ndarray]]:
         """
         Main method: เตรียมข้อมูลสำหรับการเทรนแบบ Advanced Context-Aware
         รองรับ Transcript Format ที่ 1 นักศึกษา = หลายแถว
@@ -701,12 +701,18 @@ class AdvancedFeatureEngineer:
                 
             y = X['graduated'].astype(int)
             
+            # Extract sample weights (from snapshot_weight) before dropping
+            sample_weights = None
+            if 'snapshot_weight' in X.columns:
+                sample_weights = X['snapshot_weight'].values.copy()
+                logger.info(f"📊 Using sample weights: min={sample_weights.min():.2f}, max={sample_weights.max():.2f}, mean={sample_weights.mean():.2f}")
+            
             # Log class distribution
             unique_classes, class_counts = np.unique(y, return_counts=True)
             logger.info(f"\U0001f4ca Target distribution: {dict(zip(unique_classes, class_counts))}")
             
-            # Remove non-feature columns
-            X = X.drop(columns=['graduated', 'student_id', 'snapshot_id'], errors='ignore')
+            # Remove non-feature columns (keep snapshot_progress & semester_number as features)
+            X = X.drop(columns=['graduated', 'student_id', 'snapshot_id', 'snapshot_weight'], errors='ignore')
             
             # Step 7: Feature selection and normalization
             X = self._select_and_normalize_features(X)
@@ -715,7 +721,7 @@ class AdvancedFeatureEngineer:
             logger.info(f"\U0001f4ca Final shape: X={X.shape}, y={y.shape}")
             logger.info(f"\U0001f4ca Features created: {list(X.columns)[:20]}...")
             
-            return X, y
+            return X, y, sample_weights
             
         except Exception as e:
             logger.error(f"\u274c Error in feature engineering: {e}")
@@ -1396,6 +1402,17 @@ class AdvancedFeatureEngineer:
             accumulated_data = pd.DataFrame()
             for time_key, group_data in time_groups:
                 accumulated_data = pd.concat([accumulated_data, group_data])
+                
+                # Progressive label: snapshot ที่ใกล้จบได้ label เต็ม
+                # snapshot แรกๆ ได้ label ที่ลดลง (less confident)
+                snapshot_num = len(snapshots) + 1
+                total_snapshots_estimate = max(8, len(time_groups))  # ≈8 semesters
+                progress_ratio = min(1.0, snapshot_num / total_snapshots_estimate)
+                
+                # Weight: early snapshots → label closer to 0.5, later → full label
+                # ใช้สำหรับ sample_weight ในการเทรน
+                snapshot_weight = 0.3 + 0.7 * progress_ratio  # 0.3 → 1.0
+                
                 snapshot = self._create_snapshot_features(
                     student_id=student_id,
                     snapshot_id=f"{student_id}_{time_key}",
@@ -1406,14 +1423,23 @@ class AdvancedFeatureEngineer:
                     graduated=graduated
                 )
                 if snapshot:
+                    snapshot['snapshot_progress'] = progress_ratio
+                    snapshot['snapshot_weight'] = snapshot_weight
+                    snapshot['semester_number'] = snapshot_num
                     snapshots.append(snapshot)
         else:
             # สร้าง snapshots ทุกๆ กลุ่มของวิชา (simulate terms)
             courses_per_term = 6
             total_courses = len(student_data)
+            snapshot_num = 0
+            total_snapshots_estimate = max(1, total_courses // courses_per_term)
             
             for i in range(courses_per_term, total_courses + 1, courses_per_term):
+                snapshot_num += 1
                 current_data = student_data.iloc[:i]
+                progress_ratio = min(1.0, snapshot_num / total_snapshots_estimate)
+                snapshot_weight = 0.3 + 0.7 * progress_ratio
+                
                 snapshot = self._create_snapshot_features(
                     student_id=student_id,
                     snapshot_id=f"{student_id}_snapshot_{i//courses_per_term}",
@@ -1424,6 +1450,9 @@ class AdvancedFeatureEngineer:
                     graduated=graduated
                 )
                 if snapshot:
+                    snapshot['snapshot_progress'] = progress_ratio
+                    snapshot['snapshot_weight'] = snapshot_weight
+                    snapshot['semester_number'] = snapshot_num
                     snapshots.append(snapshot)
             
             # เพิ่ม final snapshot ด้วยข้อมูลทั้งหมด
@@ -1438,6 +1467,9 @@ class AdvancedFeatureEngineer:
                     graduated=graduated
                 )
                 if final_snapshot:
+                    final_snapshot['snapshot_progress'] = 1.0
+                    final_snapshot['snapshot_weight'] = 1.0
+                    final_snapshot['semester_number'] = snapshot_num + 1
                     snapshots.append(final_snapshot)
         
         return snapshots
@@ -1977,10 +2009,10 @@ class AdvancedFeatureEngineer:
 
 
 # Keep the existing train_ensemble_model function - enhanced with CV and calibration
-def train_ensemble_model(X, y):
+def train_ensemble_model(X, y, sample_weights=None):
     """
     Train ensemble model with advanced techniques
-    Enhanced: StratifiedKFold CV, calibration, better hyperparameters
+    Enhanced: StratifiedKFold CV, calibration, better hyperparameters, sample weights
     """
     logger.info("\U0001f680 Starting Advanced Ensemble Model Training...")
     logger.info(f"\U0001f4ca Input shape: X={X.shape}, y={y.shape}")
@@ -2024,27 +2056,46 @@ def train_ensemble_model(X, y):
         
         # Split data
         try:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42, stratify=y
-            )
+            if sample_weights is not None:
+                X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+                    X, y, sample_weights, test_size=test_size, random_state=42, stratify=y
+                )
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=42, stratify=y
+                )
+                w_train, w_test = None, None
         except:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42
-            )
+            if sample_weights is not None:
+                X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(
+                    X, y, sample_weights, test_size=test_size, random_state=42
+                )
+            else:
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y, test_size=test_size, random_state=42
+                )
+                w_train, w_test = None, None
         
         logger.info(f"\U0001f4ca Train/Test split: {len(X_train)}/{len(X_test)}")
         
-        # Apply SMOTE if possible
+        # Apply SMOTE if possible (skip if we have sample weights - use weights instead)
+        w_train_resampled = w_train
         try:
-            min_samples = min(Counter(y_train).values())
-            if min_samples >= 2:
-                k_neighbors = min(5, min_samples - 1)
-                k_neighbors = max(1, k_neighbors)
-                smote = SMOTE(random_state=42, k_neighbors=k_neighbors)
-                X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
-                logger.info(f"\u2705 Applied SMOTE. New distribution: {Counter(y_train_resampled)}")
-            else:
+            if w_train is not None:
+                # Use sample weights instead of SMOTE for balanced training
                 X_train_resampled, y_train_resampled = X_train, y_train
+                w_train_resampled = w_train
+                logger.info(f"📊 Using sample weights (skip SMOTE). Distribution: {Counter(y_train)}")
+            else:
+                min_samples = min(Counter(y_train).values())
+                if min_samples >= 2:
+                    k_neighbors = min(5, min_samples - 1)
+                    k_neighbors = max(1, k_neighbors)
+                    smote = SMOTE(random_state=42, k_neighbors=k_neighbors)
+                    X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+                    logger.info(f"\u2705 Applied SMOTE. New distribution: {Counter(y_train_resampled)}")
+                else:
+                    X_train_resampled, y_train_resampled = X_train, y_train
         except Exception as e:
             logger.warning(f"\u26a0\ufe0f SMOTE not applied: {e}")
             X_train_resampled, y_train_resampled = X_train, y_train
@@ -2061,17 +2112,17 @@ def train_ensemble_model(X, y):
         # Random Forest - tuned
         try:
             rf = RandomForestClassifier(
-                n_estimators=200,
-                max_depth=12,
-                min_samples_split=5,
-                min_samples_leaf=2,
+                n_estimators=300,
+                max_depth=8,
+                min_samples_split=8,
+                min_samples_leaf=4,
                 max_features='sqrt',
                 random_state=42,
                 n_jobs=1,
                 class_weight='balanced',
                 oob_score=True
             )
-            rf.fit(X_train_resampled, y_train_resampled)
+            rf.fit(X_train_resampled, y_train_resampled, sample_weight=w_train_resampled)
             models['rf'] = rf
             
             # Cross-validation score
@@ -2097,15 +2148,18 @@ def train_ensemble_model(X, y):
         # Gradient Boosting - tuned
         try:
             gb = GradientBoostingClassifier(
-                n_estimators=200,
-                learning_rate=0.05,
-                max_depth=5,
-                min_samples_split=5,
-                min_samples_leaf=2,
+                n_estimators=300,
+                learning_rate=0.03,
+                max_depth=4,
+                min_samples_split=8,
+                min_samples_leaf=4,
                 subsample=0.8,
-                random_state=42
+                random_state=42,
+                validation_fraction=0.1,
+                n_iter_no_change=20,
+                tol=1e-4
             )
-            gb.fit(X_train_resampled, y_train_resampled)
+            gb.fit(X_train_resampled, y_train_resampled, sample_weight=w_train_resampled)
             models['gb'] = gb
             
             try:
@@ -2127,7 +2181,7 @@ def train_ensemble_model(X, y):
                 solver='liblinear',
                 C=0.5
             )
-            lr.fit(X_train_scaled, y_train_resampled)
+            lr.fit(X_train_scaled, y_train_resampled, sample_weight=w_train_resampled)
             models['lr'] = lr
             
             try:
@@ -2277,6 +2331,12 @@ class ContextAwarePredictor:
         if not features or features.get('Total_Courses_so_far', 0) == 0:
             return {'probability': 0.5, 'confidence': 0.0, 'features_used': 0, 'courses_analyzed': 0}
         
+        # Add temporal features for prediction (reasonable defaults)
+        total_courses = features.get('Total_Courses_so_far', 0)
+        expected_total = 40  # typical program ~40 courses
+        features['snapshot_progress'] = min(total_courses / expected_total, 1.0) if expected_total > 0 else 0.5
+        features['semester_number'] = max(1, int(total_courses / 6))  # ~6 courses per semester
+        
         # แปลงเป็น DataFrame
         X = pd.DataFrame([features])
         
@@ -2284,7 +2344,7 @@ class ContextAwarePredictor:
         X = self.feature_engineer._generate_advanced_features(X)
         
         # ลบคอลัมน์ที่ไม่ใช่ feature
-        X = X.drop(columns=['graduated', 'student_id', 'snapshot_id'], errors='ignore')
+        X = X.drop(columns=['graduated', 'student_id', 'snapshot_id', 'snapshot_weight'], errors='ignore')
         
         # ===== สำคัญ: จับคู่ features ให้ตรงกับตอนเทรน =====
         if self.feature_names and len(self.feature_names) > 0:
