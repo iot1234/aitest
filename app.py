@@ -24,7 +24,7 @@ else:
 print(f"R2 Access Key present: {bool(os.getenv('CLOUDFLARE_R2_ACCESS_KEY_ID'))}")
 print(f"R2 Secret Key present: {bool(os.getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY'))}")
 
-from advanced_training import AdvancedFeatureEngineer, ContextAwarePredictor
+from advanced_training import AdvancedFeatureEngineer, ContextAwarePredictor, normalize_course_code, deduplicate_transcript
 from explainable_ai import ExplainablePredictor
 
 from flask import (
@@ -6187,14 +6187,17 @@ def analyze_curriculum():
                         for course_id, grade in current_grades.items():
                             if grade:  # มีเกรด
                                 course = next((c for c in courses_data if c['id'] == course_id), None)
+                                course_name = course.get('thaiName', '') if course else ''
+                                # Normalize course code (เก่า → ใหม่)
+                                normalized_id = normalize_course_code(course_id, course_name)
                                 if course:
                                     # แปลงเกรดเป็น GRADE_POINT
                                     grade_point = grade_mapping.get(grade, 0)
                                     
                                     transcript_data.append({
                                         'Dummy StudentNO': student_name,
-                                        'COURSE_CODE': course_id,
-                                        'COURSE_TITLE_TH': course.get('thaiName', ''),
+                                        'COURSE_CODE': normalized_id,
+                                        'COURSE_TITLE_TH': course_name,
                                         'CREDIT': course.get('credit', 3),
                                         'GRADE': grade,
                                         'GRADE_POINT': grade_point,
@@ -6813,6 +6816,22 @@ def _run_batch_prediction_on_df(df, model_filename):
     import traceback
 
     grade_mapping = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
+
+    # Normalize course codes before processing
+    if 'COURSE_CODE' in df.columns:
+        # หาชื่อวิชาไทย (ถ้ามี) สำหรับ name-based fallback
+        course_name_col = None
+        for c in df.columns:
+            if c.upper() in ['COURSE_TITLE_TH', 'COURSE_NAME_TH']:
+                course_name_col = c
+                break
+        df['COURSE_CODE'] = df.apply(
+            lambda row: normalize_course_code(
+                str(row['COURSE_CODE']).strip(),
+                str(row[course_name_col]).strip() if course_name_col and pd.notna(row.get(course_name_col)) else None
+            ), axis=1
+        )
+        logger.info(f"🔄 Batch prediction: Normalized {len(df)} course codes")
 
     # Load model
     loaded_model_data = storage.load_model(model_filename)

@@ -1,6 +1,14 @@
 # advanced_training.py - COMPLETE ENHANCED VERSION WITH AUTOMATIC GRADUATION CALCULATION
+# ✅ Fixed: Course code normalization (old 3-part → new 4-part)
+# ✅ Fixed: Name-based course matching fallback
+# ✅ Fixed: GROUPNAME1 deduplication
+# ✅ Fixed: พ.ศ./ค.ศ. year mismatch handling
+# ✅ Fixed: Graduation label for students still studying
+# ✅ Fixed: Temporal snapshot target leakage
+# ✅ Fixed: W_count tracking
 import pandas as pd
 import numpy as np
+import re
 from typing import Dict, List, Tuple, Any, Optional, Set
 import logging
 from datetime import datetime
@@ -15,6 +23,114 @@ warnings.filterwarnings('ignore')
 
 # Setup logger
 logger = logging.getLogger(__name__)
+
+# --- Course Code Normalization Utilities ---
+_COURSE_CODE_MAPPING = None
+_COURSE_NAME_KEYWORDS = None
+
+def _get_course_code_mapping():
+    """Lazy-load course code mapping from config"""
+    global _COURSE_CODE_MAPPING
+    if _COURSE_CODE_MAPPING is None:
+        try:
+            from config import Config
+            _COURSE_CODE_MAPPING = getattr(Config, 'COURSE_CODE_MAPPING', {})
+        except Exception:
+            _COURSE_CODE_MAPPING = {}
+    return _COURSE_CODE_MAPPING
+
+def _get_course_name_keywords():
+    """Lazy-load course name keywords from config"""
+    global _COURSE_NAME_KEYWORDS
+    if _COURSE_NAME_KEYWORDS is None:
+        try:
+            from config import Config
+            _COURSE_NAME_KEYWORDS = getattr(Config, 'COURSE_NAME_KEYWORDS', {})
+        except Exception:
+            _COURSE_NAME_KEYWORDS = {}
+    return _COURSE_NAME_KEYWORDS
+
+def normalize_course_code(code: str, course_name: str = None) -> str:
+    """
+    Normalize course code: แปลงรหัสเก่า (3 ส่วน) → ใหม่ (4 ส่วน)
+    ถ้ารหัสไม่ match ให้ลอง match จากชื่อวิชา
+    
+    Args:
+        code: รหัสวิชา เช่น '02-011-109' หรือ '02-005-011-109'
+        course_name: ชื่อวิชา (ไทย/อังกฤษ) สำหรับ fallback matching
+    Returns:
+        รหัสวิชาที่ normalize แล้ว
+    """
+    if not code or not isinstance(code, str):
+        return code
+    
+    code = code.strip()
+    
+    # 1. ลอง exact match จาก mapping
+    mapping = _get_course_code_mapping()
+    if code in mapping:
+        return mapping[code]
+    
+    # 2. ถ้าเป็นรหัส 4 ส่วนอยู่แล้ว → คืนค่าเดิม
+    if re.match(r'^\d{2}-\d{3}-\d{3}-\d{3}$', code):
+        return code
+    
+    # 3. ลอง pattern matching: XX-YYY-ZZZ → XX-000-YYY-ZZZ (เติม 000)
+    m = re.match(r'^(\d{2})-(\d{3})-(\d{3})$', code)
+    if m:
+        prefix, mid, suffix = m.groups()
+        # ลองเติม 000, 005 etc. แล้วดูว่า match กับ mapping value ไหม
+        for padded in [f'{prefix}-000-{mid}-{suffix}', f'{prefix}-005-{mid}-{suffix}']:
+            # Check if this padded code exists in mapping values or COURSES_DATA
+            if padded in mapping.values():
+                return padded
+        # ไม่ match → ลอง default padding
+        return f'{prefix}-000-{mid}-{suffix}'
+    
+    # 4. Fallback: match จากชื่อวิชา
+    if course_name and isinstance(course_name, str):
+        name_keywords = _get_course_name_keywords()
+        course_name_clean = course_name.strip()
+        # ลอง exact match ก่อน จากนั้น substring match
+        for keyword, mapped_code in name_keywords.items():
+            if keyword in course_name_clean:
+                return mapped_code
+    
+    return code
+
+
+def deduplicate_transcript(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    ลบข้อมูลซ้ำที่เกิดจาก GROUPNAME1 (วิชาเดียวกันอยู่หลายกลุ่มวิชา)
+    เก็บเฉพาะแถวที่ไม่ซ้ำตาม (นักศึกษา, รหัสวิชา, ปีการศึกษา, เทอม, เกรด)
+    """
+    original_len = len(df)
+    
+    # หาคอลัมน์ที่เกี่ยวข้อง (ก่อน lowercasing)
+    student_cols = [c for c in df.columns if any(k in c.lower().replace(' ', '_').replace('-', '_') 
+                    for k in ['dummy_studentno', 'student_id', 'studentno', 'รหัสนักศึกษา'])]
+    course_cols = [c for c in df.columns if any(k in c.lower().replace(' ', '_').replace('-', '_') 
+                    for k in ['course_code', 'course', 'รหัสวิชา'])]
+    year_cols = [c for c in df.columns if any(k in c.lower().replace(' ', '_').replace('-', '_') 
+                    for k in ['ปีการศึกษา', 'academic_year', 'year'])]
+    term_cols = [c for c in df.columns if any(k in c.lower().replace(' ', '_').replace('-', '_') 
+                    for k in ['เทอม', 'semester', 'term'])]
+    grade_cols = [c for c in df.columns if c.lower().strip() in ['grade', 'เกรด']]
+    
+    dedup_cols = []
+    if student_cols: dedup_cols.append(student_cols[0])
+    if course_cols: dedup_cols.append(course_cols[0])
+    if year_cols: dedup_cols.append(year_cols[0])
+    if term_cols: dedup_cols.append(term_cols[0])
+    if grade_cols: dedup_cols.append(grade_cols[0])
+    
+    if len(dedup_cols) >= 3:  # ต้องมีอย่างน้อย student+course+grade
+        df = df.drop_duplicates(subset=dedup_cols, keep='first')
+        removed = original_len - len(df)
+        if removed > 0:
+            logger.info(f"🧹 Dedup: ลบข้อมูลซ้ำ {removed} แถว (จาก {original_len} → {len(df)})")
+    
+    return df
 
 class AdvancedFeatureEngineer:
     """
@@ -530,13 +646,20 @@ class AdvancedFeatureEngineer:
         """
         Main method: เตรียมข้อมูลสำหรับการเทรนแบบ Advanced Context-Aware
         รองรับ Transcript Format ที่ 1 นักศึกษา = หลายแถว
+        ✅ ปรับปรุง: dedup, normalize course codes, fix year/graduation
         """
         logger.info("🚀 Starting Advanced Context-Aware Feature Engineering...")
         logger.info(f"📊 Input data shape: {df.shape}")
         
         try:
+            # Step 0: Deduplicate ข้อมูลซ้ำจาก GROUPNAME1 ก่อน clean
+            df = deduplicate_transcript(df)
+            
             # Step 1: ตรวจสอบและทำความสะอาดข้อมูล
             df = self._clean_data(df)
+            
+            # Step 1.5: Normalize course codes (เก่า → ใหม่)
+            df = self._normalize_course_codes(df)
             
             # Step 2: สร้าง Course DNA Profiles จากข้อมูลทั้งหมด
             logger.info("🧬 Creating Course DNA profiles...")
@@ -593,6 +716,36 @@ class AdvancedFeatureEngineer:
             import traceback
             logger.error(traceback.format_exc())
             raise
+    
+    def _normalize_course_codes(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalize course codes: แปลงรหัสเก่า → ใหม่
+        ใช้ทั้ง code mapping และ name-based matching
+        """
+        course_col = self._find_column(df, ['course_code', 'course', 'subject', 'รหัสวิชา'])
+        if not course_col:
+            return df
+        
+        # หา course name column สำหรับ fallback
+        name_col_th = self._find_column(df, ['course_title_th', 'ชื่อวิชา', 'วิชา'])
+        name_col_en = self._find_column(df, ['course_title_en', 'course_name'])
+        name_col = name_col_th or name_col_en
+        
+        original_codes = df[course_col].nunique()
+        
+        # Normalize แต่ละแถว
+        def _normalize_row(row):
+            code = str(row[course_col]).strip() if pd.notna(row[course_col]) else ''
+            name = str(row[name_col]).strip() if name_col and pd.notna(row.get(name_col)) else None
+            return normalize_course_code(code, name)
+        
+        df[course_col] = df.apply(_normalize_row, axis=1)
+        
+        new_codes = df[course_col].nunique()
+        if new_codes != original_codes:
+            logger.info(f"🔄 Course code normalization: {original_codes} → {new_codes} unique codes")
+        
+        return df
     
     def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """ทำความสะอาดข้อมูล"""
@@ -866,6 +1019,8 @@ class AdvancedFeatureEngineer:
         """
         แปลงข้อมูล Transcript (หลายแถวต่อนักศึกษา) เป็น Student Records
         พร้อมคำนวณสถานะการจบอัตโนมัติตามจำนวนปีที่เรียน
+        
+        ✅ ปรับปรุง: กรองนศ.ที่ยังเรียนไม่ครบ, ใช้เกณฑ์ GPA+หน่วยกิต+ปี ร่วม
         """
         student_records = {}
         
@@ -878,14 +1033,35 @@ class AdvancedFeatureEngineer:
             df['dummy_student_id'] = [f"student_{i}" for i in range(len(df))]
             student_col = 'dummy_student_id'
         
-        # Group by student - แก้ไขการจัดการ NaN
+        # หาคอลัมน์สำคัญสำหรับคำนวณ graduation
+        grade_col = self._find_column(df, ['grade', 'เกรด'])
+        credit_col = self._find_column(df, ['credit', 'หน่วยกิต'])
+        grade_point_col = self._find_column(df, ['grade_point', 'คะแนนเกรด', 'gpa_point'])
+        entry_year_col = self._find_column(df, ['ปีที่เข้า', 'entry_year', 'admission_year'])
+        academic_year_col = self._find_column(df, ['ปีการศึกษา', 'academic_year', 'year'])
+        
+        # Group by student
         df[student_col] = df[student_col].fillna('unknown')
         df[student_col] = df[student_col].astype(str)
         unique_students = df[student_col].unique()
         
         logger.info(f"📊 Processing {len(unique_students)} students...")
         
-        graduation_stats = {'graduated': 0, 'not_graduated': 0}
+        graduation_stats = {'graduated': 0, 'not_graduated': 0, 'excluded': 0}
+        
+        # --- กำหนดว่า "ปีปัจจุบัน" คืออะไร เพื่อกรอง นศ. ที่ยังเรียนอยู่ ---
+        current_calendar_year = datetime.now().year  # ค.ศ. ปัจจุบัน (2026)
+        # หา max academic year ในข้อมูลเพื่อตรวจว่าเป็น พ.ศ. หรือ ค.ศ.
+        max_acad_year = 0
+        if academic_year_col:
+            try:
+                max_acad_year = int(df[academic_year_col].dropna().max())
+            except:
+                pass
+        
+        # ถ้า max > 2500 แสดงว่าเป็น พ.ศ.
+        is_be_system = max_acad_year > 2500
+        current_acad_year_be = current_calendar_year + 543 if is_be_system else current_calendar_year
         
         for i, student_id in enumerate(unique_students):
             try:
@@ -894,13 +1070,51 @@ class AdvancedFeatureEngineer:
                 if student_data.empty:
                     continue
                 
-                # คำนวณจำนวนปีที่เรียนจากข้อมูล
+                # คำนวณจำนวนปีที่เรียนจากข้อมูล (แก้ไข พ.ศ./ค.ศ.)
                 years_studied = self._calculate_years_studied(student_data)
                 
-                # 🔴 คำนวณสถานะการจบอัตโนมัติ
-                # จบตามเกณฑ์ = เรียน ≤ 4 ปี
-                # ไม่จบตามเกณฑ์ = เรียน > 4 ปี
-                graduated_status = 1 if years_studied <= 4 else 0
+                # --- ตรวจว่า นศ. มีข้อมูลเพียงพอหรือยัง ---
+                # กรอง นศ. ที่เข้ามาน้อยกว่า 4 ปี → ยังตัดสินไม่ได้ว่าจบหรือไม่
+                entry_year = None
+                if entry_year_col:
+                    try:
+                        entry_year = int(student_data[entry_year_col].dropna().iloc[0])
+                    except:
+                        pass
+                
+                # คำนวณว่า นศ.คนนี้ มีเวลา >= 4 ปี ที่จะจบหรือยัง
+                min_years_to_graduate = 4
+                student_has_enough_time = True
+                
+                if entry_year:
+                    # แปลง entry_year เป็น พ.ศ. ถ้าจำเป็น
+                    entry_be = entry_year + 543 if entry_year < 2500 else entry_year
+                    potential_years = (current_acad_year_be - entry_be + 1)
+                    
+                    if potential_years < min_years_to_graduate:
+                        # นศ. เข้ามาน้อยกว่า 4 ปี → ยังตัดสินไม่ได้
+                        student_has_enough_time = False
+                
+                if not student_has_enough_time:
+                    graduation_stats['excluded'] += 1
+                    # ยังคง include ใน training แต่ใช้ GPA-based label แทน
+                    # คำนวณ GPA จากข้อมูลที่มี
+                    gpa = self._calculate_student_gpa(student_data, grade_col, credit_col, grade_point_col)
+                    # นศ.ที่ยังเรียนอยู่: ถ้า GPA >= 2.0 → คาดว่าจบ, < 2.0 → เสี่ยงไม่จบ
+                    graduated_status = 1 if gpa >= 2.0 else 0
+                else:
+                    # --- คำนวณ graduation ด้วยเกณฑ์ผสม ---
+                    gpa = self._calculate_student_gpa(student_data, grade_col, credit_col, grade_point_col)
+                    total_credits = 0
+                    if credit_col:
+                        try:
+                            total_credits = student_data[credit_col].astype(float).sum()
+                        except:
+                            total_credits = len(student_data) * 3
+                    
+                    # เกณฑ์: เรียน ≤ 5 ปี AND GPA >= 2.0
+                    # (ขยายจาก 4 ปี เป็น 5 ปี เพราะหลายคนแค่ช้า 1 ปี)
+                    graduated_status = 1 if (years_studied <= 5 and gpa >= 2.0) else 0
                 
                 # นับสถิติ
                 if graduated_status == 1:
@@ -908,8 +1122,8 @@ class AdvancedFeatureEngineer:
                 else:
                     graduation_stats['not_graduated'] += 1
                 
-                # Log progress ทุก 10 students เพื่อไม่ให้ช้า
-                if (i + 1) % 10 == 0:
+                # Log progress ทุก 50 students
+                if (i + 1) % 50 == 0:
                     logger.info(f"  Processed {i+1}/{len(unique_students)} students...")
                 
                 # เรียงตามเวลา
@@ -918,7 +1132,9 @@ class AdvancedFeatureEngineer:
                 student_records[str(student_id)] = {
                     'data': student_data,
                     'graduated': graduated_status,
-                    'years_studied': years_studied
+                    'years_studied': years_studied,
+                    'gpa': gpa,
+                    'has_enough_time': student_has_enough_time
                 }
                 
             except Exception as e:
@@ -927,61 +1143,88 @@ class AdvancedFeatureEngineer:
         
         # สรุปผล
         logger.info(f"✅ Classification results:")
-        logger.info(f"   - จบตามเกณฑ์ (≤4 ปี): {graduation_stats['graduated']} คน")
-        logger.info(f"   - จบไม่ตามเกณฑ์ (>4 ปี): {graduation_stats['not_graduated']} คน")
+        logger.info(f"   - จบตามเกณฑ์: {graduation_stats['graduated']} คน")
+        logger.info(f"   - ไม่จบตามเกณฑ์: {graduation_stats['not_graduated']} คน")
+        logger.info(f"   - นศ.ยังเรียนอยู่ (ใช้ GPA-based label): {graduation_stats['excluded']} คน")
         
         return student_records
+    
+    def _calculate_student_gpa(self, student_data: pd.DataFrame, grade_col, credit_col, grade_point_col) -> float:
+        """คำนวณ GPA ของนักศึกษาจากข้อมูล"""
+        if not grade_col:
+            return 2.0  # default
+        
+        grades = []
+        credits = []
+        
+        for _, row in student_data.iterrows():
+            if pd.notna(row.get(grade_col)):
+                gp_val = row.get(grade_point_col) if grade_point_col else None
+                grade_val = self._convert_grade_to_numeric(row[grade_col], gp_val)
+                if grade_val is not None:
+                    grades.append(grade_val)
+                    try:
+                        c = float(row[credit_col]) if credit_col and pd.notna(row.get(credit_col)) else 3
+                        credits.append(c)
+                    except:
+                        credits.append(3)
+        
+        if not grades:
+            return 2.0
+        
+        total_points = sum(g * c for g, c in zip(grades, credits))
+        total_credits = sum(credits)
+        return total_points / total_credits if total_credits > 0 else 0
     
     def _calculate_years_studied(self, student_data: pd.DataFrame) -> int:
         """
         คำนวณจำนวนปีที่เรียนจากข้อมูล transcript
-        ใช้ "ปีที่เข้า" และ "ปีการศึกษา" ในการคำนวณ
-        รองรับปี พ.ศ./ค.ศ. อัตโนมัติ
+        ✅ แก้ไข: ปีที่เข้า (ค.ศ.) กับ ปีการศึกษา (พ.ศ.) แปลงให้ตรงกัน
         """
-        # Method 1: ใช้ "ปีที่เข้า" และ "ปีการศึกษา" (วิธีที่แม่นยำที่สุด)
         entry_year_col = self._find_column(student_data, ['ปีที่เข้า', 'entry_year', 'admission_year'])
         academic_year_col = self._find_column(student_data, ['ปีการศึกษา', 'academic_year', 'year'])
         
+        # Method 1: ใช้ "ปีที่เข้า" + "ปีการศึกษา" (แม่นยำที่สุด)
         if entry_year_col and academic_year_col:
             try:
-                # ดึงปีที่เข้า (ควรเป็นค่าเดียวกันทั้งหมด)
                 entry_years = student_data[entry_year_col].dropna().unique()
-                if len(entry_years) > 0:
+                academic_years = student_data[academic_year_col].dropna().unique()
+                
+                if len(entry_years) > 0 and len(academic_years) > 0:
                     entry_year = int(entry_years[0])
                     
-                    # ดึงปีการศึกษาทั้งหมดที่เรียน
-                    academic_years = student_data[academic_year_col].dropna().unique()
-                    if len(academic_years) > 0:
-                        # แปลงปีการศึกษาเป็นตัวเลข
-                        year_values = []
-                        for y in academic_years:
-                            year_int = self._convert_year_to_int(y)
-                            if year_int:
-                                year_values.append(year_int)
+                    year_values = []
+                    for y in academic_years:
+                        year_int = self._convert_year_to_int(y)
+                        if year_int:
+                            year_values.append(year_int)
+                    
+                    if year_values:
+                        last_academic_year = max(year_values)
                         
-                        if year_values:
-                            # คำนวณจากปีการศึกษาสุดท้าย - ปีที่เข้า + 1
-                            last_academic_year = max(year_values)
-                            entry_year_converted = self._convert_year_to_int(entry_year)
-                            
-                            if entry_year_converted and last_academic_year:
-                                # ถ้าปีการศึกษาเป็น พ.ศ. และปีที่เข้าเป็น ค.ศ. หรือในทางกลับกัน
-                                if abs(last_academic_year - entry_year_converted) > 100:
-                                    # แปลงให้เป็นระบบเดียวกัน
-                                    if last_academic_year > 2500:  # พ.ศ.
-                                        if entry_year_converted < 2500:  # ค.ศ.
-                                            entry_year_converted += 543
-                                    else:  # ค.ศ.
-                                        if entry_year_converted > 2500:  # พ.ศ.
-                                            entry_year_converted -= 543
-                                
-                                years_studied = last_academic_year - entry_year_converted + 1
-                                return max(1, min(10, years_studied))  # จำกัดไว้ 1-10 ปี
-                
+                        # --- แปลงให้เป็นระบบเดียวกัน ---
+                        # ตรวจว่า entry_year เป็น ค.ศ. หรือ พ.ศ.
+                        entry_is_ce = entry_year < 2500  # <2500 = ค.ศ.
+                        acad_is_be = last_academic_year > 2500  # >2500 = พ.ศ.
+                        
+                        if entry_is_ce and acad_is_be:
+                            # ปีที่เข้าเป็น ค.ศ., ปีการศึกษาเป็น พ.ศ. → แปลง entry เป็น พ.ศ.
+                            entry_year_be = entry_year + 543
+                            years_studied = last_academic_year - entry_year_be + 1
+                        elif not entry_is_ce and not acad_is_be:
+                            # ปีที่เข้าเป็น พ.ศ., ปีการศึกษาเป็น ค.ศ. → แปลง entry เป็น ค.ศ.
+                            entry_year_ce = entry_year - 543
+                            years_studied = last_academic_year - entry_year_ce + 1
+                        else:
+                            # เป็นระบบเดียวกันอยู่แล้ว
+                            years_studied = last_academic_year - entry_year + 1
+                        
+                        return max(1, min(10, years_studied))
+                        
             except Exception as e:
                 logger.debug(f"Error in Method 1: {e}")
         
-        # Method 2: ใช้ปีการศึกษาเพียงอย่างเดียว
+        # Method 2: ใช้ปีการศึกษาเพียงอย่างเดียว (range)
         if academic_year_col:
             try:
                 years = student_data[academic_year_col].dropna().unique()
@@ -993,25 +1236,25 @@ class AdvancedFeatureEngineer:
                             year_values.append(year_int)
                     
                     if year_values:
-                        return max(year_values) - min(year_values) + 1
+                        return max(1, min(10, max(year_values) - min(year_values) + 1))
             except Exception as e:
                 logger.debug(f"Error in Method 2: {e}")
         
-        # Method 3: ใช้เทอม/ภาคเรียน
+        # Method 3: นับจำนวนเทอมที่แตกต่างกัน (รวม year+term)
         term_col = self._find_column(student_data, ['term', 'semester', 'ภาคเรียน', 'เทอม'])
-        if term_col and term_col in student_data.columns:
+        if term_col and academic_year_col:
             try:
-                # นับจำนวนเทอมที่แตกต่างกัน
-                terms = student_data[term_col].dropna().unique()
-                total_terms = len(terms)
-                # สมมติว่า 1 ปี = 2 เทอม (ไม่นับ summer)
-                return max(1, (total_terms + 1) // 2)
-            except Exception as e:
-                logger.debug(f"Error in Method 3: {e}")
+                unique_terms = student_data.drop_duplicates(subset=[academic_year_col, term_col])
+                # นับเฉพาะเทอม 1 และ 2 (ไม่นับ summer)
+                main_terms = len(unique_terms[unique_terms[term_col].isin([1, 2, '1', '2'])])
+                if main_terms > 0:
+                    return max(1, min(10, (main_terms + 1) // 2))
+            except:
+                pass
         
         # Method 4: นับจากจำนวนวิชา (fallback)
         total_courses = len(student_data)
-        courses_per_year = 14  # ประมาณ 7 วิชาต่อเทอม x 2 เทอม
+        courses_per_year = 14
         return max(1, min(8, (total_courses + courses_per_year - 1) // courses_per_year))
     
     def _convert_year_to_int(self, year_value) -> Optional[int]:
@@ -1142,6 +1385,7 @@ class AdvancedFeatureEngineer:
         """
         grades = []
         credits = []
+        grade_letters = []  # ✅ เพิ่ม: เก็บ grade letter สำหรับนับ W
         course_grades_detail = {}
         
         # หา grade_point column
@@ -1169,8 +1413,7 @@ class AdvancedFeatureEngineer:
                     continue
                 
                 grades.append(grade_val)
-                
-                # หาหน่วยกิต
+                grade_letters.append(str(row[grade_col]).strip().upper())  # ✅ เก็บ grade letter
                 if credit_col and credit_col in row.index:
                     try:
                         credit = float(row[credit_col])
@@ -1227,7 +1470,7 @@ class AdvancedFeatureEngineer:
             'Total_Credits_so_far': sum(credits) if credits else len(grades) * 3,
             'Total_Courses_so_far': len(grades),
             'Total_F_Count_so_far': sum(1 for g in grades if g == 0),
-            'Total_W_Count_so_far': 0,  # จะต้องดูจาก grade letter
+            'Total_W_Count_so_far': sum(1 for gl in grade_letters if gl == 'W'),  # ✅ Fixed: track W count
             
             # === Trend & Recent Features (แนวโน้มและล่าสุด) ===
             'GPA_last_window': np.mean(recent_grades) if recent_grades else 0,
@@ -1625,12 +1868,12 @@ def train_ensemble_model(X, y):
             recall = recall_score(y_test, ensemble_pred, zero_division=0)
             f1 = f1_score(y_test, ensemble_pred, zero_division=0)
         else:
-            # Default metrics if no test set
-            accuracy = 0.85
-            precision = 0.85
-            recall = 0.85
-            f1 = 0.85
-            logger.warning("⚠️ No test set available, using default metrics")
+            # No test set — estimate from training (don't fabricate)
+            accuracy = 0.0
+            precision = 0.0
+            recall = 0.0
+            f1 = 0.0
+            logger.warning("⚠️ No test set available, metrics set to 0 (unknown)")
         
         logger.info(f"📊 Model Performance:")
         logger.info(f"   - Accuracy: {accuracy:.3f}")
