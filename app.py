@@ -5464,8 +5464,94 @@ def gemini_predict_route():
         logger.warning(f"Error building course context: {context_exc}")
         course_context_str = ""
     
+    # =========================================================
+    # 🤖 CO-PREDICTION: เรียก ML Model ก่อน แล้วส่งผลให้ Gemini
+    # =========================================================
+    ml_prediction_result = None
+    ml_context_str = ""
+    
     try:
-        logger.info(f"🔮 Starting Gemini prediction for {student_name} with {len(cleaned_grades)} courses")
+        # สร้าง transcript DataFrame จากเกรดที่กรอก
+        grade_mapping_for_ml = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
+        courses_data = ACTIVE_CONFIG.COURSES_DATA
+        COURSE_LOOKUP_LOCAL = {c['id']: c for c in courses_data}
+        
+        transcript_rows = []
+        for course_id, grade in cleaned_grades.items():
+            course = COURSE_LOOKUP_LOCAL.get(course_id) or COURSE_LOOKUP.get(course_id)
+            if course and grade:
+                course_name = course.get('thaiName', '')
+                normalized_id = normalize_course_code(course_id, course_name)
+                grade_point = grade_mapping_for_ml.get(grade.upper() if isinstance(grade, str) else str(grade).upper(), 0)
+                transcript_rows.append({
+                    'Dummy StudentNO': student_name,
+                    'COURSE_CODE': normalized_id,
+                    'COURSE_TITLE_TH': course_name,
+                    'CREDIT': course.get('credit', 3),
+                    'GRADE': grade.upper() if isinstance(grade, str) else str(grade).upper(),
+                    'GRADE_POINT': grade_point,
+                })
+        
+        if transcript_rows:
+            transcript_df = pd.DataFrame(transcript_rows)
+            
+            # โหลดโมเดล
+            stored_model = None
+            if model_filename:
+                stored_model = storage.load_model(model_filename)
+            else:
+                models_list = storage.list_models()
+                if models_list:
+                    stored_model = storage.load_model(models_list[0]['filename'])
+            
+            if stored_model:
+                models_dict = stored_model.get('models', {})
+                scaler = stored_model.get('scaler')
+                feature_names = stored_model.get('feature_names', [])
+                cp = stored_model.get('course_profiles', {})
+                mw = stored_model.get('model_weights', {})
+                
+                if models_dict:
+                    engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping_for_ml)
+                    engineer.course_profiles = cp or (course_profiles or {})
+                    
+                    predictor = ContextAwarePredictor(
+                        feature_engineer=engineer,
+                        models=models_dict,
+                        scaler=scaler,
+                        feature_names=feature_names,
+                        model_weights=mw
+                    )
+                    
+                    ml_prediction_result = predictor.predict_graduation_probability(transcript_df, explain=False)
+                    
+                    ml_prob = ml_prediction_result.get('probability', 0.5)
+                    ml_conf = ml_prediction_result.get('confidence', 0.5)
+                    ml_models = ml_prediction_result.get('models_used', [])
+                    ml_per_model = ml_prediction_result.get('model_confidence', {})
+                    ml_fi = ml_prediction_result.get('feature_importance', {})
+                    
+                    ml_context_str = f"""
+**ผลการทำนายจากโมเดล AI (Machine Learning Ensemble):**
+- ความน่าจะเป็นจบ: {ml_prob*100:.1f}%
+- ความมั่นใจ: {ml_conf*100:.1f}%
+- โมเดลที่ใช้: {', '.join(ml_models)}
+- ผลแต่ละโมเดล: {', '.join(f'{k}={v*100:.1f}%' for k, v in ml_per_model.items())}
+- ปัจจัยสำคัญที่โมเดลใช้ตัดสิน (เรียงจากมากไปน้อย): {', '.join(f'{k}({v:.3f})' for k, v in list(ml_fi.items())[:5])}
+- สรุป: {'คาดว่าจบ' if ml_prob >= 0.5 else 'คาดว่าไม่จบ'}
+
+**คำแนะนำสำหรับ Gemini:** กรุณาวิเคราะห์ผลจากโมเดล AI ด้านบนร่วมกับข้อมูลเกรด
+ถ้าผลโมเดล AI สอดคล้องกับการวิเคราะห์ของคุณ ให้ระบุว่าสอดคล้อง
+ถ้าขัดแย้ง ให้อธิบายว่าเหตุใดจึงเห็นต่าง และให้น้ำหนักกับข้อมูลที่น่าเชื่อถือกว่า
+"""
+                    logger.info(f"ML co-prediction: prob={ml_prob:.3f}, conf={ml_conf:.3f}")
+        
+    except Exception as ml_exc:
+        logger.warning(f"ML co-prediction failed (Gemini will predict alone): {ml_exc}")
+        ml_context_str = ""
+    
+    try:
+        logger.info(f"Starting Gemini prediction for {student_name} with {len(cleaned_grades)} courses")
         
         grade_summary = summarize_grades_for_gemini(cleaned_grades, loaded_terms_count)
         grade_summary['student_name'] = student_name
@@ -5502,7 +5588,8 @@ def gemini_predict_route():
 {json.dumps(grade_summary.get('failed_courses', []), ensure_ascii=False, indent=2)}
 
 {course_context_str}
-(ข้อมูลข้างบนคือข้อมูลเปรียบเทียบกับสถิติรุ่นพี่ที่เทรนมาแล้ว)
+
+{ml_context_str}
 
 **งานของคุณ (ตอบเป็นภาษาไทยทั้งหมด):**
 
@@ -5510,6 +5597,7 @@ def gemini_predict_route():
    - ทำนายว่านักศึกษาคนนี้ "จะจบตามเกณฑ์" หรือ "จะไม่จบ/จบช้า"
    - เกณฑ์การจบ: GPA >= 2.00 และหน่วยกิต >= 136 และผ่านวิชาบังคับ/วิชาปราบเซียน
    - ระบุความมั่นใจในการทำนายเป็นเปอร์เซ็นต์ (0-100%)
+   - ถ้ามีผลจากโมเดล AI ให้วิเคราะห์ร่วมกัน ระบุว่า Gemini เห็นด้วยหรือไม่ และเพราะอะไร
 
 **2. อธิบายเหตุผลว่าทำไมถึงจบ (ถ้าทำนายว่าจบ):**
    - อธิบายเป็นภาษาไทยว่าทำไมถึงทำนายว่าจบ
@@ -5574,14 +5662,25 @@ def gemini_predict_route():
                 'suggestion': 'กรุณาตรวจสอบว่า GEMINI_API_KEY ถูกตั้งค่าถูกต้องและลองใหม่อีกครั้ง'
             }), 400
         
-        return jsonify({
+        # --- รวมผลจาก ML model เข้ากับ response ---
+        response_data = {
             'success': True,
             'source': 'live_grades',
             'analysis': grade_summary,
             'gemini': gemini_output,
             'training_analysis': training_analysis,
             'model_metadata': model_metadata
-        })
+        }
+        if ml_prediction_result:
+            response_data['ml_prediction'] = {
+                'probability': ml_prediction_result.get('probability', None),
+                'confidence': ml_prediction_result.get('confidence', None),
+                'prediction': 'จบการศึกษา' if ml_prediction_result.get('probability', 0) >= 0.5 else 'ไม่จบ/จบช้า',
+                'models_used': ml_prediction_result.get('models_used', []),
+                'model_confidence': ml_prediction_result.get('model_confidence', {}),
+                'feature_importance': dict(list(ml_prediction_result.get('feature_importance', {}).items())[:10])
+            }
+        return jsonify(response_data)
     except Exception as exc:
         error_msg = str(exc)
         
@@ -6293,6 +6392,82 @@ def analyze_curriculum():
             import traceback
             logger.error(traceback.format_exc())
             response_data['graduation_analysis'] = None
+        
+        # ✨ เพิ่ม Gemini AI ร่วมวิเคราะห์ผลทำนาย (ถ้า API Key พร้อม)
+        try:
+            gemini_api_key = os.environ.get('GEMINI_API_KEY', '')
+            use_gemini = data.get('use_gemini', True)  # default True ถ้าไม่ระบุ
+            
+            if gemini_api_key and use_gemini:
+                # สร้างสรุปเกรดสำหรับ Gemini
+                grade_lines = []
+                for course_id, grade in current_grades.items():
+                    if grade:
+                        course = next((c for c in courses_data if c['id'] == course_id), None)
+                        name = course.get('thaiName', course_id) if course else course_id
+                        credit = course.get('credit', 3) if course else 3
+                        grade_lines.append(f"- {name} ({course_id}): เกรด {grade}, {credit} หน่วยกิต")
+                
+                grade_text = "\n".join(grade_lines[:50]) if grade_lines else "ไม่มีข้อมูลเกรด"
+                
+                # สร้างสรุปผลจาก ML model
+                ml_summary = ""
+                pred_result = response_data.get('prediction_result', {})
+                if pred_result:
+                    ml_summary = f"""
+--- ผลจากโมเดล AI (Machine Learning) ---
+- ผลทำนาย: {pred_result.get('prediction', 'N/A')}
+- ความน่าจะเป็นจบ: {pred_result.get('prob_pass', 0):.1%}
+- ความมั่นใจ: {pred_result.get('confidence', 0):.1%}
+- ระดับความเสี่ยง: {pred_result.get('risk_level', 'N/A')}
+- วิธีที่ใช้: {pred_result.get('method', 'N/A')}
+- โมเดลที่ใช้: {', '.join(pred_result.get('models_used', []))}
+"""
+                
+                gemini_curriculum_prompt = f"""คุณเป็นที่ปรึกษาทางวิชาการ AI วิเคราะห์ข้อมูลต่อไปนี้และให้ความเห็นเพิ่มเติม:
+
+**ข้อมูลนักศึกษา: {student_name}**
+
+**สถิติปัจจุบัน:**
+- GPA: {avg_gpa:.2f}
+- หน่วยกิตสะสม: {completed_credits}/{total_required_credits}
+- อัตราความสำเร็จ: {completion_rate:.1f}%
+- วิชาตก (F): {len(failed_courses_ids)} วิชา
+- วิชาที่ถูกบล็อก: {len(blocked_courses)} วิชา
+
+**รายละเอียดเกรด:**
+{grade_text}
+
+{ml_summary}
+
+**ให้วิเคราะห์สั้นๆ (ตอบเป็นภาษาไทย):**
+1. สรุปสถานะการเรียน (1-2 ประโยค)
+2. จุดแข็งของนักศึกษา (1-2 ข้อ)
+3. จุดที่ต้องปรับปรุง (1-2 ข้อ)
+4. คำแนะนำเร่งด่วนที่สุด (1 ข้อ)
+5. ถ้ามีผลจากโมเดล AI ให้บอกว่าเห็นด้วยหรือไม่ และเพราะอะไร
+
+ตอบกระชับไม่เกิน 200 คำ"""
+
+                gemini_payload = {
+                    'student_name': student_name,
+                    'analysis_goal': 'curriculum_analysis',
+                    'grade_summary': grade_text[:500],
+                    'detailed_prompt': gemini_curriculum_prompt
+                }
+                
+                try:
+                    gemini_analysis = call_gemini_with_retry(gemini_payload, 'curriculum_analysis')
+                    response_data['gemini_analysis'] = gemini_analysis
+                    logger.info("✅ Gemini co-analysis added to curriculum prediction")
+                except Exception as gemini_err:
+                    logger.warning(f"⚠️ Gemini co-analysis failed (non-critical): {gemini_err}")
+                    response_data['gemini_analysis'] = None
+            else:
+                response_data['gemini_analysis'] = None
+        except Exception as e:
+            logger.warning(f"⚠️ Gemini integration error (non-critical): {e}")
+            response_data['gemini_analysis'] = None
         
         return jsonify(response_data)
         
