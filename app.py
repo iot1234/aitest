@@ -6216,7 +6216,8 @@ def analyze_curriculum():
                                 feature_engineer=engineer,
                                 models=models,
                                 scaler=scaler,
-                                feature_names=feature_names
+                                feature_names=feature_names,
+                                model_weights=model_data.get('model_weights', {})
                             )
                             
                             # ทำนายด้วย Context-Aware AI System
@@ -6359,7 +6360,8 @@ def explain_prediction():
                     feature_engineer=app.advanced_trainer.feature_engineer,
                     models=app.advanced_trainer.models if hasattr(app.advanced_trainer, 'models') else {},
                     scaler=app.advanced_trainer.scaler if hasattr(app.advanced_trainer, 'scaler') else None,
-                    feature_names=app.advanced_trainer.feature_names if hasattr(app.advanced_trainer, 'feature_names') else []
+                    feature_names=app.advanced_trainer.feature_names if hasattr(app.advanced_trainer, 'feature_names') else [],
+                    model_weights=getattr(app.advanced_trainer, 'model_weights', {})
                 )
                 prediction_result = predictor.predict_graduation_probability(student_data, explain=True)
         except Exception as e:
@@ -6851,7 +6853,8 @@ def _run_batch_prediction_on_df(df, model_filename):
         feature_engineer=engineer,
         models=models_dict,
         scaler=scaler,
-        feature_names=feature_names
+        feature_names=feature_names,
+        model_weights=model_data.get('model_weights', {}) if isinstance(model_data, dict) else {}
     )
 
     unique_students = df['STUDENT_ID'].unique()

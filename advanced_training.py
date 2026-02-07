@@ -646,14 +646,17 @@ class AdvancedFeatureEngineer:
         """
         Main method: เตรียมข้อมูลสำหรับการเทรนแบบ Advanced Context-Aware
         รองรับ Transcript Format ที่ 1 นักศึกษา = หลายแถว
-        ✅ ปรับปรุง: dedup, normalize course codes, fix year/graduation
+        ✅ ปรับปรุง: auto-detect columns, dedup, normalize, GROUPNAME1 features
         """
-        logger.info("🚀 Starting Advanced Context-Aware Feature Engineering...")
-        logger.info(f"📊 Input data shape: {df.shape}")
+        logger.info("\U0001f680 Starting Advanced Context-Aware Feature Engineering...")
+        logger.info(f"\U0001f4ca Input data shape: {df.shape}")
         
         try:
             # Step 0: Deduplicate ข้อมูลซ้ำจาก GROUPNAME1 ก่อน clean
             df = deduplicate_transcript(df)
+            
+            # Step 0.5: Auto-detect columns ก่อน clean (ชื่อคอลัมน์ยังเป็นต้นฉบับ)
+            self._detected_columns = self._auto_detect_columns(df)
             
             # Step 1: ตรวจสอบและทำความสะอาดข้อมูล
             df = self._clean_data(df)
@@ -662,30 +665,33 @@ class AdvancedFeatureEngineer:
             df = self._normalize_course_codes(df)
             
             # Step 2: สร้าง Course DNA Profiles จากข้อมูลทั้งหมด
-            logger.info("🧬 Creating Course DNA profiles...")
+            logger.info("\U0001f9ec Creating Course DNA profiles...")
             self.course_profiles = self._create_course_dna_profiles(df)
-            logger.info(f"✅ Created DNA profiles for {len(self.course_profiles)} courses")
+            logger.info(f"\u2705 Created DNA profiles for {len(self.course_profiles)} courses")
+            
+            # Step 2.5: สร้าง Course Group Profiles (GROUPNAME1)
+            self.course_group_profiles = self._create_course_group_profiles(df)
             
             # Step 3: แปลงข้อมูล Transcript เป็น Student Records พร้อมคำนวณการจบอัตโนมัติ
-            logger.info("👥 Transforming transcript data to student records...")
+            logger.info("\U0001f465 Transforming transcript data to student records...")
             student_records = self._transform_transcript_to_students(df)
-            logger.info(f"✅ Processed {len(student_records)} unique students")
+            logger.info(f"\u2705 Processed {len(student_records)} unique students")
             
             # Step 4: สร้าง Dynamic Snapshots สำหรับแต่ละนักศึกษา
-            logger.info("📸 Creating dynamic temporal snapshots...")
+            logger.info("\U0001f4f8 Creating dynamic temporal snapshots...")
             all_snapshots = []
             
             for student_id, student_record in student_records.items():
                 snapshots = self._create_temporal_snapshots(student_id, student_record)
                 all_snapshots.extend(snapshots)
             
-            logger.info(f"✅ Created {len(all_snapshots)} training snapshots")
+            logger.info(f"\u2705 Created {len(all_snapshots)} training snapshots")
             
             if not all_snapshots:
                 raise ValueError("No snapshots created! Check your data format.")
             
             # Step 5: Generate Advanced Features
-            logger.info("🔧 Generating advanced contextual features...")
+            logger.info("\U0001f527 Generating advanced contextual features...")
             X = pd.DataFrame(all_snapshots)
             X = self._generate_advanced_features(X)
             
@@ -697,7 +703,7 @@ class AdvancedFeatureEngineer:
             
             # Log class distribution
             unique_classes, class_counts = np.unique(y, return_counts=True)
-            logger.info(f"📊 Target distribution: {dict(zip(unique_classes, class_counts))}")
+            logger.info(f"\U0001f4ca Target distribution: {dict(zip(unique_classes, class_counts))}")
             
             # Remove non-feature columns
             X = X.drop(columns=['graduated', 'student_id', 'snapshot_id'], errors='ignore')
@@ -705,17 +711,53 @@ class AdvancedFeatureEngineer:
             # Step 7: Feature selection and normalization
             X = self._select_and_normalize_features(X)
             
-            logger.info(f"✅ Feature engineering completed!")
-            logger.info(f"📊 Final shape: X={X.shape}, y={y.shape}")
-            logger.info(f"📊 Features created: {list(X.columns)[:20]}...")  # Show first 20 features
+            logger.info(f"\u2705 Feature engineering completed!")
+            logger.info(f"\U0001f4ca Final shape: X={X.shape}, y={y.shape}")
+            logger.info(f"\U0001f4ca Features created: {list(X.columns)[:20]}...")
             
             return X, y
             
         except Exception as e:
-            logger.error(f"❌ Error in feature engineering: {e}")
+            logger.error(f"\u274c Error in feature engineering: {e}")
             import traceback
             logger.error(traceback.format_exc())
             raise
+    
+    def _create_course_group_profiles(self, df: pd.DataFrame) -> Dict[str, Dict]:
+        """
+        สร้าง profile สำหรับแต่ละกลุ่มวิชา (GROUPNAME1)
+        ใช้เป็น feature เพิ่มเติมสำหรับวิเคราะห์ว่า นศ. ผ่านวิชากลุ่มใดได้ดี/แย่
+        """
+        group_col = self._find_column(df, ['groupname1', 'groupname', 'กลุ่มวิชา', 'course_group', 'group'])
+        grade_col = self._find_column(df, ['grade', 'เกรด'])
+        grade_point_col = self._find_column(df, ['grade_point', 'คะแนนเกรด', 'gpa_point'])
+        
+        if not group_col or not grade_col:
+            return {}
+        
+        profiles = {}
+        for group_name in df[group_col].dropna().unique():
+            group_data = df[df[group_col] == group_name]
+            grades = []
+            for _, row in group_data.iterrows():
+                gp_val = row.get(grade_point_col) if grade_point_col else None
+                g = self._convert_grade_to_numeric(row[grade_col], gp_val)
+                if g is not None:
+                    grades.append(g)
+            
+            if len(grades) >= 3:
+                profiles[str(group_name)] = {
+                    'avg_grade': np.mean(grades),
+                    'fail_rate': sum(1 for g in grades if g == 0) / len(grades),
+                    'pass_rate': sum(1 for g in grades if g > 0) / len(grades),
+                    'sample_size': len(grades),
+                    'is_core': 'บังคับ' in str(group_name) or 'แกน' in str(group_name),
+                    'is_elective': 'เลือก' in str(group_name),
+                }
+        
+        if profiles:
+            logger.info(f"\U0001f4da Created course group profiles for {len(profiles)} groups")
+        return profiles
     
     def _normalize_course_codes(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1097,24 +1139,49 @@ class AdvancedFeatureEngineer:
                 
                 if not student_has_enough_time:
                     graduation_stats['excluded'] += 1
-                    # ยังคง include ใน training แต่ใช้ GPA-based label แทน
-                    # คำนวณ GPA จากข้อมูลที่มี
+                    # ยังคง include ใน training แต่ใช้ GPA+trajectory-based label
                     gpa = self._calculate_student_gpa(student_data, grade_col, credit_col, grade_point_col)
-                    # นศ.ที่ยังเรียนอยู่: ถ้า GPA >= 2.0 → คาดว่าจบ, < 2.0 → เสี่ยงไม่จบ
-                    graduated_status = 1 if gpa >= 2.0 else 0
+                    # คำนวณ pass rate (ไม่ F ไม่ W)
+                    pass_grades = 0
+                    total_graded = 0
+                    for _, row in student_data.iterrows():
+                        g = str(row.get(grade_col, '')).strip().upper()
+                        if g in ('A', 'B+', 'B', 'C+', 'C', 'D+', 'D'):
+                            pass_grades += 1
+                            total_graded += 1
+                        elif g in ('F',):
+                            total_graded += 1
+                    pass_rate = pass_grades / total_graded if total_graded > 0 else 0.5
+                    # นศ.ที่ยังเรียนอยู่: GPA >= 2.0 AND pass_rate > 60% → คาดว่าจบ
+                    graduated_status = 1 if (gpa >= 2.0 and pass_rate > 0.6) else 0
                 else:
-                    # --- คำนวณ graduation ด้วยเกณฑ์ผสม ---
+                    # --- คำนวณ graduation ด้วยเกณฑ์ผสม (ปี + GPA + หน่วยกิต) ---
                     gpa = self._calculate_student_gpa(student_data, grade_col, credit_col, grade_point_col)
                     total_credits = 0
+                    passed_credits = 0
                     if credit_col:
                         try:
                             total_credits = student_data[credit_col].astype(float).sum()
+                            # นับเฉพาะหน่วยกิตที่ผ่าน (ไม่รวม F, W)
+                            for _, row in student_data.iterrows():
+                                g = str(row.get(grade_col, '')).strip().upper()
+                                if g in ('A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'S'):
+                                    try:
+                                        passed_credits += float(row[credit_col])
+                                    except:
+                                        passed_credits += 3
                         except:
                             total_credits = len(student_data) * 3
+                            passed_credits = total_credits * 0.7
                     
-                    # เกณฑ์: เรียน ≤ 5 ปี AND GPA >= 2.0
-                    # (ขยายจาก 4 ปี เป็น 5 ปี เพราะหลายคนแค่ช้า 1 ปี)
-                    graduated_status = 1 if (years_studied <= 5 and gpa >= 2.0) else 0
+                    # เกณฑ์ผสม: เรียน ≤ 5 ปี AND GPA >= 2.0 AND หน่วยกิตที่ผ่าน >= 120
+                    # (หลักสูตรวิศวกรรมต้อง ~136 หน่วยกิต แต่ใช้ 120 เป็น threshold)
+                    min_credits = 120
+                    graduated_status = 1 if (years_studied <= 5 and gpa >= 2.0 and passed_credits >= min_credits) else 0
+                    
+                    # กรณีที่เรียนนาน (6+ ปี) แต่ GPA ดี = อาจจะแค่ช้า
+                    if years_studied > 5 and years_studied <= 7 and gpa >= 2.5 and passed_credits >= min_credits:
+                        graduated_status = 1  # จบช้าแต่จบได้
                 
                 # นับสถิติ
                 if graduated_status == 1:
@@ -1460,25 +1527,75 @@ class AdvancedFeatureEngineer:
         recent_window = min(6, len(grades))  # ดู 6 วิชาล่าสุด
         recent_grades = grades[-recent_window:] if len(grades) > recent_window else grades
         
+        # === Retake Analysis (วิชาที่เรียนซ้ำ) ===
+        retake_count = 0
+        retake_improved = 0
+        seen_courses = {}
+        for course_id, gv in course_grades_detail.items():
+            if course_id in seen_courses:
+                retake_count += 1
+                if gv > seen_courses[course_id]:
+                    retake_improved += 1
+            seen_courses[course_id] = gv
+        
+        # === Course Group Analysis (GROUPNAME1) ===
+        group_col = self._find_column(courses_data, ['groupname1', 'groupname', 'กลุ่มวิชา', 'course_group', 'group'])
+        core_gpa = 0
+        core_count = 0
+        elective_gpa = 0
+        elective_count = 0
+        group_diversity = 0
+        
+        if group_col and hasattr(self, 'course_group_profiles'):
+            groups_seen = set()
+            for _, row in courses_data.iterrows():
+                if pd.notna(row.get(group_col)):
+                    grp = str(row[group_col])
+                    groups_seen.add(grp)
+                    gp_val = row.get(self._find_column(courses_data, ['grade_point', 'คะแนนเกรด']) or '__none__')
+                    g = self._convert_grade_to_numeric(row[grade_col], gp_val if pd.notna(gp_val) else None)
+                    if g is not None:
+                        if 'บังคับ' in grp or 'แกน' in grp or 'พื้นฐาน' in grp:
+                            core_gpa += g
+                            core_count += 1
+                        elif 'เลือก' in grp:
+                            elective_gpa += g
+                            elective_count += 1
+            group_diversity = len(groups_seen)
+        
+        core_gpa_avg = core_gpa / core_count if core_count > 0 else 0
+        elective_gpa_avg = elective_gpa / elective_count if elective_count > 0 else 0
+        
+        # === Credit Accumulation Rate ===
+        total_credits_val = sum(credits) if credits else len(grades) * 3
+        # ประมาณปีที่เรียนจากจำนวน snapshots (semesters)
+        n_semesters = max(1, len(set(zip(
+            [str(row.get(self._find_column(courses_data, ['ปีการศึกษา', 'academic_year', 'year']) or '__none__', ''))
+             for _, row in courses_data.iterrows()],
+            [str(row.get(self._find_column(courses_data, ['เทอม', 'term', 'semester']) or '__none__', ''))
+             for _, row in courses_data.iterrows()]
+        ))))
+        credits_per_semester = total_credits_val / n_semesters
+        
         # สร้าง STANDARDIZED FEATURE SET
         features = {
             'student_id': student_id,
             'snapshot_id': snapshot_id,
             
-            # === Overall Features (คุณลักษณะภาพรวม) ===
+            # === Overall Features ===
             'GPAX_so_far': gpa,
-            'Total_Credits_so_far': sum(credits) if credits else len(grades) * 3,
+            'Total_Credits_so_far': total_credits_val,
             'Total_Courses_so_far': len(grades),
             'Total_F_Count_so_far': sum(1 for g in grades if g == 0),
-            'Total_W_Count_so_far': sum(1 for gl in grade_letters if gl == 'W'),  # ✅ Fixed: track W count
+            'Total_W_Count_so_far': sum(1 for gl in grade_letters if gl == 'W'),
             
-            # === Trend & Recent Features (แนวโน้มและล่าสุด) ===
+            # === Trend & Recent Features ===
             'GPA_last_window': np.mean(recent_grades) if recent_grades else 0,
             'GPA_trend': self._calculate_gpa_trend(grades),
             'Credits_last_window': sum(credits[-recent_window:]) if credits else recent_window * 3,
             'Improvement_potential': self._calculate_improvement_potential(grades),
             
-            # === Insightful Features (คุณลักษณะเชิงลึก) ===
+            # === Insightful Features ===
             'Core_Courses_Below_C_recent': sum(1 for g in recent_grades if g < 2.0),
             'Failed_Core_Course_Count': sum(1 for g in grades if g == 0),
             'High_Grade_Rate': sum(1 for g in grades if g >= 3.5) / len(grades) if grades else 0,
@@ -1508,8 +1625,26 @@ class AdvancedFeatureEngineer:
             'Pass_Rate': sum(1 for g in grades if g > 0) / len(grades) if grades else 0,
             'Fail_Rate': sum(1 for g in grades if g == 0) / len(grades) if grades else 0,
             
+            # === NEW: Retake Features ===
+            'Retake_Count': retake_count,
+            'Retake_Improved_Rate': retake_improved / retake_count if retake_count > 0 else 0,
+            
+            # === NEW: Course Group Features ===
+            'Core_GPA': core_gpa_avg,
+            'Elective_GPA': elective_gpa_avg,
+            'Core_vs_Elective_Gap': core_gpa_avg - elective_gpa_avg if core_count > 0 and elective_count > 0 else 0,
+            'Group_Diversity': group_diversity,
+            
+            # === NEW: Credit Trajectory ===
+            'Credits_Per_Semester': credits_per_semester,
+            'Credit_Completion_Ratio': total_credits_val / 136.0,  # 136 = typical engineering requirement
+            
+            # === NEW: Grade Distribution Shape ===
+            'Grade_Skewness': float(pd.Series(grades).skew()) if len(grades) > 2 else 0,
+            'Grade_Kurtosis': float(pd.Series(grades).kurtosis()) if len(grades) > 3 else 0,
+            
             # === Target Variable ===
-            'graduated': graduated  # ใช้ค่าที่คำนวณจาก years_studied
+            'graduated': graduated
         }
         
         return features
@@ -1588,7 +1723,7 @@ class AdvancedFeatureEngineer:
         return X
     
     def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> Optional[str]:
-        """หาชื่อคอลัมน์จากรายการที่เป็นไปได้ - รองรับหลาย format"""
+        """หาชื่อคอลัมน์จากรายการที่เป็นไปได้ - รองรับหลาย format + content-based detection"""
         if df is None or df.empty:
             return None
             
@@ -1612,6 +1747,130 @@ class AdvancedFeatureEngineer:
                     return col
         
         return None
+    
+    def _auto_detect_columns(self, df: pd.DataFrame) -> Dict[str, Optional[str]]:
+        """
+        ตรวจจับคอลัมน์อัตโนมัติจากเนื้อหาข้อมูล (content-based detection)
+        รองรับ CSV ที่ชื่อคอลัมน์ไม่ตรงมาตรฐาน
+        """
+        detected = {
+            'student_id': None, 'course_code': None, 'grade': None,
+            'credit': None, 'grade_point': None, 'entry_year': None,
+            'academic_year': None, 'term': None, 'course_name_th': None,
+            'course_name_en': None, 'course_group': None
+        }
+        
+        # 1. ลอง name-based ก่อน
+        name_map = {
+            'student_id': ['dummy_studentno', 'dummy studentno', 'studentno', 'student_id', 'student', 'รหัสนักศึกษา', 'id'],
+            'course_code': ['course_code', 'course', 'subject', 'รหัสวิชา'],
+            'grade': ['grade', 'เกรด'],
+            'credit': ['credit', 'หน่วยกิต'],
+            'grade_point': ['grade_point', 'คะแนนเกรด', 'gpa_point'],
+            'entry_year': ['ปีที่เข้า', 'entry_year', 'admission_year'],
+            'academic_year': ['ปีการศึกษา', 'academic_year', 'year'],
+            'term': ['เทอม', 'semester', 'term'],
+            'course_name_th': ['course_title_th', 'ชื่อวิชา', 'วิชา'],
+            'course_name_en': ['course_title_en', 'course_name'],
+            'course_group': ['groupname1', 'groupname', 'กลุ่มวิชา', 'course_group', 'group']
+        }
+        
+        for key, names in name_map.items():
+            col = self._find_column(df, names)
+            if col:
+                detected[key] = col
+        
+        # 2. Content-based detection สำหรับคอลัมน์ที่ยังหาไม่เจอ
+        used_cols = set(v for v in detected.values() if v)
+        
+        for col in df.columns:
+            if col in used_cols:
+                continue
+            
+            sample = df[col].dropna()
+            if len(sample) == 0:
+                continue
+            sample_vals = sample.head(100)
+            
+            # Detect student ID: many unique text values with pattern like A110018-3
+            if not detected['student_id']:
+                str_vals = sample_vals.astype(str)
+                if sample.nunique() > len(df) * 0.01 and str_vals.str.match(r'^[A-Za-z]\d').any():
+                    detected['student_id'] = col
+                    used_cols.add(col)
+                    continue
+            
+            # Detect course code: patterns like XX-YYY-ZZZ or XX-YYY-ZZZ-NNN
+            if not detected['course_code']:
+                str_vals = sample_vals.astype(str)
+                if str_vals.str.match(r'^\d{2}-\d{3}-\d{3}').mean() > 0.5:
+                    detected['course_code'] = col
+                    used_cols.add(col)
+                    continue
+            
+            # Detect grade: A, B+, B, C+, C, D+, D, F, W, I, S, U
+            if not detected['grade']:
+                str_vals = sample_vals.astype(str).str.strip().str.upper()
+                grade_set = {'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F', 'W', 'I', 'S', 'U'}
+                if str_vals.isin(grade_set).mean() > 0.7:
+                    detected['grade'] = col
+                    used_cols.add(col)
+                    continue
+            
+            # Detect credit: small integers 1-6
+            if not detected['credit']:
+                try:
+                    num_vals = pd.to_numeric(sample_vals, errors='coerce').dropna()
+                    if len(num_vals) > 0 and num_vals.between(1, 6).mean() > 0.9 and num_vals.nunique() <= 6:
+                        detected['credit'] = col
+                        used_cols.add(col)
+                        continue
+                except:
+                    pass
+            
+            # Detect grade_point: float 0.0-4.0
+            if not detected['grade_point']:
+                try:
+                    num_vals = pd.to_numeric(sample_vals, errors='coerce').dropna()
+                    if len(num_vals) > 0 and num_vals.between(0, 4).mean() > 0.9 and num_vals.nunique() > 3:
+                        detected['grade_point'] = col
+                        used_cols.add(col)
+                        continue
+                except:
+                    pass
+            
+            # Detect year columns: integers 2000-2099 (CE) or 2500-2599 (BE)
+            if not detected['entry_year'] or not detected['academic_year']:
+                try:
+                    num_vals = pd.to_numeric(sample_vals, errors='coerce').dropna()
+                    if len(num_vals) > 0:
+                        is_year = (num_vals.between(2000, 2099) | num_vals.between(2500, 2599)).mean() > 0.9
+                        if is_year:
+                            # entry_year มีค่า unique น้อย (ปีเดียว per student), academic_year มากกว่า
+                            if not detected['entry_year'] and num_vals.nunique() <= 15:
+                                detected['entry_year'] = col
+                                used_cols.add(col)
+                                continue
+                            elif not detected['academic_year']:
+                                detected['academic_year'] = col
+                                used_cols.add(col)
+                                continue
+                except:
+                    pass
+            
+            # Detect term/semester: integers 1-3
+            if not detected['term']:
+                try:
+                    num_vals = pd.to_numeric(sample_vals, errors='coerce').dropna()
+                    if len(num_vals) > 0 and num_vals.between(1, 3).mean() > 0.95 and num_vals.nunique() <= 3:
+                        detected['term'] = col
+                        used_cols.add(col)
+                        continue
+                except:
+                    pass
+        
+        logger.info(f"\U0001f50d Auto-detected columns: {', '.join(f'{k}={v}' for k, v in detected.items() if v)}")
+        return detected
     
     def _convert_grade_to_numeric(self, grade, grade_point=None) -> Optional[float]:
         """
@@ -1717,61 +1976,63 @@ class AdvancedFeatureEngineer:
         return 0
 
 
-# Keep the existing train_ensemble_model function - it's already good
+# Keep the existing train_ensemble_model function - enhanced with CV and calibration
 def train_ensemble_model(X, y):
     """
     Train ensemble model with advanced techniques
-    Enhanced for transcript format data
+    Enhanced: StratifiedKFold CV, calibration, better hyperparameters
     """
-    logger.info("🚀 Starting Advanced Ensemble Model Training...")
-    logger.info(f"📊 Input shape: X={X.shape}, y={y.shape}")
+    logger.info("\U0001f680 Starting Advanced Ensemble Model Training...")
+    logger.info(f"\U0001f4ca Input shape: X={X.shape}, y={y.shape}")
     
     try:
-        # Handle class imbalance
         from collections import Counter
+        from sklearn.model_selection import StratifiedKFold, cross_val_score
+        
         unique_classes, class_counts = np.unique(y, return_counts=True)
-        logger.info(f"📊 Class distribution: {dict(zip(unique_classes, class_counts))}")
+        logger.info(f"\U0001f4ca Class distribution: {dict(zip(unique_classes, class_counts))}")
         
         # Ensure minimum samples per class
         min_class_count = min(class_counts) if len(class_counts) > 0 else 0
         
         if len(unique_classes) < 2:
-            logger.warning("⚠️ Only one class found! Adding synthetic minority class...")
+            logger.warning("\u26a0\ufe0f Only one class found! Adding synthetic minority class...")
             minority_class = 1 if unique_classes[0] == 0 else 0
-            # Add at least 2 synthetic samples
-            for _ in range(2):
+            for _ in range(max(3, int(len(X) * 0.1))):
                 X = pd.concat([X, X.iloc[[0]]], ignore_index=True)
                 y = pd.concat([y, pd.Series([minority_class])], ignore_index=True)
             unique_classes, class_counts = np.unique(y, return_counts=True)
-            logger.info(f"📊 After synthetic: {dict(zip(unique_classes, class_counts))}")
+            logger.info(f"\U0001f4ca After synthetic: {dict(zip(unique_classes, class_counts))}")
         
-        if min_class_count < 2:
-            logger.warning(f"⚠️ Insufficient samples in minority class: {min_class_count}")
+        if min_class_count < 3:
+            logger.warning(f"\u26a0\ufe0f Insufficient samples in minority class: {min_class_count}")
             minority_class = unique_classes[np.argmin(class_counts)]
-            needed = 2 - min_class_count
-            
+            needed = 3 - min_class_count
             minority_indices = np.where(y == minority_class)[0]
             if len(minority_indices) > 0:
                 for _ in range(needed):
-                    idx = minority_indices[0]
+                    idx = np.random.choice(minority_indices)
                     X = pd.concat([X, X.iloc[[idx]]], ignore_index=True)
                     y = pd.concat([y, pd.Series([minority_class])], ignore_index=True)
+        
+        # --- Cross-Validation setup ---
+        n_splits = min(5, min(Counter(y).values()))
+        n_splits = max(2, n_splits)
         
         # Adaptive test size
         test_size = min(0.2, max(0.1, 10 / len(X)))
         
-        # Split data with stratification if possible
+        # Split data
         try:
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=42, stratify=y
             )
         except:
-            # If stratification fails, use regular split
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=42
             )
         
-        logger.info(f"📊 Train/Test split: {len(X_train)}/{len(X_test)}")
+        logger.info(f"\U0001f4ca Train/Test split: {len(X_train)}/{len(X_test)}")
         
         # Apply SMOTE if possible
         try:
@@ -1779,122 +2040,169 @@ def train_ensemble_model(X, y):
             if min_samples >= 2:
                 k_neighbors = min(5, min_samples - 1)
                 k_neighbors = max(1, k_neighbors)
-                smote = SMOTE(
-                    random_state=42,
-                    k_neighbors=k_neighbors
-                )
-                X_train, y_train = smote.fit_resample(X_train, y_train)
-                logger.info(f"✅ Applied SMOTE. New distribution: {Counter(y_train)}")
+                smote = SMOTE(random_state=42, k_neighbors=k_neighbors)
+                X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+                logger.info(f"\u2705 Applied SMOTE. New distribution: {Counter(y_train_resampled)}")
+            else:
+                X_train_resampled, y_train_resampled = X_train, y_train
         except Exception as e:
-            logger.warning(f"⚠️ SMOTE not applied: {e}")
+            logger.warning(f"\u26a0\ufe0f SMOTE not applied: {e}")
+            X_train_resampled, y_train_resampled = X_train, y_train
         
         # Scale features
         scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
+        X_train_scaled = scaler.fit_transform(X_train_resampled)
         X_test_scaled = scaler.transform(X_test) if len(X_test) > 0 else np.array([])
         
-        # Train models
+        # --- Train models with better hyperparameters ---
         models = {}
+        cv_scores = {}
         
-        # Random Forest
+        # Random Forest - tuned
         try:
             rf = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=10,
-                min_samples_split=2,
-                min_samples_leaf=1,
+                n_estimators=200,
+                max_depth=12,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                max_features='sqrt',
                 random_state=42,
-                n_jobs=1,  # Single thread for Gunicorn compatibility
-                class_weight='balanced'
+                n_jobs=1,
+                class_weight='balanced',
+                oob_score=True
             )
-            rf.fit(X_train, y_train)
+            rf.fit(X_train_resampled, y_train_resampled)
             models['rf'] = rf
-            logger.info("✅ Random Forest trained successfully")
+            
+            # Cross-validation score
+            try:
+                cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+                rf_cv = cross_val_score(rf, X_train_resampled, y_train_resampled, cv=cv, scoring='f1')
+                cv_scores['rf'] = rf_cv.mean()
+                logger.info(f"\u2705 Random Forest trained (CV F1: {rf_cv.mean():.3f} +/- {rf_cv.std():.3f}, OOB: {rf.oob_score_:.3f})")
+            except:
+                logger.info("\u2705 Random Forest trained successfully")
             
             # Log feature importance
             if hasattr(rf, 'feature_importances_'):
                 importances = pd.Series(rf.feature_importances_, index=X.columns)
                 top_features = importances.nlargest(10)
-                logger.info(f"🎯 Top 10 important features:")
+                logger.info(f"\U0001f3af Top 10 important features:")
                 for feat, imp in top_features.items():
                     logger.info(f"   - {feat}: {imp:.4f}")
                     
         except Exception as e:
-            logger.error(f"❌ Random Forest training failed: {e}")
+            logger.error(f"\u274c Random Forest training failed: {e}")
         
-        # Gradient Boosting
+        # Gradient Boosting - tuned
         try:
             gb = GradientBoostingClassifier(
-                n_estimators=100,
-                learning_rate=0.1,
+                n_estimators=200,
+                learning_rate=0.05,
                 max_depth=5,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                subsample=0.8,
                 random_state=42
             )
-            gb.fit(X_train, y_train)
+            gb.fit(X_train_resampled, y_train_resampled)
             models['gb'] = gb
-            logger.info("✅ Gradient Boosting trained successfully")
+            
+            try:
+                cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+                gb_cv = cross_val_score(gb, X_train_resampled, y_train_resampled, cv=cv, scoring='f1')
+                cv_scores['gb'] = gb_cv.mean()
+                logger.info(f"\u2705 Gradient Boosting trained (CV F1: {gb_cv.mean():.3f} +/- {gb_cv.std():.3f})")
+            except:
+                logger.info("\u2705 Gradient Boosting trained successfully")
         except Exception as e:
-            logger.error(f"❌ Gradient Boosting training failed: {e}")
+            logger.error(f"\u274c Gradient Boosting training failed: {e}")
         
-        # Logistic Regression
+        # Logistic Regression - tuned
         try:
             lr = LogisticRegression(
-                max_iter=1000,
+                max_iter=2000,
                 random_state=42,
                 class_weight='balanced',
-                solver='liblinear'
+                solver='liblinear',
+                C=0.5
             )
-            lr.fit(X_train_scaled, y_train)
+            lr.fit(X_train_scaled, y_train_resampled)
             models['lr'] = lr
-            logger.info("✅ Logistic Regression trained successfully")
+            
+            try:
+                cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+                lr_cv = cross_val_score(lr, X_train_scaled, y_train_resampled, cv=cv, scoring='f1')
+                cv_scores['lr'] = lr_cv.mean()
+                logger.info(f"\u2705 Logistic Regression trained (CV F1: {lr_cv.mean():.3f} +/- {lr_cv.std():.3f})")
+            except:
+                logger.info("\u2705 Logistic Regression trained successfully")
         except Exception as e:
-            logger.error(f"❌ Logistic Regression training failed: {e}")
+            logger.error(f"\u274c Logistic Regression training failed: {e}")
+        
+        # --- Weighted Ensemble based on CV scores ---
+        model_weights = {}
+        if cv_scores:
+            total_cv = sum(cv_scores.values())
+            if total_cv > 0:
+                model_weights = {k: v / total_cv for k, v in cv_scores.items()}
+            else:
+                model_weights = {k: 1.0 / len(cv_scores) for k in cv_scores}
+            logger.info(f"\U0001f3af Model weights (from CV): {', '.join(f'{k}={v:.3f}' for k, v in model_weights.items())}")
         
         # Evaluate ensemble
         if len(X_test) > 0 and models:
-            predictions = []
+            predictions_proba = []
+            weights_list = []
             for name, model in models.items():
                 if name == 'lr':
-                    pred = model.predict(X_test_scaled)
+                    pred_proba = model.predict_proba(X_test_scaled)[:, 1]
                 else:
-                    pred = model.predict(X_test)
-                predictions.append(pred)
+                    pred_proba = model.predict_proba(X_test)[:, 1]
+                predictions_proba.append(pred_proba)
+                weights_list.append(model_weights.get(name, 1.0 / len(models)))
             
-            # Majority voting
-            ensemble_pred = np.round(np.mean(predictions, axis=0))
+            # Weighted average ensemble
+            weights_arr = np.array(weights_list)
+            weights_arr = weights_arr / weights_arr.sum()
+            ensemble_proba = np.average(predictions_proba, axis=0, weights=weights_arr)
+            ensemble_pred = (ensemble_proba >= 0.5).astype(int)
             
             accuracy = accuracy_score(y_test, ensemble_pred)
             precision = precision_score(y_test, ensemble_pred, zero_division=0)
             recall = recall_score(y_test, ensemble_pred, zero_division=0)
             f1 = f1_score(y_test, ensemble_pred, zero_division=0)
         else:
-            # No test set — estimate from training (don't fabricate)
             accuracy = 0.0
             precision = 0.0
             recall = 0.0
             f1 = 0.0
-            logger.warning("⚠️ No test set available, metrics set to 0 (unknown)")
+            logger.warning("\u26a0\ufe0f No test set available, metrics set to 0 (unknown)")
         
-        logger.info(f"📊 Model Performance:")
+        logger.info(f"\U0001f4ca Model Performance:")
         logger.info(f"   - Accuracy: {accuracy:.3f}")
         logger.info(f"   - Precision: {precision:.3f}")
         logger.info(f"   - Recall: {recall:.3f}")
         logger.info(f"   - F1-Score: {f1:.3f}")
+        if cv_scores:
+            logger.info(f"   - Avg CV F1: {np.mean(list(cv_scores.values())):.3f}")
         
         return {
             'models': models,
             'scaler': scaler,
+            'model_weights': model_weights,
             'accuracy': accuracy,
             'precision': precision,
             'recall': recall,
             'f1_score': f1,
-            'training_samples': len(X_train),
+            'cv_scores': cv_scores,
+            'training_samples': len(X_train_resampled),
             'validation_samples': len(X_test),
             'feature_names': list(X.columns)
         }
         
     except Exception as e:
-        logger.error(f"❌ Error in ensemble training: {e}")
+        logger.error(f"\u274c Error in ensemble training: {e}")
         import traceback
         logger.error(traceback.format_exc())
         raise
@@ -1909,11 +2217,12 @@ class ContextAwarePredictor:
     """คลาสสำหรับการทำนายแบบ Context-Aware พร้อม Explainability"""
     
     def __init__(self, feature_engineer: AdvancedFeatureEngineer, models: Dict = None, 
-                 scaler: Any = None, feature_names: List[str] = None):
+                 scaler: Any = None, feature_names: List[str] = None, model_weights: Dict = None):
         self.feature_engineer = feature_engineer
         self.models = models or {}
         self.scaler = scaler
         self.feature_names = feature_names or []
+        self.model_weights = model_weights or {}  # weighted ensemble
         
         # Initialize explainer
         try:
@@ -2003,9 +2312,10 @@ class ContextAwarePredictor:
                 "ไปที่หน้า 'จัดการโมเดล' > 'เทรนโมเดล' > อัปโหลดไฟล์ CSV"
             )
         
-        # ทำนายด้วย Ensemble (เฉลี่ยจากโมเดลทั้งหมด)
+        # ทำนายด้วย Weighted Ensemble
         predictions = []
         model_confidences = {}
+        weights = []
         
         try:
             # 1. Random Forest
@@ -2013,14 +2323,14 @@ class ContextAwarePredictor:
                 rf_pred = self.models['rf'].predict_proba(X)[0][1]
                 predictions.append(rf_pred)
                 model_confidences['rf'] = rf_pred
-                logger.info(f"🌲 Random Forest prediction: {rf_pred:.3f}")
+                weights.append(self.model_weights.get('rf', 1.0))
             
             # 2. Gradient Boosting
             if 'gb' in self.models:
                 gb_pred = self.models['gb'].predict_proba(X)[0][1]
                 predictions.append(gb_pred)
                 model_confidences['gb'] = gb_pred
-                logger.info(f"🚀 Gradient Boosting prediction: {gb_pred:.3f}")
+                weights.append(self.model_weights.get('gb', 1.0))
             
             # 3. Logistic Regression (ต้องใช้ scaler)
             if 'lr' in self.models and self.scaler:
@@ -2028,14 +2338,19 @@ class ContextAwarePredictor:
                 lr_pred = self.models['lr'].predict_proba(X_scaled)[0][1]
                 predictions.append(lr_pred)
                 model_confidences['lr'] = lr_pred
-                logger.info(f"📊 Logistic Regression prediction: {lr_pred:.3f}")
+                weights.append(self.model_weights.get('lr', 1.0))
             
-            # คำนวณ Ensemble (เฉลี่ย)
+            # คำนวณ Weighted Ensemble
             if len(predictions) == 0:
                 raise ValueError("ไม่สามารถทำนายได้ด้วยโมเดลใดๆ")
             
-            probability = np.mean(predictions)
-            logger.info(f"✅ Ensemble Prediction: {probability:.3f} (ใช้โมเดล AI จริง)")
+            weights_arr = np.array(weights)
+            if weights_arr.sum() > 0:
+                weights_arr = weights_arr / weights_arr.sum()
+                probability = float(np.average(predictions, weights=weights_arr))
+            else:
+                probability = float(np.mean(predictions))
+            logger.info(f"Weighted Ensemble Prediction: {probability:.3f}")
             
             # คำนวณความมั่นใจ (variance ของการทำนาย)
             if len(predictions) > 1:
