@@ -2440,7 +2440,7 @@
         const combined = data.combined_prediction || {};
         const gradAnalysis = data.graduation_analysis || {};
         
-        const combinedProb = combined.probability || 0.5;
+        const combinedProb = (combined.probability !== null && combined.probability !== undefined) ? combined.probability : 0.5;
         const combinedVerdict = combined.verdict || 'ไม่ทราบ';
         const willGraduate = combinedVerdict === 'จบ';
         const probPass = Math.min(100, (combinedProb * 100)).toFixed(1);
@@ -2790,48 +2790,75 @@
             recsDiv.innerHTML = '<div class="recommendation-card"><i class="bi bi-info-circle text-info me-2"></i>ไม่มีคำแนะนำเพิ่มเติม</div>';
         }
         
-        // === Charts ===
-        // GPA Chart
-        try {
-            if (data.chart_data?.terms?.length > 0) {
-                document.getElementById('threeLineChartContainer').style.display = 'block';
-                const ctx = document.getElementById('threeLineChart').getContext('2d');
-                if (window.threeLineChartInstance) window.threeLineChartInstance.destroy();
-                
-                window.threeLineChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.chart_data.terms,
-                        datasets: [
-                            { label: 'เป้าหมาย', data: data.chart_data.target || [], borderColor: '#10b981', borderDash: [5, 5], fill: false, tension: 0.1 },
-                            { label: 'ผลจริง', data: data.chart_data.actual || [], borderColor: '#3b82f6', fill: false, tension: 0.3, pointRadius: 4 },
-                            { label: 'ทำนาย', data: data.chart_data.predicted || [], borderColor: '#f59e0b', borderDash: [3, 3], fill: false, tension: 0.3 }
-                        ]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
-            }
-        } catch (e) { console.warn('Chart error:', e); }
+        // === Risk Factors Section ===
+        const riskSection = document.getElementById('riskFactorsSection');
+        const riskList = document.getElementById('riskFactorsList');
+        const criticalReasons = gradAnalysis.reasons?.filter(r => r.type === 'critical' || r.type === 'warning') || [];
         
-        // Grade distribution
-        try {
-            const gradeDist = data.graduation_analysis?.grade_distribution || {};
-            if (Object.keys(gradeDist).length > 0) {
-                const ctx2 = document.getElementById('gradeDistChart').getContext('2d');
-                if (window.gradeDistChartInstance) window.gradeDistChartInstance.destroy();
-                
-                const colors = { 'A': '#10b981', 'B+': '#34d399', 'B': '#3b82f6', 'C+': '#60a5fa', 'C': '#f59e0b', 'D+': '#f97316', 'D': '#ef4444', 'F': '#dc2626', 'W': '#6b7280' };
-                
-                window.gradeDistChartInstance = new Chart(ctx2, {
-                    type: 'doughnut',
-                    data: {
-                        labels: Object.keys(gradeDist),
-                        datasets: [{ data: Object.values(gradeDist), backgroundColor: Object.keys(gradeDist).map(g => colors[g] || '#9ca3af') }]
-                    },
-                    options: { responsive: true, plugins: { legend: { position: 'right' } }, cutout: '60%' }
-                });
+        if (criticalReasons.length > 0 && riskSection && riskList) {
+            riskSection.style.display = 'block';
+            riskList.innerHTML = criticalReasons.map(r => `
+                <div class="d-flex align-items-start mb-2">
+                    <i class="bi bi-exclamation-${r.type === 'critical' ? 'triangle' : 'circle'}-fill text-${r.type === 'critical' ? 'danger' : 'warning'} me-2 mt-1"></i>
+                    <div>
+                        <div class="fw-bold">${r.title}</div>
+                        <small class="text-muted">${r.description || ''}</small>
+                        ${r.solution ? `<div class="mt-1"><small class="text-success"><i class="bi bi-lightbulb me-1"></i>${r.solution}</small></div>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } else if (riskSection) {
+            riskSection.style.display = 'none';
+        }
+        
+        // === Improvement Suggestions ===
+        const improvementSection = document.getElementById('improvementSection');
+        const improvementList = document.getElementById('improvementList');
+        if (gradAnalysis.recommendations?.length > 0 && improvementSection && improvementList) {
+            improvementSection.style.display = 'block';
+            improvementList.innerHTML = gradAnalysis.recommendations.slice(0, 5).map(s =>
+                `<div class="d-flex align-items-start mb-2"><i class="bi bi-lightbulb-fill text-success me-2 mt-1"></i><span>${s}</span></div>`
+            ).join('');
+        } else if (improvementSection) {
+            improvementSection.style.display = 'none';
+        }
+        
+        // === AI Insights Card (show if ML has data) ===
+        const aiCard = document.getElementById('aiInsightsCard');
+        if (aiCard && ml.available && ml.feature_importance && Object.keys(ml.feature_importance).length > 0) {
+            aiCard.style.display = 'block';
+            const methodBadge = document.getElementById('predictionMethodBadge');
+            if (methodBadge) methodBadge.textContent = ml.method || 'AI_MODEL';
+            
+            const modelsList = document.getElementById('modelsUsedList');
+            if (modelsList && ml.models_used) {
+                modelsList.innerHTML = ml.models_used.map(m =>
+                    `<span class="badge bg-primary me-1 mb-1">${m.toUpperCase()}</span>`
+                ).join('');
             }
-        } catch (e) { console.warn('Dist chart error:', e); }
+            
+            const featureList = document.getElementById('featureImportanceList');
+            if (featureList) {
+                const features = Object.entries(ml.feature_importance).slice(0, 5);
+                featureList.innerHTML = features.map(([name, imp], i) => `
+                    <div class="feature-item">
+                        <span class="rank">${i + 1}</span>
+                        <span class="name">${name}</span>
+                        <div class="bar"><div class="bar-fill" style="width: ${(imp * 100).toFixed(0)}%"></div></div>
+                        <span class="value">${(imp * 100).toFixed(1)}%</span>
+                    </div>
+                `).join('');
+            }
+        } else if (aiCard) {
+            aiCard.style.display = 'none';
+        }
+        
+        // === Charts - use existing display functions ===
+        if (data.chart_data) {
+            displayThreeLineChart(data.chart_data);
+        }
+        displayGpaChart(data);
+        displayGradeDistChart(data);
         
         // Scroll to results
         setTimeout(() => {

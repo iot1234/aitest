@@ -4087,6 +4087,8 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8, pre
             'expected_credits': expected_credits,
             'progress_percentage': round(passed_credits/136*100, 1) if passed_credits > 0 else 0,  # 136 หน่วยกิตรวม
             'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses),
+            # Grade distribution for charts
+            'grade_distribution': {g: sum(1 for grade in current_grades.values() if str(grade).upper() == g) for g in ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'] if sum(1 for grade in current_grades.values() if str(grade).upper() == g) > 0},
             # ====== ข้อมูลการทำนายจบ/ไม่จบ (ใช้ AI Model เป็นหลัก) ======
             'will_graduate': will_graduate,
             'graduation_prediction_text': graduation_prediction_text,
@@ -5450,13 +5452,15 @@ def predict_unified():
                             feature_names=feature_names,
                             model_weights=mw
                         )
-                        ml_result = predictor.predict_graduation_probability(transcript_df, explain=False)
+                        ml_result = predictor.predict_graduation_probability(transcript_df, explain=True)
                         ml_method = 'AI_MODEL'
                         logger.info(f"🤖 ML: prob={ml_result.get('probability', 0):.3f}, conf={ml_result.get('confidence', 0):.3f}")
         except Exception as ml_err:
             logger.warning(f"ML prediction error: {ml_err}")
+            import traceback
+            logger.warning(traceback.format_exc())
         
-        # Graduation analysis (rule-based + AI hybrid)
+        # Graduation analysis (rule-based + AI hybrid) - always run
         graduation_analysis = None
         try:
             ai_pred = None
