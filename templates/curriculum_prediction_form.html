@@ -1269,6 +1269,11 @@
     // ===== Initialization =====
     document.addEventListener('DOMContentLoaded', async function () {
         console.log('🚀 Starting initialization...');
+        
+        // Always attach event listeners first so buttons work
+        console.log('🔧 Setting up event listeners...');
+        setupEventListeners();
+        
         try {
             const configLoaded = await loadConfigFromAPI();
             console.log('📦 Config loaded:', configLoaded);
@@ -1335,10 +1340,7 @@
             return;
         }
 
-        console.log('🔧 Setting up event listeners...');
-        setupEventListeners();
-
-        console.log('📊 Loading models...');
+        console.log(' Loading models...');
         await loadModels();
 
         console.log('📈 Updating live stats...');
