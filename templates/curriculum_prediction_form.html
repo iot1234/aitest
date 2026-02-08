@@ -2083,8 +2083,8 @@
 
         // AI Insights
         if (pred?.prediction_method === 'AI_MODEL' && pred?.feature_importance) {
-            const aiCard = document.getElementById('aiInsightsCard');
-            aiCard.style.display = 'block';
+            const aiCardPred = document.getElementById('aiInsightsCard');
+            aiCardPred.style.display = 'block';
 
             document.getElementById('predictionMethodBadge').textContent = pred.prediction_method;
 
@@ -2752,8 +2752,10 @@
         }
         
         // === AI Insights Card (legacy) - hide as we have the new display ===
-        const aiCard = document.getElementById('aiInsightsCard');
-        if (aiCard) aiCard.style.display = 'none';
+        {
+            const aiCardLegacy = document.getElementById('aiInsightsCard');
+            if (aiCardLegacy) aiCardLegacy.style.display = 'none';
+        }
         
         // === Problem & Blocked Courses ===
         const problemDiv = document.getElementById('problemCourses');
@@ -2826,33 +2828,35 @@
         }
         
         // === AI Insights Card (show if ML has data) ===
-        const aiCard = document.getElementById('aiInsightsCard');
-        if (aiCard && ml.available && ml.feature_importance && Object.keys(ml.feature_importance).length > 0) {
-            aiCard.style.display = 'block';
-            const methodBadge = document.getElementById('predictionMethodBadge');
-            if (methodBadge) methodBadge.textContent = ml.method || 'AI_MODEL';
+        {
+            const aiCardML = document.getElementById('aiInsightsCard');
+            if (aiCardML && ml.available && ml.feature_importance && Object.keys(ml.feature_importance).length > 0) {
+                aiCardML.style.display = 'block';
+                const methodBadge = document.getElementById('predictionMethodBadge');
+                if (methodBadge) methodBadge.textContent = ml.method || 'AI_MODEL';
             
-            const modelsList = document.getElementById('modelsUsedList');
-            if (modelsList && ml.models_used) {
-                modelsList.innerHTML = ml.models_used.map(m =>
-                    `<span class="badge bg-primary me-1 mb-1">${m.toUpperCase()}</span>`
-                ).join('');
+                const modelsList = document.getElementById('modelsUsedList');
+                if (modelsList && ml.models_used) {
+                    modelsList.innerHTML = ml.models_used.map(m =>
+                        `<span class="badge bg-primary me-1 mb-1">${m.toUpperCase()}</span>`
+                    ).join('');
+                }
+                
+                const featureList = document.getElementById('featureImportanceList');
+                if (featureList) {
+                    const features = Object.entries(ml.feature_importance).slice(0, 5);
+                    featureList.innerHTML = features.map(([name, imp], i) => `
+                        <div class="feature-item">
+                            <span class="rank">${i + 1}</span>
+                            <span class="name">${name}</span>
+                            <div class="bar"><div class="bar-fill" style="width: ${(imp * 100).toFixed(0)}%"></div></div>
+                            <span class="value">${(imp * 100).toFixed(1)}%</span>
+                        </div>
+                    `).join('');
+                }
+            } else if (aiCardML) {
+                aiCardML.style.display = 'none';
             }
-            
-            const featureList = document.getElementById('featureImportanceList');
-            if (featureList) {
-                const features = Object.entries(ml.feature_importance).slice(0, 5);
-                featureList.innerHTML = features.map(([name, imp], i) => `
-                    <div class="feature-item">
-                        <span class="rank">${i + 1}</span>
-                        <span class="name">${name}</span>
-                        <div class="bar"><div class="bar-fill" style="width: ${(imp * 100).toFixed(0)}%"></div></div>
-                        <span class="value">${(imp * 100).toFixed(1)}%</span>
-                    </div>
-                `).join('');
-            }
-        } else if (aiCard) {
-            aiCard.style.display = 'none';
         }
         
         // === Charts - use existing display functions ===
