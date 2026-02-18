@@ -6366,6 +6366,10 @@ def gemini_predict_route():
         analysis_goal = payload.get('analysis_goal', '').strip()
         loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
         model_filename = payload.get('model_filename')
+        model_prediction = payload.get('model_prediction')  # from combined mode
+        graduation_analysis_input = payload.get('graduation_analysis')  # from combined mode
+        combined_mode = payload.get('combined_mode', False)
+        avg_gpa_input = payload.get('avg_gpa')
         training_analysis = None
         model_metadata = None
         
@@ -6509,6 +6513,33 @@ def gemini_predict_route():
 
 {course_context_str}
 (ข้อมูลข้างบนคือข้อมูลเปรียบเทียบกับสถิติรุ่นพี่ที่เทรนมาแล้ว)
+"""
+
+        # Add trained model prediction context for combined mode
+        model_context_str = ""
+        if combined_mode and model_prediction:
+            mp = model_prediction
+            model_context_str = f"""
+**ผลจาก AI Model ที่เทรนมาแล้ว (ใช้เป็นข้อมูลประกอบ):**
+- ผลทำนาย: {mp.get('prediction', 'N/A')}
+- โอกาสจบ: {mp.get('prob_pass', 0) * 100:.1f}%
+- โอกาสไม่จบ: {mp.get('prob_fail', 0) * 100:.1f}%
+- ความมั่นใจ: {mp.get('confidence', 0) * 100:.1f}%
+- ระดับความเสี่ยง: {mp.get('risk_level', 'N/A')}
+- วิธีที่ใช้: {mp.get('method', 'N/A')}
+- โมเดลที่ใช้: {', '.join(mp.get('models_used', []))}
+"""
+        if combined_mode and graduation_analysis_input:
+            ga = graduation_analysis_input
+            model_context_str += f"""
+**ผลวิเคราะห์การจบจาก Backend:**
+- คาดว่าจะจบ: {'ใช่' if ga.get('will_graduate') else 'ไม่'}
+- GPA: {avg_gpa_input or 'N/A'}
+- วิธีทำนาย: {ga.get('prediction_method', 'N/A')}
+"""
+
+        detailed_prompt += f"""
+{model_context_str}
 
 **งานของคุณ (ตอบเป็นภาษาไทยทั้งหมด):**
 
@@ -6542,6 +6573,7 @@ def gemini_predict_route():
 - **ต้องอธิบายเหตุผลเป็นภาษาไทย** ว่าทำไมถึงจบ/ไม่จบ
 - วิเคราะห์จากข้อมูลที่มี ไม่ต้องถามข้อมูลเพิ่ม
 - ให้ความสำคัญกับ Course DNA และ Killer Courses
+- ถ้ามีผลจาก AI Model ให้ใช้เป็นข้อมูลประกอบ — เปรียบเทียบความเห็นของคุณกับ AI Model แล้วสรุปร่วมกัน
 - ตอบในรูปแบบ JSON ตาม Schema ที่กำหนด
 
 กรุณาทำนายและให้คำตอบตามโครงสร้างที่กำหนด โดยให้:
@@ -7257,11 +7289,39 @@ def analyze_curriculum():
                             logger.info(f"🤖 AI Model Prediction: {prediction} (confidence: {confidence:.3f}, models: {models_used})")
                         else:
                             logger.warning("No valid transcript data for prediction")
-                        
+                    else:
+                        logger.warning(f"Failed to load model: {model_filename}")
+
             except Exception as e:
                 logger.error(f"Error during prediction: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
+
+        # Fallback: rule-based prediction when no AI model prediction was made
+        if 'prediction_result' not in response_data:
+            rule_prob_pass = min(1.0, max(0.0, (avg_gpa - 1.0) / 2.0)) if avg_gpa > 0 else 0.5
+            failed_penalty = len(failed_courses_ids) * 0.08
+            rule_prob_pass = max(0.0, rule_prob_pass - failed_penalty)
+
+            if completion_status['is_completed']:
+                rule_prob_pass = 1.0
+            elif completion_status['min_credits_met'] and not completion_status['min_gpa_met']:
+                rule_prob_pass = 0.0
+
+            rule_prediction = 'จบ' if rule_prob_pass >= 0.5 else 'ไม่จบ'
+            response_data['prediction_result'] = {
+                'prediction': rule_prediction,
+                'prob_pass': float(rule_prob_pass),
+                'prob_fail': float(1 - rule_prob_pass),
+                'confidence': 0.6,
+                'risk_level': 'ต่ำ' if rule_prob_pass >= 0.7 else ('ปานกลาง' if rule_prob_pass >= 0.4 else 'สูง'),
+                'gpa_input': float(avg_gpa),
+                'method': 'Rule-based (ไม่มีโมเดล AI)',
+                'models_used': [],
+                'feature_importance': {},
+                'status': 'rule_based'
+            }
+            logger.info(f"📊 Rule-based fallback: {rule_prediction} (prob_pass={rule_prob_pass:.3f}, gpa={avg_gpa:.2f})")
         
         # ✨ เพิ่มข้อมูลกราฟ 3 เส้น (ใช้ข้อมูลจริงจากนักศึกษา)
         try:

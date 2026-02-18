@@ -978,6 +978,11 @@
             <label class="btn" for="modeGemini">
                 <i class="bi bi-stars me-1"></i> Gemini AI
             </label>
+
+            <input type="radio" class="btn-check" name="predictionMode" id="modeCombined" value="combined">
+            <label class="btn" for="modeCombined">
+                <i class="bi bi-diagram-3 me-1"></i> ผสมผสาน
+            </label>
         </div>
 
         <div id="geminiModeConfig" class="mb-4" style="display: none; max-width: 500px; margin: 0 auto;">
@@ -1614,21 +1619,24 @@
     function updatePredictionModeUI() {
         const mode = getSelectedPredictionMode();
         const config = document.getElementById('geminiModeConfig');
-        config.style.display = mode === 'gemini' ? 'block' : 'none';
+        config.style.display = (mode === 'gemini' || mode === 'combined') ? 'block' : 'none';
     }
 
     function updateGeminiStatus() {
         const badge = document.getElementById('geminiStatusBadge');
         const geminiRadio = document.getElementById('modeGemini');
+        const combinedRadio = document.getElementById('modeCombined');
 
         if (geminiEnabled) {
             badge.className = 'badge bg-success ms-auto';
             badge.textContent = 'พร้อมใช้งาน';
             if (geminiRadio) geminiRadio.disabled = false;
+            if (combinedRadio) combinedRadio.disabled = false;
         } else {
             badge.className = 'badge bg-danger ms-auto';
             badge.textContent = 'ไม่พร้อมใช้งาน';
             if (geminiRadio) geminiRadio.disabled = true;
+            if (combinedRadio) combinedRadio.disabled = true;
         }
     }
 
@@ -1659,7 +1667,12 @@
             return;
         }
 
-        showCustomLoadingModal('กำลังวิเคราะห์ด้วย AI...');
+        if (mode === 'combined' && geminiEnabled) {
+            await analyzeCombined(studentName, modelFilename);
+            return;
+        }
+
+        showCustomLoadingModal('กำลังวิเคราะห์ด้วย AI Model...');
         currentAnalysisController = new AbortController();
 
         try {
@@ -1690,6 +1703,66 @@
         } finally {
             hideCustomLoadingModal();
             currentAnalysisController = null;
+        }
+    }
+
+    async function analyzeCombined(studentName, modelFilename) {
+        showCustomLoadingModal('กำลังวิเคราะห์ด้วย AI Model + Gemini...');
+
+        try {
+            // Step 1: Run trained model prediction
+            const modelResponse = await fetch('/api/analyze_curriculum', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_name: studentName,
+                    current_grades: courseGrades,
+                    loaded_terms_count: loadedTermsCount,
+                    model_filename: modelFilename
+                })
+            });
+            const modelResult = await modelResponse.json();
+
+            if (modelResult.success) {
+                displayResults(modelResult);
+            }
+
+            // Step 2: Send model prediction + grades to Gemini for enhanced analysis
+            const goalInput = document.getElementById('geminiModeGoalInput');
+            const geminiPayload = {
+                student_name: studentName,
+                course_grades: courseGrades,
+                loaded_terms_count: loadedTermsCount,
+                model_filename: modelFilename,
+                model_prediction: modelResult.success ? modelResult.prediction_result : null,
+                graduation_analysis: modelResult.success ? modelResult.graduation_analysis : null,
+                avg_gpa: modelResult.success ? modelResult.avg_gpa : null,
+                combined_mode: true
+            };
+            if (goalInput?.value.trim()) {
+                geminiPayload.analysis_goal = goalInput.value.trim();
+            }
+
+            const geminiResponse = await fetch('/api/gemini/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(geminiPayload)
+            });
+            const geminiResult = await geminiResponse.json();
+
+            if (geminiResult.success) {
+                displayGeminiResult(geminiResult);
+                showAlert('✅ วิเคราะห์ผสมผสาน AI Model + Gemini เสร็จสิ้น', 'success');
+            } else {
+                showAlert(geminiResult.error || 'Gemini ไม่สามารถวิเคราะห์ได้', 'warning');
+                if (modelResult.success) {
+                    showAlert('✅ ใช้ผลจาก AI Model เท่านั้น', 'info');
+                }
+            }
+        } catch (error) {
+            showAlert('เกิดข้อผิดพลาด: ' + error.message, 'danger');
+        } finally {
+            hideCustomLoadingModal();
         }
     }
 
