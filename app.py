@@ -1406,13 +1406,23 @@ COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COUR
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-# Use gemini-3-flash-preview as default (fastest Gemini 3 model with free tier)
-# Fallback chain: gemini-2.5-flash (stable) → gemini-2.5-pro (advanced) → gemini-2.0-flash (legacy)
+# Use gemini-2.0-flash as default (stable, fast, widely available)
+# Fallback chain: gemini-2.0-flash → gemini-2.5-flash → gemini-2.5-pro → gemini-1.5-pro
 # Reference: https://ai.google.dev/gemini-api/docs/models
-GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
 # Default fallback models for high availability (in order of preference)
-GEMINI_DEFAULT_FALLBACKS = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
+GEMINI_DEFAULT_FALLBACKS = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro']
+
+# Known Gemini models for the admin dropdown (label → model id)
+GEMINI_KNOWN_MODELS = [
+    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'desc': 'เร็ว เสถียร แนะนำ'},
+    {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash Lite', 'desc': 'เบาที่สุด ประหยัด'},
+    {'id': 'gemini-2.5-flash-preview-05-20', 'name': 'Gemini 2.5 Flash Preview', 'desc': 'รุ่นใหม่ เร็ว'},
+    {'id': 'gemini-2.5-pro-preview-05-06', 'name': 'Gemini 2.5 Pro Preview', 'desc': 'ฉลาดสุด ช้ากว่า'},
+    {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'desc': 'รุ่นเก่า เสถียร'},
+    {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'desc': 'รุ่นเก่า อาจไม่พร้อมใช้'},
+]
 
 
 def _build_gemini_model_candidates(primary_name: str) -> List[str]:
@@ -1462,7 +1472,7 @@ def refresh_gemini_runtime_from_settings():
         admin_manager.apply_runtime_env()
 
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
+    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
     GEMINI_MODEL_CANDIDATES = _build_gemini_model_candidates(GEMINI_MODEL_NAME)
 
     gemini_client_ready = False
@@ -5549,6 +5559,7 @@ def admin_settings():
     current_values['r2_connected'] = not getattr(storage, 'use_local', True)
     current_values['r2_bucket'] = getattr(storage, 'bucket_name', '')
     current_values['is_fallback'] = not admin_manager.enabled
+    current_values['gemini_known_models'] = GEMINI_KNOWN_MODELS
 
     if success_msg:
         current_values['success'] = success_msg
@@ -5653,20 +5664,38 @@ def admin_test_connections():
     except Exception as e:
         results['r2'] = {'connected': False, 'message': str(e)}
 
-    # Gemini
+    # Gemini — try primary model then fallbacks
     try:
         refresh_gemini_runtime_from_settings()
         if not is_gemini_available():
             results['gemini'] = {'connected': False, 'message': 'Gemini API key/model not configured'}
         else:
-            # Lightweight call to verify API key/model works
             if genai is None:
                 raise RuntimeError('google.generativeai not installed')
-            model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-            ping_response = model.generate_content('ping')
-            if not getattr(ping_response, 'text', None):
-                raise RuntimeError('Empty response from Gemini')
-            results['gemini'] = {'connected': True, 'message': f'Connected with model {GEMINI_MODEL_NAME}'}
+            # Try each candidate model until one works
+            last_error = None
+            connected_model = None
+            for candidate in GEMINI_MODEL_CANDIDATES:
+                try:
+                    model = genai.GenerativeModel(candidate)
+                    ping_response = model.generate_content('ping')
+                    if getattr(ping_response, 'text', None):
+                        connected_model = candidate
+                        break
+                except Exception as model_err:
+                    last_error = model_err
+                    logger.warning(f"Gemini model {candidate} failed: {model_err}")
+                    continue
+            if connected_model:
+                # Auto-fix: update model name to the working one
+                if connected_model != GEMINI_MODEL_NAME:
+                    os.environ['GEMINI_MODEL_NAME'] = connected_model
+                    if admin_manager.enabled:
+                        admin_manager.set_setting('GEMINI_MODEL_NAME', connected_model, actor_user_id=session.get('user_id'))
+                    refresh_gemini_runtime_from_settings()
+                results['gemini'] = {'connected': True, 'message': f'Connected with model {connected_model}'}
+            else:
+                raise last_error or RuntimeError('All Gemini models failed')
     except Exception as e:
         results['gemini'] = {'connected': False, 'message': str(e)}
 
@@ -5679,6 +5708,42 @@ def admin_test_connections():
     results['success'] = overall_ok
     admin_manager._log_audit(session.get('user_id'), 'TEST_CONNECTIONS', 'mongo_r2_gemini', 'success' if overall_ok else 'failed', results)
     return jsonify(results)
+
+
+@app.route('/api/admin/gemini-models', methods=['GET'])
+@admin_login_required
+@roles_required('admin', 'super_admin')
+def admin_list_gemini_models():
+    """List available Gemini models: known models + live models from API."""
+    result = {
+        'success': True,
+        'known_models': GEMINI_KNOWN_MODELS,
+        'live_models': [],
+        'current_model': GEMINI_MODEL_NAME,
+    }
+
+    # Try to fetch live models from the Gemini API
+    if genai and GEMINI_API_KEY:
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            live = []
+            for m in genai.list_models():
+                name = m.name  # e.g. "models/gemini-2.0-flash"
+                model_id = name.replace('models/', '') if name.startswith('models/') else name
+                # Only include models that support generateContent
+                supported = [method for method in m.supported_generation_methods]
+                if 'generateContent' in supported:
+                    live.append({
+                        'id': model_id,
+                        'display_name': getattr(m, 'display_name', model_id),
+                        'desc': getattr(m, 'description', '')[:80],
+                    })
+            result['live_models'] = live
+        except Exception as e:
+            logger.warning(f"Could not list Gemini models: {e}")
+            result['live_error'] = str(e)
+
+    return jsonify(result)
 
 
 @app.route('/')

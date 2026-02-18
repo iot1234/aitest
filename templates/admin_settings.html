@@ -2,6 +2,13 @@
 
 {% block title %}ตั้งค่าระบบ — Admin{% endblock %}
 
+{% block custom_css %}
+{{ super() }}
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container py-4 py-md-5" style="max-width: 1000px;">
 
@@ -133,18 +140,30 @@
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">GEMINI_MODEL_NAME</label>
-                        <input type="text" name="gemini_model_name" class="form-control"
-                               value="{{ gemini_model_name or 'gemini-3-flash-preview' }}"
-                               placeholder="เช่น gemini-3-flash-preview">
-                        <small class="text-muted">โมเดลหลักที่ใช้</small>
+                        <label class="form-label">GEMINI_MODEL_NAME <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <select name="gemini_model_name" id="gemini_model_name" class="form-select">
+                                {% for m in gemini_known_models %}
+                                <option value="{{ m.id }}" {% if gemini_model_name == m.id %}selected{% endif %}>
+                                    {{ m.name }} — {{ m.desc }}
+                                </option>
+                                {% endfor %}
+                                {% if gemini_model_name and gemini_model_name not in gemini_known_models|map(attribute='id')|list %}
+                                <option value="{{ gemini_model_name }}" selected>{{ gemini_model_name }} (custom)</option>
+                                {% endif %}
+                            </select>
+                            <button class="btn btn-outline-info" type="button" id="btnLoadModels" title="โหลดรายชื่อโมเดลจาก Google API">
+                                <i class="bi bi-arrow-clockwise" id="loadModelsIcon"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">โมเดลหลักที่ใช้ — กด <i class="bi bi-arrow-clockwise"></i> เพื่อดึงรายชื่อล่าสุดจาก API</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">GEMINI_MODEL_FALLBACKS</label>
                         <input type="text" name="gemini_model_fallbacks" class="form-control"
                                value="{{ gemini_model_fallbacks or '' }}"
                                placeholder="gemini-2.5-flash, gemini-2.0-flash">
-                        <small class="text-muted">โมเดลสำรอง (คั่นด้วย comma)</small>
+                        <small class="text-muted">โมเดลสำรอง (คั่นด้วย comma) — ใช้เมื่อโมเดลหลักไม่พร้อม</small>
                     </div>
                 </div>
             </div>
@@ -298,6 +317,83 @@ document.getElementById('settingsForm')?.addEventListener('submit', function() {
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> กำลังบันทึก...';
+    }
+});
+
+// Load live Gemini models from API
+document.getElementById('btnLoadModels')?.addEventListener('click', async () => {
+    const icon = document.getElementById('loadModelsIcon');
+    const select = document.getElementById('gemini_model_name');
+    if (!select) return;
+
+    // Spinning animation
+    icon.className = 'bi bi-arrow-clockwise';
+    icon.style.animation = 'spin 1s linear infinite';
+
+    try {
+        const resp = await fetch('/api/admin/gemini-models');
+        if (resp.status === 401 || resp.status === 403) {
+            alert('Session หมดอายุ — กรุณาเข้าสู่ระบบใหม่');
+            return;
+        }
+        const data = await resp.json();
+        const currentVal = select.value;
+
+        // Clear existing options
+        select.innerHTML = '';
+
+        // Build a set to avoid duplicates
+        const added = new Set();
+
+        // Add live models first (from API) — these are guaranteed to work
+        if (data.live_models && data.live_models.length > 0) {
+            const liveGroup = document.createElement('optgroup');
+            liveGroup.label = '🟢 โมเดลพร้อมใช้งาน (จาก API)';
+            data.live_models.forEach(m => {
+                if (added.has(m.id)) return;
+                added.add(m.id);
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = `${m.display_name || m.id}`;
+                if (m.id === currentVal) opt.selected = true;
+                liveGroup.appendChild(opt);
+            });
+            select.appendChild(liveGroup);
+        }
+
+        // Add known models that weren't in live list
+        if (data.known_models && data.known_models.length > 0) {
+            const knownGroup = document.createElement('optgroup');
+            knownGroup.label = '📋 โมเดลที่รู้จัก';
+            data.known_models.forEach(m => {
+                if (added.has(m.id)) return;
+                added.add(m.id);
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = `${m.name} — ${m.desc}`;
+                if (m.id === currentVal) opt.selected = true;
+                knownGroup.appendChild(opt);
+            });
+            if (knownGroup.children.length > 0) select.appendChild(knownGroup);
+        }
+
+        // Keep current value if not in any list
+        if (currentVal && !added.has(currentVal)) {
+            const opt = document.createElement('option');
+            opt.value = currentVal;
+            opt.textContent = `${currentVal} (custom)`;
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+
+        if (data.live_error) {
+            alert('โหลดรายชื่อโมเดลจาก API ไม่สำเร็จ: ' + data.live_error);
+        }
+    } catch (e) {
+        alert('เกิดข้อผิดพลาด: ' + e.message);
+    } finally {
+        icon.style.animation = '';
+        icon.className = 'bi bi-arrow-clockwise';
     }
 });
 </script>
