@@ -1638,7 +1638,6 @@ GEMINI_KNOWN_MODELS = [
     {'id': 'gemini-2.5-flash', 'name': 'Gemini 2.5 Flash', 'desc': 'เร็ว เสถียร ฟรี'},
     {'id': 'gemini-2.5-flash-lite', 'name': 'Gemini 2.5 Flash Lite', 'desc': 'เบาที่สุด ประหยัด ฟรี'},
     {'id': 'gemini-2.5-pro', 'name': 'Gemini 2.5 Pro', 'desc': 'ฉลาดสุด ช้ากว่า'},
-    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'desc': '⚠️ deprecated มี.ค. 2026'},
 ]
 
 
@@ -2475,7 +2474,6 @@ def quick_prediction():
 def get_storage_status():
     """Get detailed storage status"""
     status = storage.get_connection_status()
-    status['env_check'] = env_check_result
     return jsonify(status)
 
 # Variables to store loaded models (re-declared for clarity in this combined file)
@@ -5992,38 +5990,53 @@ def admin_test_connections():
     except Exception as e:
         results['r2'] = {'connected': False, 'message': str(e)}
 
-    # Gemini — try primary model then fallbacks
+    # Gemini — test the PRIMARY model the user selected (not fallbacks)
     try:
         refresh_gemini_runtime_from_settings()
         if not is_gemini_available():
-            results['gemini'] = {'connected': False, 'message': 'Gemini API key/model not configured'}
+            results['gemini'] = {'connected': False, 'message': 'ยังไม่ได้ตั้งค่า Gemini API Key หรือโมเดล'}
         else:
             if genai is None:
                 raise RuntimeError('google.generativeai not installed')
-            # Try each candidate model until one works
-            last_error = None
-            connected_model = None
-            for candidate in GEMINI_MODEL_CANDIDATES:
-                try:
-                    model = genai.GenerativeModel(candidate)
-                    ping_response = model.generate_content('ping')
-                    if getattr(ping_response, 'text', None):
-                        connected_model = candidate
-                        break
-                except Exception as model_err:
-                    last_error = model_err
-                    logger.warning(f"Gemini model {candidate} failed: {model_err}")
-                    continue
-            if connected_model:
-                # Auto-fix: update model name to the working one
-                if connected_model != GEMINI_MODEL_NAME:
-                    os.environ['GEMINI_MODEL_NAME'] = connected_model
-                    if admin_manager.enabled:
-                        admin_manager.set_setting('GEMINI_MODEL_NAME', connected_model, actor_user_id=session.get('user_id'))
-                    refresh_gemini_runtime_from_settings()
-                results['gemini'] = {'connected': True, 'message': f'Connected with model {connected_model}'}
-            else:
-                raise last_error or RuntimeError('All Gemini models failed')
+            primary_model = GEMINI_MODEL_NAME
+            try:
+                model = genai.GenerativeModel(primary_model)
+                ping_response = model.generate_content('ping')
+                if getattr(ping_response, 'text', None):
+                    results['gemini'] = {
+                        'connected': True,
+                        'message': f'เชื่อมต่อโมเดล {primary_model} สำเร็จ',
+                        'model': primary_model
+                    }
+                else:
+                    results['gemini'] = {
+                        'connected': False,
+                        'message': f'โมเดล {primary_model} ไม่ตอบกลับ — ลองเปลี่ยนโมเดลในตั้งค่า',
+                        'model': primary_model
+                    }
+            except Exception as model_err:
+                # Primary model failed — suggest a working fallback
+                suggested = None
+                for fallback in GEMINI_DEFAULT_FALLBACKS:
+                    if fallback == primary_model:
+                        continue
+                    try:
+                        fb_model = genai.GenerativeModel(fallback)
+                        fb_resp = fb_model.generate_content('ping')
+                        if getattr(fb_resp, 'text', None):
+                            suggested = fallback
+                            break
+                    except Exception:
+                        continue
+                msg = f'โมเดล {primary_model} ใช้ไม่ได้ ({model_err})'
+                if suggested:
+                    msg += f' — แนะนำเปลี่ยนเป็น {suggested}'
+                results['gemini'] = {
+                    'connected': False,
+                    'message': msg,
+                    'model': primary_model,
+                    'suggested_model': suggested
+                }
     except Exception as e:
         results['gemini'] = {'connected': False, 'message': str(e)}
 

@@ -933,6 +933,10 @@
 
     // Check system status
     async function checkSystemStatus() {
+        let modelOk = false;
+        let storageOk = false;
+
+        // ตรวจสอบโมเดล AI
         try {
             const response = await fetch('/api/models');
             const data = await response.json();
@@ -941,47 +945,65 @@
                 document.getElementById('subject-model-status').innerHTML = `
                 <span class="badge bg-success rounded-pill">
                     <i class="bi bi-check-circle me-1"></i>${data.models.length} โมเดลพร้อมใช้
-                </span>
-            `;
+                </span>`;
                 const predictBtn = document.getElementById('predictBtn');
                 if (predictBtn && !predictBtn.querySelector('.spinner-border:not(.d-none)')) {
                     predictBtn.disabled = false;
                 }
+                modelOk = true;
             } else {
                 document.getElementById('subject-model-status').innerHTML = `
                 <span class="badge bg-warning text-dark rounded-pill">
                     <i class="bi bi-exclamation-circle me-1"></i>ยังไม่มีโมเดล
-                </span>
-            `;
+                </span>`;
                 const predictBtn = document.getElementById('predictBtn');
                 if (predictBtn) predictBtn.disabled = true;
+                modelOk = true; // ไม่มีโมเดลแต่ระบบปกติ
             }
+        } catch (error) {
+            console.error('Error checking models:', error);
+            document.getElementById('subject-model-status').innerHTML = `
+            <span class="badge bg-danger rounded-pill">
+                <i class="bi bi-x-circle me-1"></i>ตรวจสอบไม่ได้
+            </span>`;
+        }
 
+        // ตรวจสอบที่เก็บข้อมูล
+        try {
             const storageResponse = await fetch('/api/storage/status');
             const storageData = await storageResponse.json();
 
             if (storageData.connected) {
                 document.getElementById('storage-status').innerHTML = `
                 <span class="badge bg-success rounded-pill">
-                    <i class="bi bi-cloud-check me-1"></i>Cloud R2 Connected
-                </span>
-            `;
+                    <i class="bi bi-cloud-check me-1"></i>Cloud R2 เชื่อมต่อแล้ว
+                </span>`;
             } else {
                 document.getElementById('storage-status').innerHTML = `
                 <span class="badge bg-info rounded-pill">
-                    <i class="bi bi-hdd me-1"></i>Local Storage
-                </span>
-            `;
+                    <i class="bi bi-hdd me-1"></i>เก็บในเครื่อง (Local)
+                </span>`;
             }
+            storageOk = true;
+        } catch (error) {
+            console.error('Error checking storage:', error);
+            document.getElementById('storage-status').innerHTML = `
+            <span class="badge bg-danger rounded-pill">
+                <i class="bi bi-x-circle me-1"></i>ตรวจสอบไม่ได้
+            </span>`;
+        }
 
+        // สรุปความพร้อมรวม
+        if (modelOk && storageOk) {
             document.getElementById('model-check-status').innerHTML = `
             <span class="badge bg-success bg-opacity-25 text-success rounded-pill border border-success">
-                <i class="bi bi-check-circle me-1"></i>ระบบปกติ
-            </span>
-        `;
-
-        } catch (error) {
-            console.error('Error checking status:', error);
+                <i class="bi bi-check-circle me-1"></i>ระบบพร้อมใช้งาน
+            </span>`;
+        } else {
+            document.getElementById('model-check-status').innerHTML = `
+            <span class="badge bg-warning text-dark rounded-pill">
+                <i class="bi bi-exclamation-triangle me-1"></i>มีปัญหาบางส่วน
+            </span>`;
         }
     }
 

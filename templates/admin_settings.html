@@ -304,15 +304,45 @@ document.getElementById('btnTestConnections')?.addEventListener('click', async (
         const statusIcon = (ok) => ok ? '✅' : '❌';
         const mongo = `${statusIcon(data.mongo?.connected)} <strong>MongoDB:</strong> ${data.mongo?.connected ? 'เชื่อมต่อสำเร็จ' : (data.mongo?.message || 'เชื่อมต่อไม่ได้')}`;
         const r2 = `${statusIcon(data.r2?.connected)} <strong>Cloudflare R2:</strong> ${data.r2?.connected ? data.r2.message : (data.r2?.message || 'เชื่อมต่อไม่ได้')}`;
-        const gemini = `${statusIcon(data.gemini?.connected)} <strong>Gemini AI:</strong> ${data.gemini?.connected ? data.gemini.message : (data.gemini?.message || 'เชื่อมต่อไม่ได้')}`;
+
+        let geminiHtml = `${statusIcon(data.gemini?.connected)} <strong>Gemini AI:</strong> ${data.gemini?.message || 'เชื่อมต่อไม่ได้'}`;
+        // ถ้าโมเดลหลักใช้ไม่ได้ แต่มีโมเดลแนะนำ — แสดงปุ่มเปลี่ยน
+        if (!data.gemini?.connected && data.gemini?.suggested_model) {
+            geminiHtml += `<br><button class="btn btn-sm btn-warning mt-1" onclick="applySuggestedModel('${data.gemini.suggested_model}')">
+                <i class="bi bi-arrow-repeat me-1"></i>เปลี่ยนเป็น ${data.gemini.suggested_model}</button>`;
+        }
 
         resultBox.className = `alert ${data.success ? 'alert-success' : 'alert-warning'} mt-3`;
-        resultBox.innerHTML = `${mongo}<br>${r2}<br>${gemini}`;
+        resultBox.innerHTML = `${mongo}<br>${r2}<br>${geminiHtml}`;
     } catch (e) {
         resultBox.className = 'alert alert-danger mt-3';
         resultBox.innerHTML = `<i class="bi bi-x-circle me-2"></i>ทดสอบไม่สำเร็จ: ${e.message}`;
     }
 });
+
+// Apply suggested model — เปลี่ยน dropdown เป็นโมเดลที่แนะนำ แล้วบันทึกอัตโนมัติ
+function applySuggestedModel(modelId) {
+    const select = document.getElementById('gemini_model_name');
+    if (select) {
+        // ถ้าโมเดลอยู่ใน dropdown อยู่แล้ว ก็เลือกได้เลย
+        let found = false;
+        for (const opt of select.options) {
+            if (opt.value === modelId) {
+                opt.selected = true;
+                found = true;
+                break;
+            }
+        }
+        // ถ้าไม่มีใน dropdown ก็เพิ่มเข้าไป
+        if (!found) {
+            const opt = new Option(modelId + ' (แนะนำ)', modelId, true, true);
+            select.add(opt);
+        }
+    }
+    // กดบันทึกฟอร์มให้อัตโนมัติ
+    const form = document.getElementById('settingsForm');
+    if (form) form.submit();
+}
 
 // Save button loading state
 document.getElementById('settingsForm')?.addEventListener('submit', function() {
