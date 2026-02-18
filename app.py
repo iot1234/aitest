@@ -712,6 +712,16 @@ class AdvancedModelTrainer:
     def save_model(self, model_path, course_profiles=None, training_results=None):
         """บันทึกโมเดลและ scaler ในรูปแบบเดียวกับ advanced path"""
         if self.best_model is not None:
+            # สร้าง performance_metrics ที่ serializable (ไม่เก็บ model objects / numpy arrays)
+            clean_metrics = {}
+            if training_results:
+                for name, res in training_results.items():
+                    clean_metrics[name] = {
+                        'accuracy': float(res.get('accuracy', 0)),
+                        'f1_score': float(res.get('f1_score', 0)),
+                        'precision': float(res.get('precision', 0)),
+                        'recall': float(res.get('recall', 0)),
+                    }
             model_data = {
                 'models': {'rf': self.best_model},  # Wrap in dict like ensemble format
                 'scaler': self.scaler,
@@ -733,7 +743,7 @@ class AdvancedModelTrainer:
                 'data_format': 'subject_based',
                 'training_type': 'tan1_advanced',
                 'created_at': datetime.now().isoformat(),
-                'performance_metrics': training_results or {},
+                'performance_metrics': clean_metrics,
             }
             joblib.dump(model_data, model_path)
             return True
@@ -3120,13 +3130,13 @@ def train_model():
                             'columns_in_file': len(df.columns),
                             'prepared_samples': len(X),
                             'feature_count': X.shape[1] if hasattr(X, 'shape') else 0,
-                            'label_distribution': dict(zip(*np.unique(y, return_counts=True))) if len(y) > 0 else {},
+                            'label_distribution': {int(k): int(v) for k, v in zip(*np.unique(y, return_counts=True))} if len(y) > 0 else {},
                             'course_profiles_count': len(course_profiles) if course_profiles else 0,
                             'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
                             'model_metrics': {
                                 name: {
-                                    'accuracy': res.get('accuracy'),
-                                    'f1_score': res.get('f1_score')
+                                    'accuracy': float(res.get('accuracy', 0)),
+                                    'f1_score': float(res.get('f1_score', 0))
                                 } for name, res in results.items()
                             },
                             'timestamp': datetime.now().isoformat(),
@@ -3163,14 +3173,14 @@ def train_model():
                     pairs = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
                     tan1_feature_importances = {name: float(imp) for name, imp in pairs[:15]}
 
-                # สรุปผลลัพธ์ทุกโมเดล (ภาษาไทย)
+                # สรุปผลลัพธ์ทุกโมเดล (ภาษาไทย) — cast เป็น float เพื่อให้ JSON serializable
                 all_model_results = {}
                 for name, res in results.items():
                     all_model_results[name] = {
-                        'accuracy': res.get('accuracy', 0),
-                        'f1_score': res.get('f1_score', 0),
-                        'precision': res.get('precision', 0),
-                        'recall': res.get('recall', 0),
+                        'accuracy': float(res.get('accuracy', 0)),
+                        'f1_score': float(res.get('f1_score', 0)),
+                        'precision': float(res.get('precision', 0)),
+                        'recall': float(res.get('recall', 0)),
                     }
 
                 # จำนวน label
@@ -3183,18 +3193,18 @@ def train_model():
                     'model_filename': model_fname,
                     'model_path': model_path,
                     'best_model_name': best_name,
-                    'accuracy': best.get('accuracy', 0),
-                    'precision': best.get('precision', 0),
-                    'recall': best.get('recall', 0),
-                    'f1_score': best.get('f1_score', 0),
+                    'accuracy': float(best.get('accuracy', 0)),
+                    'precision': float(best.get('precision', 0)),
+                    'recall': float(best.get('recall', 0)),
+                    'f1_score': float(best.get('f1_score', 0)),
                     'all_model_results': all_model_results,
-                    'training_samples': len(X),
-                    'features_count': X.shape[1] if len(X) > 0 else 0,
-                    'course_profiles_count': len(course_profiles) if course_profiles else 0,
+                    'training_samples': int(len(X)),
+                    'features_count': int(X.shape[1]) if len(X) > 0 else 0,
+                    'course_profiles_count': int(len(course_profiles)) if course_profiles else 0,
                     'feature_importances': tan1_feature_importances,
                     'label_distribution': label_dist,
-                    'students_count': len(df_wide_format),
-                    'courses_count': len(course_credit_map),
+                    'students_count': int(len(df_wide_format)),
+                    'courses_count': int(len(course_credit_map)),
                     'training_type': 'tan1_advanced',
                     'gemini_analysis': tan1_gemini_analysis
                 })
@@ -3288,14 +3298,14 @@ def train_model():
                     'columns_in_file': len(df.columns),
                     'prepared_samples': len(X),
                     'feature_count': int(X.shape[1]) if hasattr(X, 'shape') else len(model_result.get('feature_columns', [])),
-                    'label_distribution': y.value_counts().to_dict() if hasattr(y, 'value_counts') else (dict(zip(*np.unique(y, return_counts=True))) if len(y) > 0 else {}),
+                    'label_distribution': {int(k): int(v) for k, v in y.value_counts().items()} if hasattr(y, 'value_counts') else ({int(k): int(v) for k, v in zip(*np.unique(y, return_counts=True))} if len(y) > 0 else {}),
                     'course_profiles_count': course_profiles_count,
                     'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
                     'model_metrics': {
-                        'accuracy': model_result['accuracy'],
-                        'precision': model_result['precision'],
-                        'recall': model_result['recall'],
-                        'f1_score': model_result['f1_score']
+                        'accuracy': float(model_result['accuracy']),
+                        'precision': float(model_result['precision']),
+                        'recall': float(model_result['recall']),
+                        'f1_score': float(model_result['f1_score'])
                     },
                     'timestamp': datetime.now().isoformat(),
                     'source_file': filename
@@ -3334,10 +3344,10 @@ def train_model():
               'source_file': filename
           },
           'performance_metrics': {
-              'accuracy': model_result['accuracy'],
-              'precision': model_result['precision'],
-              'recall': model_result['recall'],
-              'f1_score': model_result['f1_score']
+              'accuracy': float(model_result['accuracy']),
+              'precision': float(model_result['precision']),
+              'recall': float(model_result['recall']),
+              'f1_score': float(model_result['f1_score'])
           },
           'feature_importances': feature_importances,
           'gemini_training_analysis': gemini_training_analysis,
@@ -3363,13 +3373,13 @@ def train_model():
             'success': True,
             'model_filename': model_filename,
             'training_type': training_type,
-            'accuracy': model_result['accuracy'],
-            'precision': model_result['precision'],
-            'recall': model_result['recall'],
-            'f1_score': model_result['f1_score'],
-          'training_samples': len(X),
-          'validation_samples': model_result.get('validation_samples', 0),
-          'features_count': X.shape[1],
+            'accuracy': float(model_result['accuracy']),
+            'precision': float(model_result['precision']),
+            'recall': float(model_result['recall']),
+            'f1_score': float(model_result['f1_score']),
+          'training_samples': int(len(X)),
+          'validation_samples': int(model_result.get('validation_samples', 0)),
+          'features_count': int(X.shape[1]),
           'data_format': data_format,
           'feature_importances': feature_importances,
           'course_profiles_count': course_profiles_count,
@@ -3575,11 +3585,23 @@ def list_models():
                             filepath = os.path.join(model_folder, filename)
                             try:
                                 model_data = joblib.load(filepath)
+                                # ดึงเฉพาะ metrics ที่ serializable (ไม่เอา model objects)
+                                raw_perf = model_data.get('performance_metrics', {})
+                                safe_perf = {}
+                                if isinstance(raw_perf, dict):
+                                    for k, v in raw_perf.items():
+                                        if isinstance(v, dict):
+                                            safe_perf[k] = {
+                                                mk: float(mv) for mk, mv in v.items()
+                                                if isinstance(mv, (int, float)) or (hasattr(mv, 'item') and callable(mv.item))
+                                            }
+                                        elif isinstance(v, (int, float)):
+                                            safe_perf[k] = float(v)
                                 model_info = {
                                     'filename': filename,
                                     'created_at': model_data.get('created_at', datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
                                     'data_format': model_data.get('data_format', 'subject_based'),
-                                    'performance_metrics': model_data.get('performance_metrics', {}),
+                                    'performance_metrics': safe_perf,
                                     'storage': 'local'
                                 }
                             except:
