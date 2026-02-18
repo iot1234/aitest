@@ -13,5 +13,5 @@ RUN pip install --upgrade pip \
 
 COPY . ./
 
-# Railway provides PORT at runtime
-CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT:-8000} --timeout 600 --workers 1 --threads 4 --worker-class gthread --log-level warning --access-logfile - --error-logfile -"]
+# Railway provides PORT at runtime. If PORT is missing or invalid (e.g. literal '$PORT'), fall back to 8000.
+CMD ["sh", "-c", "PORT_SAFE=\"${PORT:-8000}\"; case \"$PORT_SAFE\" in (''|*[!0-9]*) PORT_SAFE=8000 ;; esac; gunicorn app:app --bind 0.0.0.0:$PORT_SAFE --timeout 600 --workers 1 --threads 4 --worker-class gthread --log-level warning --access-logfile - --error-logfile -"]
