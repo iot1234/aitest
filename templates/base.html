@@ -727,7 +727,7 @@
                     </li>
                     {% if is_logged_in %}
                     <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.2s;">
-                        <a class="nav-link" href="{{ url_for('index') }}">
+                        <a class="nav-link" href="{{ url_for('predict_batch_page') }}">
                             <i class="bi bi-cpu me-1"></i> ฝึกโมเดล
                         </a>
                     </li>
@@ -813,7 +813,7 @@
                         <li><a href="{{ url_for('main_page') }}">หน้าหลัก</a></li>
                         <li><a href="{{ url_for('curriculum_prediction_form') }}">ทำนายรายบุคคล</a></li>
                         {% if is_logged_in %}
-                        <li><a href="{{ url_for('index') }}">ฝึกโมเดล</a></li>
+                        <li><a href="{{ url_for('predict_batch_page') }}">ฝึกโมเดล</a></li>
                         {% else %}
                         <li><a href="{{ url_for('admin_login') }}">เข้าสู่ระบบ</a></li>
                         {% endif %}

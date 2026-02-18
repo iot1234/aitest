@@ -302,7 +302,7 @@
                 <i class="bi bi-person-check-fill text-primary"></i> ทดสอบการทำนาย
             </a>
             {% if is_logged_in %}
-            <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+            <a href="{{ url_for('predict_batch_page') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
                 <i class="bi bi-cpu"></i> ฝึกโมเดล AI
             </a>
             {% else %}
@@ -382,7 +382,7 @@
                     </div>
                     <h5>ฝึกโมเดล AI</h5>
                     <p>อัปโหลดข้อมูลเพื่อสร้างโมเดลการทำนายที่แม่นยำด้วย Machine Learning ขั้นสูง</p>
-                    <a href="{{ url_for('index') }}" class="btn btn-primary w-100 rounded-pill">
+                    <a href="{{ url_for('predict_batch_page') }}" class="btn btn-primary w-100 rounded-pill">
                         <i class="bi bi-play-circle me-1"></i> เริ่มฝึกโมเดล
                     </a>
                 </div>
@@ -431,7 +431,7 @@
                     </div>
                     <h5>วิเคราะห์รายวิชา</h5>
                     <p>เจาะลึกข้อมูลรายวิชา ความยากง่าย และแนวโน้มผลการเรียน</p>
-                    <a href="{{ url_for('index') }}#analyze" class="btn btn-warning w-100 rounded-pill">
+                    <a href="{{ url_for('predict_batch_page') }}#analyze" class="btn btn-warning w-100 rounded-pill">
                         <i class="bi bi-clipboard-data me-1"></i> ดูการวิเคราะห์
                     </a>
                 </div>
