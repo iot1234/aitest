@@ -1089,88 +1089,49 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ==========================================
-# ตรวจสอบ Environment Variables แบบละเอียด
+# ตรวจสอบ Environment Variables (deferred - runs after MongoDB loads settings)
 # ==========================================
-logger.info("=" * 70)
-logger.info("🔧 CLOUDFLARE R2 CONFIGURATION CHECK")
-logger.info("=" * 70)
-
 def check_env_variables():
-    """ตรวจสอบและแสดงสถานะ environment variables แบบละเอียด"""
+    """ตรวจสอบและแสดงสถานะ R2 environment variables"""
+    logger.info("=" * 70)
+    logger.info("🔧 CLOUDFLARE R2 CONFIGURATION CHECK (post-MongoDB)")
+    logger.info("=" * 70)
+
     env_status = {
         'all_present': True,
         'missing': [],
         'details': {}
     }
-    
+
     required_vars = {
         'CLOUDFLARE_R2_ACCESS_KEY_ID': 'Access Key for R2 authentication',
         'CLOUDFLARE_R2_SECRET_ACCESS_KEY': 'Secret Key for R2 authentication',
         'CLOUDFLARE_R2_ENDPOINT': 'R2 endpoint URL',
         'CLOUDFLARE_R2_BUCKET_NAME': 'R2 bucket name'
     }
-    
+
     for var_name, description in required_vars.items():
         value = os.environ.get(var_name, '')
-        
+
         if value:
-            # แสดงแค่ส่วนแรกของค่าเพื่อความปลอดภัย
             if 'SECRET' in var_name or 'KEY' in var_name:
                 display_value = f"{value[:8]}...{value[-4:]}" if len(value) > 12 else "***"
             else:
                 display_value = value
-            
             logger.info(f"✅ {var_name}: {display_value}")
-            env_status['details'][var_name] = {
-                'present': True,
-                'length': len(value),
-                'description': description
-            }
+            env_status['details'][var_name] = {'present': True, 'length': len(value), 'description': description}
         else:
-            logger.error(f"❌ {var_name}: NOT FOUND - {description}")
+            logger.warning(f"⚠️ {var_name}: NOT FOUND - {description}")
             env_status['missing'].append(var_name)
             env_status['all_present'] = False
-            env_status['details'][var_name] = {
-                'present': False,
-                'description': description
-            }
-    
-    # ตรวจสอบไฟล์ .env
-    if os.path.exists('.env'):
-        logger.info(f"📄 .env file: EXISTS (size: {os.path.getsize('.env')} bytes)")
-        
-        # อ่านและตรวจสอบเนื้อหา .env
-        try:
-            with open('.env', 'r') as f:
-                env_lines = f.readlines()
-                env_vars_in_file = {}
-                for line in env_lines:
-                    if '=' in line and not line.strip().startswith('#'):
-                        key = line.split('=')[0].strip()
-                        env_vars_in_file[key] = True
-            
-            logger.info(f"📋 Variables in .env file: {list(env_vars_in_file.keys())}")
-            
-            # เช็คว่าตัวแปรใน .env ถูกโหลดหรือไม่
-            for var in required_vars.keys():
-                if var in env_vars_in_file and not os.environ.get(var):
-                    logger.warning(f"⚠️ {var} exists in .env but not loaded into environment!")
-                    
-        except Exception as e:
-            logger.error(f"❌ Error reading .env file: {str(e)}")
+            env_status['details'][var_name] = {'present': False, 'description': description}
+
+    if not env_status['all_present']:
+        logger.warning(f"⚠️ R2 missing vars: {', '.join(env_status['missing'])} — will use LOCAL storage until set via Admin Settings")
     else:
-        logger.warning("⚠️ .env file: NOT FOUND")
-    
+        logger.info("✅ All R2 credentials found")
+    logger.info("=" * 70)
     return env_status
-
-env_check_result = check_env_variables()
-
-if not env_check_result['all_present']:
-    logger.error("=" * 70)
-    logger.error("⚠️ CLOUDFLARE R2 CONFIGURATION INCOMPLETE!")
-    logger.error("Missing variables: " + ", ".join(env_check_result['missing']))
-    logger.error("R2 storage will be DISABLED. Using LOCAL storage instead.")
-    logger.error("=" * 70)
 
 # Create Flask app
 ACTIVE_CONFIG = config.get_config()
@@ -1402,6 +1363,9 @@ class MongoAdminManager:
 admin_manager = MongoAdminManager()
 admin_manager.apply_runtime_env()
 
+# Now that MongoDB has loaded settings into os.environ, check R2 config
+check_env_variables()
+
 COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COURSES_DATA', [])}
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
@@ -1412,16 +1376,15 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
 # Default fallback models for high availability (in order of preference)
-GEMINI_DEFAULT_FALLBACKS = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro']
+GEMINI_DEFAULT_FALLBACKS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-pro-preview-05-06']
 
 # Known Gemini models for the admin dropdown (label → model id)
+# Use exact model IDs from Google AI — click 🔄 in admin to fetch live list
 GEMINI_KNOWN_MODELS = [
-    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'desc': 'เร็ว เสถียร แนะนำ'},
-    {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash Lite', 'desc': 'เบาที่สุด ประหยัด'},
-    {'id': 'gemini-2.5-flash-preview-05-20', 'name': 'Gemini 2.5 Flash Preview', 'desc': 'รุ่นใหม่ เร็ว'},
+    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'desc': '⭐ แนะนำ — เร็ว เสถียร ฟรี'},
+    {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash Lite', 'desc': 'เบาที่สุด ประหยัด ฟรี'},
+    {'id': 'gemini-2.5-flash-preview-05-20', 'name': 'Gemini 2.5 Flash Preview', 'desc': 'รุ่นใหม่ ฉลาด เร็ว'},
     {'id': 'gemini-2.5-pro-preview-05-06', 'name': 'Gemini 2.5 Pro Preview', 'desc': 'ฉลาดสุด ช้ากว่า'},
-    {'id': 'gemini-1.5-pro', 'name': 'Gemini 1.5 Pro', 'desc': 'รุ่นเก่า เสถียร'},
-    {'id': 'gemini-1.5-flash', 'name': 'Gemini 1.5 Flash', 'desc': 'รุ่นเก่า อาจไม่พร้อมใช้'},
 ]
 
 
@@ -5435,7 +5398,13 @@ def admin_login():
 
     if session.get('must_change_password'):
         return redirect(url_for('admin_change_password'))
-    return redirect(url_for('admin_settings'))
+
+    # Redirect to the page user was trying to visit before login
+    next_url = request.args.get('next') or request.form.get('next') or url_for('admin_settings')
+    # Safety: only allow relative URLs
+    if not next_url.startswith('/'):
+        next_url = url_for('admin_settings')
+    return redirect(next_url)
 
 
 @app.route('/admin')
