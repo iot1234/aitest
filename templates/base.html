@@ -657,6 +657,7 @@
 </head>
 
 <body>
+    {% set is_logged_in = session.get('user_id') %}
     <!-- Top Bar -->
     <div class="top-bar d-none d-md-block">
         <div class="container">
@@ -668,10 +669,21 @@
                     </small>
                 </div>
                 <div class="col-md-6 text-end">
+                    {% if is_logged_in %}
                     <a href="{{ url_for('status_page') }}" class="me-3 animate__animated animate__fadeInRight"
                         style="animation-delay: 0.1s;">
                         <i class="bi bi-activity me-1"></i> สถานะระบบ
                     </a>
+                    <a href="{{ url_for('admin_logout') }}" class="me-3 animate__animated animate__fadeInRight"
+                        style="animation-delay: 0.15s;">
+                        <i class="bi bi-box-arrow-right me-1"></i> ออกจากระบบ
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('admin_login') }}" class="me-3 animate__animated animate__fadeInRight"
+                        style="animation-delay: 0.1s;">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ
+                    </a>
+                    {% endif %}
                     <button class="btn btn-sm btn-link text-gray-300 p-0 animate__animated animate__fadeInRight"
                         style="animation-delay: 0.2s;" onclick="toggleDarkMode()" id="darkModeBtn">
                         <i class="bi bi-moon-fill"></i>
@@ -684,7 +696,7 @@
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg sticky-top">
         <div class="container">
-            <a class="navbar-brand animate__animated animate__fadeInDown" href="{{ url_for('main_page') }}">
+            <a class="navbar-brand animate__animated animate__fadeInDown" href="{{ url_for('curriculum_prediction_form') }}">
                 <div class="brand-icon">
                     <i class="bi bi-mortarboard-fill"></i>
                 </div>
@@ -704,28 +716,27 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.1s;">
+                        <a class="nav-link" href="{{ url_for('curriculum_prediction_form') }}">
+                            <i class="bi bi-person-check me-1"></i> ทำนายรายบุคคล
+                        </a>
+                    </li>
+
+                    {% if is_logged_in %}
+                    <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.1s;">
                         <a class="nav-link" href="{{ url_for('main_page') }}">
                             <i class="bi bi-house me-1"></i> หน้าหลัก
                         </a>
                     </li>
-                    {% if is_admin %}
                     <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.2s;">
                         <a class="nav-link" href="{{ url_for('index') }}">
                             <i class="bi bi-cpu me-1"></i> ฝึกโมเดล
                         </a>
                     </li>
-                    {% endif %}
                     <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.3s;">
-                        <a class="nav-link" href="{{ url_for('curriculum_prediction_form') }}">
-                            <i class="bi bi-person-check me-1"></i> ทำนายรายบุคคล
+                        <a class="nav-link" href="{{ url_for('admin_settings') }}">
+                            <i class="bi bi-gear me-1"></i> หลังบ้าน
                         </a>
                     </li>
-                    <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.35s;">
-                        <a class="nav-link" href="{{ url_for('predict_batch_page') }}">
-                            <i class="bi bi-people me-1"></i> ทำนายแบบกลุ่ม
-                        </a>
-                    </li>
-                    {% if is_admin %}
                     <li class="nav-item dropdown animate__animated animate__fadeInDown" style="animation-delay: 0.4s;">
                         <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
                             <i class="bi bi-tools me-1"></i> เครื่องมือ
@@ -734,11 +745,6 @@
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('models_page') }}">
                                     <i class="bi bi-folder me-2"></i> จัดการโมเดล
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('admin_grade_forms_page') }}">
-                                    <i class="bi bi-collection me-2"></i> แบบฟอร์มเก็บเกรด
                                 </a>
                             </li>
                             <li>
@@ -751,18 +757,13 @@
                             </li>
                         </ul>
                     </li>
-                    {% endif %}
-                    <li class="nav-item animate__animated animate__fadeInDown ms-lg-2" style="animation-delay: 0.5s;">
-                        {% if is_admin %}
-                        <a class="nav-link" href="{{ url_for('logout') }}" title="ออกจากระบบ ({{ admin_username }})">
-                            <i class="bi bi-box-arrow-right me-1"></i> ออกจากระบบ
-                        </a>
-                        {% else %}
-                        <a class="nav-link" href="{{ url_for('login_page') }}">
+                    {% else %}
+                    <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.2s;">
+                        <a class="nav-link" href="{{ url_for('admin_login') }}">
                             <i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ
                         </a>
-                        {% endif %}
                     </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
@@ -810,24 +811,24 @@
                 <div class="col-lg-2 col-md-4 mb-4 mb-lg-0" data-aos="fade-up" data-aos-delay="100">
                     <h6 class="text-white fw-bold mb-3">เมนูหลัก</h6>
                     <ul class="list-unstyled mb-0">
-                        <li><a href="{{ url_for('main_page') }}">หน้าหลัก</a></li>
-                        {% if is_admin %}
-                        <li><a href="{{ url_for('index') }}">ฝึกโมเดล</a></li>
-                        {% endif %}
                         <li><a href="{{ url_for('curriculum_prediction_form') }}">ทำนายรายบุคคล</a></li>
-                        <li><a href="{{ url_for('predict_batch_page') }}">ทำนายแบบกลุ่ม</a></li>
+                        {% if is_logged_in %}
+                        <li><a href="{{ url_for('main_page') }}">หน้าหลัก</a></li>
+                        <li><a href="{{ url_for('index') }}">ฝึกโมเดล</a></li>
+                        {% else %}
+                        <li><a href="{{ url_for('admin_login') }}">เข้าสู่ระบบ</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 <div class="col-lg-2 col-md-4 mb-4 mb-lg-0" data-aos="fade-up" data-aos-delay="200">
                     <h6 class="text-white fw-bold mb-3">เครื่องมือ</h6>
                     <ul class="list-unstyled mb-0">
-                        {% if is_admin %}
+                        {% if is_logged_in %}
                         <li><a href="{{ url_for('models_page') }}">จัดการโมเดล</a></li>
-                        <li><a href="{{ url_for('admin_grade_forms_page') }}">แบบฟอร์มเก็บเกรด</a></li>
                         <li><a href="{{ url_for('curriculum_page') }}">วิเคราะห์หลักสูตร</a></li>
                         <li><a href="{{ url_for('status_page') }}">สถานะระบบ</a></li>
                         {% else %}
-                        <li><a href="{{ url_for('login_page') }}">เข้าสู่ระบบผู้ดูแล</a></li>
+                        <li><a href="{{ url_for('admin_login') }}">เข้าสู่ระบบเพื่อใช้เมนูทั้งหมด</a></li>
                         {% endif %}
                     </ul>
                 </div>

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Settings{% endblock %}
+
+{% block content %}
+<div class="container py-4 py-md-5" style="max-width: 980px;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Admin Settings</h2>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('admin_change_password') }}" class="btn btn-outline-warning">เปลี่ยนรหัสผ่าน</a>
+            <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger">ออกจากระบบ</a>
+        </div>
+    </div>
+    <p class="text-muted">ตั้งค่าคีย์ระบบจากหลังบ้าน (MongoDB) โดยไม่ต้องแก้ .env ยกเว้น MONGODB_URI</p>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body p-4">
+            <h5 class="mb-3">Gemini Settings</h5>
+            <form method="post" action="{{ url_for('admin_settings') }}">
+                <div class="mb-3">
+                    <label class="form-label">GEMINI_API_KEY</label>
+                    <input type="text" name="gemini_api_key" class="form-control" value="{{ gemini_api_key or '' }}" placeholder="ใส่ API Key">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">GEMINI_MODEL_NAME</label>
+                    <input type="text" name="gemini_model_name" class="form-control" value="{{ gemini_model_name or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">GEMINI_MODEL_FALLBACKS</label>
+                    <input type="text" name="gemini_model_fallbacks" class="form-control" value="{{ gemini_model_fallbacks or '' }}" placeholder="คั่นด้วย comma">
+                </div>
+
+                <hr class="my-4">
+                <h5 class="mb-3">Cloudflare R2 Settings</h5>
+
+                <div class="mb-3">
+                    <label class="form-label">CLOUDFLARE_R2_ACCESS_KEY_ID</label>
+                    <input type="text" name="r2_access_key" class="form-control" value="{{ r2_access_key or '' }}" placeholder="ใส่ Access Key">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">CLOUDFLARE_R2_SECRET_ACCESS_KEY</label>
+                    <input type="text" name="r2_secret_key" class="form-control" value="{{ r2_secret_key or '' }}" placeholder="ใส่ Secret Key">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">CLOUDFLARE_R2_ENDPOINT</label>
+                    <input type="text" name="r2_endpoint" class="form-control" value="{{ r2_endpoint or '' }}">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label">CLOUDFLARE_R2_BUCKET_NAME</label>
+                    <input type="text" name="r2_bucket_name" class="form-control" value="{{ r2_bucket_name or '' }}">
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-primary">บันทึกและรีโหลดค่า Runtime</button>
+                    <button type="button" id="btnTestConnections" class="btn btn-outline-success">ทดสอบการเชื่อมต่อ MongoDB / R2 / Gemini</button>
+                </div>
+
+                <div id="connectionTestResult" class="alert mt-3 d-none"></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block custom_js %}
+{{ super() }}
+<script>
+document.getElementById('btnTestConnections')?.addEventListener('click', async () => {
+    const resultBox = document.getElementById('connectionTestResult');
+    resultBox.className = 'alert alert-info mt-3';
+    resultBox.classList.remove('d-none');
+    resultBox.textContent = 'กำลังทดสอบการเชื่อมต่อ...';
+
+    try {
+        const resp = await fetch('/api/admin/test-connections', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await resp.json();
+
+        const mongo = data.mongo?.connected ? '✅ MongoDB: เชื่อมต่อได้' : `❌ MongoDB: ${data.mongo?.message || 'เชื่อมต่อไม่ได้'}`;
+        const r2 = data.r2?.connected ? '✅ R2: เชื่อมต่อได้' : `❌ R2: ${data.r2?.message || 'เชื่อมต่อไม่ได้'}`;
+        const gemini = data.gemini?.connected ? '✅ Gemini: เชื่อมต่อได้' : `❌ Gemini: ${data.gemini?.message || 'เชื่อมต่อไม่ได้'}`;
+
+        resultBox.className = `alert ${data.success ? 'alert-success' : 'alert-warning'} mt-3`;
+        resultBox.innerHTML = `${mongo}<br>${r2}<br>${gemini}`;
+    } catch (e) {
+        resultBox.className = 'alert alert-danger mt-3';
+        resultBox.textContent = `ทดสอบไม่สำเร็จ: ${e.message}`;
+    }
+});
+</script>
+{% endblock %}

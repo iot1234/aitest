@@ -24,7 +24,7 @@ else:
 print(f"R2 Access Key present: {bool(os.getenv('CLOUDFLARE_R2_ACCESS_KEY_ID'))}")
 print(f"R2 Secret Key present: {bool(os.getenv('CLOUDFLARE_R2_SECRET_ACCESS_KEY'))}")
 
-from advanced_training import AdvancedFeatureEngineer, ContextAwarePredictor, normalize_course_code, deduplicate_transcript
+from advanced_training import AdvancedFeatureEngineer, ContextAwarePredictor
 from explainable_ai import ExplainablePredictor
 
 from flask import (
@@ -33,12 +33,10 @@ from flask import (
     jsonify,
     render_template,
     send_from_directory,
-    session,
     redirect,
     url_for,
-    flash,
+    session,
 )
-from werkzeug.security import check_password_hash, generate_password_hash
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
@@ -66,11 +64,20 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from typing import Any, Dict, Optional, List
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
+import hashlib
+import base64
+
+try:
+    from pymongo import MongoClient
+    from pymongo.errors import PyMongoError
+except ImportError:
+    MongoClient = None
+    PyMongoError = Exception
 
 import config
 import math
-import secrets
-import grade_form_db
 
 try:
     import google.generativeai as genai
@@ -1169,46 +1176,226 @@ if not env_check_result['all_present']:
 ACTIVE_CONFIG = config.get_config()
 app = Flask(__name__)
 app.config.from_object(ACTIVE_CONFIG)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
-# Initialize grade form database at module level (for WSGI/Gunicorn)
-grade_form_db.init_db()
 
-# ==========================================
-# ADMIN AUTHENTICATION CONFIGURATION
-# ==========================================
-ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
-_admin_password_hash = os.environ.get('ADMIN_PASSWORD_HASH', '')
-if not _admin_password_hash:
-    _plain_password = os.environ.get('ADMIN_PASSWORD', 'admin')
-    _admin_password_hash = generate_password_hash(_plain_password)
-    logger.info(f"Admin auth configured for user: {ADMIN_USERNAME}")
-ADMIN_PASSWORD_HASH = _admin_password_hash
+class MongoAdminManager:
+    """MongoDB-backed admin/auth/settings manager.
+    NOTE: MONGODB_URI remains in .env only.
+    """
 
-# Login attempt rate limiter (per IP)
-_login_attempts = {}  # {ip: (count, last_attempt_time)}
+    SETTING_KEYS = [
+        'GEMINI_API_KEY',
+        'GEMINI_MODEL_NAME',
+        'GEMINI_MODEL_FALLBACKS',
+        'CLOUDFLARE_R2_ACCESS_KEY_ID',
+        'CLOUDFLARE_R2_SECRET_ACCESS_KEY',
+        'CLOUDFLARE_R2_ENDPOINT',
+        'CLOUDFLARE_R2_BUCKET_NAME',
+    ]
 
-def admin_required(f):
-    """Decorator to require admin login for protected routes."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not session.get('is_admin'):
-            if request.path.startswith('/api/') or request.is_json:
-                return jsonify({
-                    'success': False,
-                    'error': 'กรุณาเข้าสู่ระบบก่อนใช้งาน',
-                    'login_url': '/login'
-                }), 401
-            return redirect(url_for('login_page', next=request.url))
-        return f(*args, **kwargs)
-    return decorated_function
+    def __init__(self):
+        self.enabled = False
+        self.client = None
+        self.db = None
+        self.users = None
+        self.settings = None
+        self.audit = None
+        self.bootstrap_password = None
 
-@app.context_processor
-def inject_auth_state():
-    """Make auth state available in all templates."""
-    return {
-        'is_admin': session.get('is_admin', False),
-        'admin_username': session.get('admin_username', '')
-    }
+        self._mongo_uri = os.environ.get('MONGODB_URI', '').strip()
+        self._db_name = os.environ.get('MONGODB_DB_NAME', 'student_ai_system').strip()
+        self._enc_key = os.environ.get('APP_MASTER_ENCRYPTION_KEY', '').strip()
+
+        if not self._mongo_uri:
+            logger.warning("⚠️ MONGODB_URI not configured. Admin backend is disabled.")
+            return
+        if MongoClient is None:
+            logger.warning("⚠️ pymongo package not installed. Admin backend is disabled.")
+            return
+
+        try:
+            self.client = MongoClient(self._mongo_uri, serverSelectionTimeoutMS=5000)
+            self.client.admin.command('ping')
+            self.db = self.client[self._db_name]
+            self.users = self.db['users']
+            self.settings = self.db['system_settings']
+            self.audit = self.db['audit_logs']
+
+            self.users.create_index('username', unique=True)
+            self.settings.create_index('key', unique=True)
+            self.audit.create_index('created_at')
+
+            self.enabled = True
+            self._bootstrap_default_admin()
+            logger.info(f"✅ Mongo admin backend ready (db={self._db_name})")
+        except Exception as e:
+            logger.error(f"❌ Mongo admin backend init failed: {e}")
+            self.enabled = False
+
+    def _log_audit(self, actor_user_id, action, target, status='success', details=None):
+        if not self.enabled:
+            return
+        try:
+            self.audit.insert_one({
+                'actor_user_id': actor_user_id,
+                'action': action,
+                'target': target,
+                'status': status,
+                'details': details or {},
+                'ip_address': request.remote_addr if request else None,
+                'user_agent': request.headers.get('User-Agent') if request else None,
+                'created_at': datetime.utcnow().isoformat()
+            })
+        except Exception:
+            pass
+
+    def _derive_key(self):
+        return hashlib.sha256(self._enc_key.encode('utf-8')).digest()
+
+    def _encrypt(self, raw_value: str) -> str:
+        if raw_value is None:
+            return ''
+        key = self._derive_key()
+        raw = raw_value.encode('utf-8')
+        out = bytearray(len(raw))
+        for i, b in enumerate(raw):
+            out[i] = b ^ key[i % len(key)]
+        return base64.urlsafe_b64encode(bytes(out)).decode('utf-8')
+
+    def _decrypt(self, encrypted_value: str) -> str:
+        if not encrypted_value:
+            return ''
+        key = self._derive_key()
+        raw = base64.urlsafe_b64decode(encrypted_value.encode('utf-8'))
+        out = bytearray(len(raw))
+        for i, b in enumerate(raw):
+            out[i] = b ^ key[i % len(key)]
+        return bytes(out).decode('utf-8')
+
+    def _bootstrap_default_admin(self):
+        if not self.enabled:
+            return
+        if self.users.count_documents({}) > 0:
+            return
+
+        username = os.environ.get('INITIAL_ADMIN_USERNAME', 'admin')
+        temp_password = secrets.token_urlsafe(10)
+        self.bootstrap_password = temp_password
+
+        self.users.insert_one({
+            'username': username,
+            'email': None,
+            'password_hash': generate_password_hash(temp_password),
+            'role': 'super_admin',
+            'must_change_password': True,
+            'is_active': True,
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
+            'last_login_at': None
+        })
+
+        logger.warning("=" * 70)
+        logger.warning("🔐 FIRST RUN: Default super_admin account created")
+        logger.warning(f"   username: {username}")
+        logger.warning(f"   temporary password: {temp_password}")
+        logger.warning("   Action required: login and change password immediately")
+        logger.warning("=" * 70)
+
+    def apply_runtime_env(self):
+        """Load settings from MongoDB and apply to process env (except MONGODB_URI)."""
+        if not self.enabled:
+            return
+        try:
+            docs = list(self.settings.find({'key': {'$in': self.SETTING_KEYS}}))
+            for doc in docs:
+                key = doc.get('key')
+                # Plaintext first (new behavior), encrypted fallback (legacy data)
+                plain_value = doc.get('value')
+                value_encrypted = doc.get('value_encrypted', '')
+
+                if key and plain_value is not None:
+                    os.environ[key] = str(plain_value)
+                elif key and value_encrypted:
+                    os.environ[key] = self._decrypt(value_encrypted)
+        except Exception as e:
+            logger.warning(f"Could not apply runtime env from MongoDB: {e}")
+
+    def authenticate(self, username: str, password: str):
+        if not self.enabled:
+            return None
+        user = self.users.find_one({'username': username, 'is_active': True})
+        if not user:
+            return None
+        if not check_password_hash(user.get('password_hash', ''), password):
+            return None
+        self.users.update_one(
+            {'_id': user['_id']},
+            {'$set': {'last_login_at': datetime.utcnow().isoformat()}}
+        )
+        return user
+
+    def change_password(self, user_id, new_password: str):
+        if not self.enabled:
+            return False
+        self.users.update_one(
+            {'_id': user_id},
+            {'$set': {
+                'password_hash': generate_password_hash(new_password),
+                'must_change_password': False,
+                'updated_at': datetime.utcnow().isoformat()
+            }}
+        )
+        return True
+
+    def set_setting(self, key: str, value: str, actor_user_id=None):
+        if not self.enabled:
+            return False
+        self.settings.update_one(
+            {'key': key},
+            {'$set': {
+                'key': key,
+                # Save as plaintext by requirement
+                'value': value or '',
+                # keep legacy field for compatibility (clear when writing new value)
+                'value_encrypted': '',
+                'updated_by': str(actor_user_id) if actor_user_id else None,
+                'updated_at': datetime.utcnow().isoformat()
+            }},
+            upsert=True
+        )
+        self._log_audit(actor_user_id, 'UPDATE_SETTING', key)
+        return True
+
+    def get_setting(self, key: str, default: str = ''):
+        if not self.enabled:
+            return default
+        doc = self.settings.find_one({'key': key})
+        if not doc:
+            return default
+        try:
+            # Plaintext first (new behavior)
+            if 'value' in doc and doc.get('value') is not None:
+                return str(doc.get('value'))
+            # Encrypted fallback (legacy data)
+            encrypted = doc.get('value_encrypted', '')
+            if encrypted:
+                return self._decrypt(encrypted)
+            return default
+        except Exception:
+            return default
+
+    @staticmethod
+    def mask_value(raw: str):
+        if not raw:
+            return ''
+        if len(raw) <= 6:
+            return '***'
+        return f"{raw[:4]}***{raw[-2:]}"
+
+
+admin_manager = MongoAdminManager()
+admin_manager.apply_runtime_env()
 
 COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COURSES_DATA', [])}
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
@@ -1260,6 +1447,145 @@ elif not GEMINI_API_KEY:
     logger.info("ℹ️ GEMINI_API_KEY not found. Gemini routes will be disabled.")
 else:
     logger.warning("⚠️ google-generativeai package not available. Install to enable Gemini features.")
+
+
+def refresh_gemini_runtime_from_settings():
+    """Reload Gemini runtime variables from Mongo settings (if enabled)."""
+    global GEMINI_API_KEY, GEMINI_MODEL_NAME, GEMINI_MODEL_CANDIDATES, gemini_client_ready
+
+    if admin_manager.enabled:
+        admin_manager.apply_runtime_env()
+
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
+    GEMINI_MODEL_CANDIDATES = _build_gemini_model_candidates(GEMINI_MODEL_NAME)
+
+    gemini_client_ready = False
+    if genai and GEMINI_API_KEY:
+        try:
+            genai.configure(api_key=GEMINI_API_KEY)
+            gemini_client_ready = True
+            logger.info(f"✅ Gemini runtime refreshed with model {GEMINI_MODEL_NAME}")
+        except Exception as gemini_init_error:
+            gemini_client_ready = False
+            logger.error(f"❌ Failed to refresh Gemini runtime: {gemini_init_error}")
+
+
+def _json_error(message: str, status: int = 403):
+    return jsonify({'success': False, 'error': message}), status
+
+
+def current_user_role() -> str:
+    return session.get('user_role', 'anonymous')
+
+
+def has_any_role(*roles) -> bool:
+    if not admin_manager.enabled:
+        return True
+    return current_user_role() in roles
+
+
+def is_logged_in() -> bool:
+    if not admin_manager.enabled:
+        return True
+    return bool(session.get('user_id'))
+
+
+def admin_login_required(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if not admin_manager.enabled:
+            return _json_error('Admin backend is disabled (MongoDB not configured)', 503)
+        if not is_logged_in():
+            if request.path.startswith('/api/'):
+                return _json_error('Unauthorized', 401)
+            return redirect(url_for('admin_login', next=request.path))
+        return view_func(*args, **kwargs)
+    return wrapper
+
+
+def roles_required(*roles):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(*args, **kwargs):
+            if not admin_manager.enabled:
+                return view_func(*args, **kwargs)
+            if not is_logged_in():
+                return _json_error('Unauthorized', 401)
+            if not has_any_role(*roles):
+                return _json_error('Forbidden', 403)
+            return view_func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+@app.before_request
+def enforce_first_login_password_change():
+    if not admin_manager.enabled:
+        return None
+
+    endpoint = request.endpoint or ''
+    allow_endpoints = {
+        'admin_login',
+        'admin_logout',
+        'admin_change_password',
+        'static'
+    }
+
+    if not session.get('user_id'):
+        return None
+
+    if session.get('must_change_password') and endpoint not in allow_endpoints:
+        if request.path.startswith('/api/'):
+            return _json_error('Password change required before using this endpoint', 403)
+        return redirect(url_for('admin_change_password'))
+
+    return None
+
+
+@app.before_request
+def enforce_login_for_non_prediction_pages():
+    """Allow anonymous access only to prediction page and required prediction APIs."""
+    if not admin_manager.enabled:
+        return None
+
+    endpoint = request.endpoint or ''
+
+    public_endpoints = {
+        'static',
+        'admin_login',
+        'admin_logout',
+        'admin_change_password',
+
+        # Public prediction pages
+        'curriculum_prediction_form',
+        'curriculum_page',
+
+        # Public prediction APIs
+        'get_config_for_frontend',
+        'analyze_curriculum',
+        'gemini_predict_route',
+        'explain_prediction',
+        'get_three_line_chart_data',
+        'get_graduation_analysis',
+        'get_next_term_prediction',
+        'get_comprehensive_analysis',
+        'predict_manual_input',
+    }
+
+    if endpoint in public_endpoints:
+        return None
+
+    # Force landing page to prediction page for anonymous users
+    if endpoint == 'index' and not session.get('user_id'):
+        return redirect(url_for('curriculum_prediction_form'))
+
+    if not session.get('user_id'):
+        if request.path.startswith('/api/'):
+            return _json_error('Unauthorized', 401)
+        return redirect(url_for('admin_login', next=request.path))
+
+    return None
 
 # ==========================================
 # RETRY MECHANISM และ RATE LIMITER สำหรับ GEMINI API
@@ -1825,7 +2151,6 @@ except Exception as e:
 # TRAINING STATUS ROUTE
 # ===============================
 @app.route('/training_status')
-@admin_required
 def get_training_status():
     return jsonify(TRAINING_STATUS)
 
@@ -2196,7 +2521,7 @@ def process_gpa_data(df):
         logger.error(f"Error processing GPA data: {str(e)}")
         raise
 
-def train_ensemble_model(X, y, sample_weights=None):
+def train_ensemble_model(X, y):
     """Trains an Ensemble model with GridSearchCV and SMOTE."""
     try:
         logger.info("Starting Ensemble model training...")
@@ -2443,10 +2768,12 @@ def train_ensemble_model(X, y, sample_weights=None):
 # ==========================================
 
 @app.route('/train', methods=['POST'])
-@admin_required
 def train_model():
     """Handles model training with the uploaded file."""
     try:
+        if admin_manager.enabled and not has_any_role('admin', 'super_admin'):
+            return _json_error('เฉพาะแอดมินเท่านั้นที่สามารถเทรนโมเดลได้', 403)
+
         logger.info("🚀 Starting ADVANCED model training process...")
         data = request.get_json() or {}
         filename = data.get('filename')
@@ -2583,12 +2910,7 @@ def train_model():
                 )
                 
                 # เตรียมข้อมูลแบบ Advanced
-                result_tuple = engineer.prepare_training_data(df)
-                if len(result_tuple) == 3:
-                    X, y, sample_weights = result_tuple
-                else:
-                    X, y = result_tuple
-                    sample_weights = None
+                X, y = engineer.prepare_training_data(df)
             
             if len(X) == 0:
                 return jsonify({'success': False, 'error': 'Could not prepare training data'})
@@ -2610,7 +2932,6 @@ def train_model():
             X = processed_df[feature_cols].fillna(0)
             y = processed_df['graduated']
             course_profiles = None
-            sample_weights = None
 
         course_profiles_count = len(course_profiles) if course_profiles else 0
         gemini_training_analysis = None
@@ -2625,7 +2946,7 @@ def train_model():
 
         # เทรนโมเดล
         logger.info("🤖 Starting ensemble model training...")
-        model_result = train_ensemble_model(X, y, sample_weights=sample_weights)
+        model_result = train_ensemble_model(X, y)
 
         # คำนวณ feature importance
         feature_importances = {}
@@ -2937,6 +3258,9 @@ def _predict_next_semester_gpa(current_gpa: float) -> float:
 def list_models():
     """Lists all available trained models."""
     try:
+        if admin_manager.enabled and not has_any_role('admin', 'super_admin'):
+            return _json_error('เฉพาะแอดมินเท่านั้นที่ดูรายการโมเดลได้', 403)
+
         model_files = []
         
         # Get models from storage
@@ -3002,10 +3326,12 @@ def list_models():
         return jsonify({'success': False, 'error': f'An error occurred while listing models: {str(e)}'}), 500
 
 @app.route('/api/models/<filename>', methods=['DELETE'])
-@admin_required
 def delete_model(filename):
     """Deletes a specified model file."""
     try:
+        if admin_manager.enabled and not has_any_role('admin', 'super_admin'):
+            return _json_error('เฉพาะแอดมินเท่านั้นที่ลบโมเดลได้', 403)
+
         # Delete from S3 or local storage
         if storage.delete_model(filename):
             # Update in-memory models if needed
@@ -4087,8 +4413,6 @@ def analyze_graduation_failure_reasons(current_grades, loaded_terms_count=8, pre
             'expected_credits': expected_credits,
             'progress_percentage': round(passed_credits/136*100, 1) if passed_credits > 0 else 0,  # 136 หน่วยกิตรวม
             'recommendations': generate_improvement_recommendations(current_gpa, failed_courses, low_grade_courses, incomplete_courses),
-            # Grade distribution for charts
-            'grade_distribution': {g: sum(1 for grade in current_grades.values() if str(grade).upper() == g) for g in ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'F'] if sum(1 for grade in current_grades.values() if str(grade).upper() == g) > 0},
             # ====== ข้อมูลการทำนายจบ/ไม่จบ (ใช้ AI Model เป็นหลัก) ======
             'will_graduate': will_graduate,
             'graduation_prediction_text': graduation_prediction_text,
@@ -5044,60 +5368,272 @@ def call_gemini_structured(task_name: str, payload: Dict[str, Any], schema_key: 
 
 # Flask Routes (Keep all other routes unchanged)
 
-# ==========================================
-# AUTHENTICATION ROUTES
-# ==========================================
-@app.route('/login', methods=['GET', 'POST'])
-def login_page():
-    """Admin login page and handler."""
-    if session.get('is_admin'):
-        return redirect(url_for('index'))
-
-    if request.method == 'POST':
-        # Rate limiting
-        client_ip = request.remote_addr
-        attempts = _login_attempts.get(client_ip, (0, datetime.min))
-        if attempts[0] >= 5 and (datetime.now() - attempts[1]).total_seconds() < 300:
-            flash('เข้าสู่ระบบล้มเหลวหลายครั้ง กรุณารอ 5 นาที', 'danger')
-            return render_template('login.html'), 429
-
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-
-        if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
-            session.permanent = True
-            session['is_admin'] = True
-            session['admin_username'] = username
-            session['login_time'] = datetime.now().isoformat()
-            _login_attempts.pop(client_ip, None)
-            logger.info(f"Admin login successful: {username}")
-
-            next_url = request.args.get('next') or request.form.get('next')
-            if next_url and next_url.startswith('/'):
-                return redirect(next_url)
-            return redirect(url_for('index'))
-        else:
-            _login_attempts[client_ip] = (attempts[0] + 1, datetime.now())
-            logger.warning(f"Failed login attempt for: {username} from {client_ip}")
-            flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'danger')
-            return render_template('login.html'), 401
-
-    return render_template('login.html')
+def refresh_r2_storage_from_settings():
+    """Reinitialize storage object with current environment settings."""
+    global storage
+    try:
+        storage = S3Storage()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to refresh R2 storage runtime: {e}")
+        return False
 
 
-@app.route('/logout')
-def logout():
-    """Admin logout."""
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if not admin_manager.enabled:
+        return "MongoDB admin backend is not configured", 503
+
+    if request.method == 'GET':
+        if session.get('user_id'):
+            return redirect(url_for('admin_settings'))
+        return render_template('admin_login.html')
+
+    payload = request.get_json(silent=True) or request.form
+    username = (payload.get('username') or '').strip()
+    password = payload.get('password') or ''
+
+    user = admin_manager.authenticate(username, password)
+    if not user:
+        if request.path.startswith('/api/') or request.is_json:
+            return _json_error('Invalid credentials', 401)
+        return render_template('admin_login.html', error='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
+
+    session['user_id'] = str(user.get('_id'))
+    session['username'] = user.get('username')
+    session['user_role'] = user.get('role', 'user')
+    session['must_change_password'] = bool(user.get('must_change_password', False))
+    session.permanent = True
+
+    admin_manager._log_audit(session['user_id'], 'LOGIN', 'admin_login')
+
+    if session.get('must_change_password'):
+        return redirect(url_for('admin_change_password'))
+    return redirect(url_for('admin_settings'))
+
+
+@app.route('/admin')
+def admin_home():
+    if not admin_manager.enabled:
+        return "MongoDB admin backend is not configured", 503
+    if not is_logged_in():
+        return redirect(url_for('admin_login'))
+    if session.get('must_change_password'):
+        return redirect(url_for('admin_change_password'))
+    if has_any_role('admin', 'super_admin'):
+        return redirect(url_for('admin_settings'))
+    return redirect(url_for('index'))
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    if admin_manager.enabled and session.get('user_id'):
+        admin_manager._log_audit(session.get('user_id'), 'LOGOUT', 'admin_logout')
     session.clear()
-    flash('ออกจากระบบเรียบร้อยแล้ว', 'success')
-    return redirect(url_for('main_page'))
+    return redirect(url_for('admin_login'))
+
+
+@app.route('/admin/change-password', methods=['GET', 'POST'])
+@admin_login_required
+def admin_change_password():
+    if request.method == 'GET':
+        return render_template('admin_change_password.html')
+
+    payload = request.get_json(silent=True) or request.form
+    current_password = payload.get('current_password', '')
+    new_password = payload.get('new_password', '')
+    confirm_password = payload.get('confirm_password', '')
+
+    if len(new_password) < 8:
+        return render_template('admin_change_password.html', error='รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร')
+    if new_password != confirm_password:
+        return render_template('admin_change_password.html', error='ยืนยันรหัสผ่านไม่ตรงกัน')
+
+    user_doc = admin_manager.users.find_one({'username': session.get('username')})
+    if not user_doc:
+        return render_template('admin_change_password.html', error='ไม่พบบัญชีผู้ใช้')
+
+    if not user_doc.get('must_change_password'):
+        if not check_password_hash(user_doc.get('password_hash', ''), current_password):
+            return render_template('admin_change_password.html', error='รหัสผ่านปัจจุบันไม่ถูกต้อง')
+
+    admin_manager.change_password(user_doc['_id'], new_password)
+    session['must_change_password'] = False
+    admin_manager._log_audit(session.get('user_id'), 'CHANGE_PASSWORD', session.get('username'))
+    return render_template('admin_change_password.html', success='เปลี่ยนรหัสผ่านสำเร็จ')
+
+
+@app.route('/admin/settings', methods=['GET', 'POST'])
+@admin_login_required
+@roles_required('admin', 'super_admin')
+def admin_settings():
+    if request.method == 'POST':
+        form = request.get_json(silent=True) or request.form
+
+        setting_map = {
+            'gemini_api_key': 'GEMINI_API_KEY',
+            'gemini_model_name': 'GEMINI_MODEL_NAME',
+            'gemini_model_fallbacks': 'GEMINI_MODEL_FALLBACKS',
+            'r2_access_key': 'CLOUDFLARE_R2_ACCESS_KEY_ID',
+            'r2_secret_key': 'CLOUDFLARE_R2_SECRET_ACCESS_KEY',
+            'r2_endpoint': 'CLOUDFLARE_R2_ENDPOINT',
+            'r2_bucket_name': 'CLOUDFLARE_R2_BUCKET_NAME',
+        }
+
+        for form_key, setting_key in setting_map.items():
+            if form_key in form and form.get(form_key) is not None:
+                value = str(form.get(form_key)).strip()
+                if value:
+                    admin_manager.set_setting(setting_key, value, actor_user_id=session.get('user_id'))
+
+        admin_manager.apply_runtime_env()
+        refresh_gemini_runtime_from_settings()
+        refresh_r2_storage_from_settings()
+
+        return render_template('admin_settings.html', success='บันทึกค่าเรียบร้อยแล้ว')
+
+    current_values = {
+        'gemini_api_key': admin_manager.get_setting('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', '')),
+        'gemini_model_name': admin_manager.get_setting('GEMINI_MODEL_NAME', os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')),
+        'gemini_model_fallbacks': admin_manager.get_setting('GEMINI_MODEL_FALLBACKS', os.environ.get('GEMINI_MODEL_FALLBACKS', '')),
+        'r2_access_key': admin_manager.get_setting('CLOUDFLARE_R2_ACCESS_KEY_ID', os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', '')),
+        'r2_secret_key': admin_manager.get_setting('CLOUDFLARE_R2_SECRET_ACCESS_KEY', os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY', '')),
+        'r2_endpoint': admin_manager.get_setting('CLOUDFLARE_R2_ENDPOINT', os.environ.get('CLOUDFLARE_R2_ENDPOINT', '')),
+        'r2_bucket_name': admin_manager.get_setting('CLOUDFLARE_R2_BUCKET_NAME', os.environ.get('CLOUDFLARE_R2_BUCKET_NAME', '')),
+        'gemini_api_key_masked': MongoAdminManager.mask_value(admin_manager.get_setting('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', ''))),
+        'r2_access_key_masked': MongoAdminManager.mask_value(admin_manager.get_setting('CLOUDFLARE_R2_ACCESS_KEY_ID', os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', ''))),
+        'r2_secret_key_masked': MongoAdminManager.mask_value(admin_manager.get_setting('CLOUDFLARE_R2_SECRET_ACCESS_KEY', os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY', ''))),
+    }
+
+    return render_template('admin_settings.html', **current_values)
+
+
+@app.route('/api/admin/me')
+@admin_login_required
+def admin_me():
+    return jsonify({
+        'success': True,
+        'username': session.get('username'),
+        'role': session.get('user_role'),
+        'must_change_password': bool(session.get('must_change_password'))
+    })
+
+
+@app.route('/api/admin/users', methods=['GET', 'POST'])
+@admin_login_required
+@roles_required('super_admin')
+def admin_users_api():
+    if request.method == 'GET':
+        users = []
+        for u in admin_manager.users.find({}, {'password_hash': 0}):
+            users.append({
+                'id': str(u.get('_id')),
+                'username': u.get('username'),
+                'role': u.get('role', 'user'),
+                'is_active': bool(u.get('is_active', True)),
+                'must_change_password': bool(u.get('must_change_password', False)),
+                'created_at': u.get('created_at')
+            })
+        return jsonify({'success': True, 'users': users})
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    role = (data.get('role') or 'user').strip()
+
+    if not username:
+        return _json_error('username is required', 400)
+    if role not in ['user', 'admin', 'super_admin']:
+        return _json_error('invalid role', 400)
+
+    temp_password = secrets.token_urlsafe(10)
+    try:
+        admin_manager.users.insert_one({
+            'username': username,
+            'email': data.get('email'),
+            'password_hash': generate_password_hash(temp_password),
+            'role': role,
+            'must_change_password': True,
+            'is_active': True,
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
+            'last_login_at': None
+        })
+        admin_manager._log_audit(session.get('user_id'), 'CREATE_USER', username)
+        return jsonify({
+            'success': True,
+            'username': username,
+            'role': role,
+            'temporary_password': temp_password
+        })
+    except Exception as e:
+        return _json_error(f'cannot create user: {e}', 400)
+
+
+@app.route('/api/admin/test-connections', methods=['POST'])
+@admin_login_required
+@roles_required('admin', 'super_admin')
+def admin_test_connections():
+    """Test runtime connections for MongoDB, Cloudflare R2, and Gemini."""
+    results = {
+        'success': True,
+        'mongo': {'connected': False, 'message': ''},
+        'r2': {'connected': False, 'message': ''},
+        'gemini': {'connected': False, 'message': ''},
+    }
+
+    # MongoDB
+    try:
+        if admin_manager.enabled and admin_manager.client:
+            admin_manager.client.admin.command('ping')
+            results['mongo'] = {'connected': True, 'message': 'MongoDB ping success'}
+        else:
+            results['mongo'] = {'connected': False, 'message': 'MongoDB admin backend not enabled'}
+    except Exception as e:
+        results['mongo'] = {'connected': False, 'message': str(e)}
+
+    # R2
+    try:
+        refresh_r2_storage_from_settings()
+        if storage.use_local or not getattr(storage, 's3_client', None):
+            results['r2'] = {'connected': False, 'message': 'R2 client not initialized (using local storage)'}
+        else:
+            storage.s3_client.list_objects_v2(Bucket=storage.bucket_name, MaxKeys=1)
+            results['r2'] = {'connected': True, 'message': f'Connected to bucket {storage.bucket_name}'}
+    except Exception as e:
+        results['r2'] = {'connected': False, 'message': str(e)}
+
+    # Gemini
+    try:
+        refresh_gemini_runtime_from_settings()
+        if not is_gemini_available():
+            results['gemini'] = {'connected': False, 'message': 'Gemini API key/model not configured'}
+        else:
+            # Lightweight call to verify API key/model works
+            if genai is None:
+                raise RuntimeError('google.generativeai not installed')
+            model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+            ping_response = model.generate_content('ping')
+            if not getattr(ping_response, 'text', None):
+                raise RuntimeError('Empty response from Gemini')
+            results['gemini'] = {'connected': True, 'message': f'Connected with model {GEMINI_MODEL_NAME}'}
+    except Exception as e:
+        results['gemini'] = {'connected': False, 'message': str(e)}
+
+    overall_ok = all([
+        results['mongo']['connected'],
+        results['r2']['connected'],
+        results['gemini']['connected'],
+    ])
+
+    results['success'] = overall_ok
+    admin_manager._log_audit(session.get('user_id'), 'TEST_CONNECTIONS', 'mongo_r2_gemini', 'success' if overall_ok else 'failed', results)
+    return jsonify(results)
 
 
 @app.route('/')
-@admin_required
 def index():
-    """Main page for uploading and training models."""
-    return render_template('index.html')
+    """Landing page: redirect users to prediction page."""
+    return redirect(url_for('curriculum_prediction_form'))
 
 @app.route('/test')
 def curriculum_prediction_form():
@@ -5126,7 +5662,6 @@ def curriculum_prediction_form():
 
 
 @app.route('/status')
-@admin_required
 def status_page():
     """หน้าแสดงสถานะระบบ"""
     return render_template('status.html')
@@ -5338,358 +5873,6 @@ def gemini_analyze_file_route():
         return jsonify({'success': False, 'error': str(exc)}), 400
 
 
-# =========================================================
-# 🔗 UNIFIED PREDICTION: ML Model + Gemini AI ทำนายร่วมกัน
-# =========================================================
-@app.route('/api/predict_unified', methods=['POST'])
-def predict_unified():
-    """
-    ทำนายแบบรวม: เรียก ML Model + Gemini AI พร้อมกัน แล้วสรุปผลรวม
-    Returns: ML result + Gemini analysis + combined verdict
-    """
-    try:
-        data = request.get_json()
-        current_grades = data.get('current_grades', {})
-        loaded_terms_count = data.get('loaded_terms_count', 0)
-        model_filename = data.get('model_filename')
-        student_name = data.get('student_name', 'นักศึกษา')
-        analysis_goal = data.get('analysis_goal', '').strip()
-        
-        logger.info(f"🔗 Unified Prediction for {student_name} with {len(current_grades)} grades")
-        
-        if not current_grades:
-            return jsonify({'success': False, 'error': 'กรุณาใส่ข้อมูลเกรดอย่างน้อย 1 วิชา'}), 400
-        
-        # ========== STEP 1: ML Model Prediction (เหมือน analyze_curriculum) ==========
-        courses_data = app.config['COURSES_DATA']
-        all_terms_data = app.config['ALL_TERMS_DATA']
-        grade_mapping = app.config['DATA_CONFIG']['grade_mapping']
-        
-        loaded_courses_ids = []
-        for i in range(loaded_terms_count):
-            if i < len(all_terms_data):
-                loaded_courses_ids.extend(all_terms_data[i]['ids'])
-        repeated_courses = data.get('repeated_courses_in_this_term_ids', [])
-        loaded_courses_ids.extend(repeated_courses)
-        loaded_courses_ids = list(set(loaded_courses_ids))
-        
-        # Calculate GPA
-        total_points = 0
-        total_credits = 0
-        completed_credits = 0
-        failed_courses_ids = []
-        
-        for course_id in loaded_courses_ids:
-            course = next((c for c in courses_data if c['id'] == course_id), None)
-            if not course:
-                continue
-            grade = current_grades.get(course_id, '')
-            if grade:
-                grade_point = grade_mapping.get(grade, 0)
-                if grade_point > 0:
-                    total_points += grade_point * course['credit']
-                    total_credits += course['credit']
-                    completed_credits += course['credit']
-                elif grade == 'F':
-                    failed_courses_ids.append(course_id)
-                    total_credits += course['credit']
-        
-        avg_gpa = total_points / total_credits if total_credits > 0 else 0
-        total_required_credits = sum(c['credit'] for c in courses_data)
-        completion_rate = (completed_credits / total_required_credits * 100) if total_required_credits > 0 else 0
-        
-        # Blocked courses
-        blocked_courses = find_all_blocked_courses(current_grades, loaded_courses_ids, courses_data, grade_mapping)
-        
-        # ML Model prediction
-        ml_result = None
-        ml_method = 'none'
-        try:
-            stored_model = None
-            if model_filename:
-                stored_model = storage.load_model(model_filename)
-            else:
-                models_list = storage.list_models()
-                if models_list:
-                    stored_model = storage.load_model(models_list[0]['filename'])
-            
-            if stored_model:
-                models_dict = stored_model.get('models', {})
-                scaler = stored_model.get('scaler')
-                feature_names = stored_model.get('feature_names', [])
-                cp = stored_model.get('course_profiles', {})
-                mw = stored_model.get('model_weights', {})
-                
-                if models_dict:
-                    engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping)
-                    engineer.course_profiles = cp
-                    
-                    # สร้าง transcript
-                    COURSE_LOOKUP_LOCAL = {c['id']: c for c in courses_data}
-                    transcript_rows = []
-                    for course_id, grade in current_grades.items():
-                        if not grade:
-                            continue
-                        course = COURSE_LOOKUP_LOCAL.get(course_id)
-                        if course:
-                            normalized_id = normalize_course_code(course_id, course.get('thaiName', ''))
-                            gp = grade_mapping.get(grade.upper() if isinstance(grade, str) else str(grade).upper(), 0)
-                            transcript_rows.append({
-                                'Dummy StudentNO': student_name,
-                                'COURSE_CODE': normalized_id,
-                                'COURSE_TITLE_TH': course.get('thaiName', ''),
-                                'CREDIT': course.get('credit', 3),
-                                'GRADE': grade.upper() if isinstance(grade, str) else str(grade).upper(),
-                                'GRADE_POINT': gp,
-                            })
-                    
-                    if transcript_rows:
-                        transcript_df = pd.DataFrame(transcript_rows)
-                        predictor = ContextAwarePredictor(
-                            feature_engineer=engineer,
-                            models=models_dict,
-                            scaler=scaler,
-                            feature_names=feature_names,
-                            model_weights=mw
-                        )
-                        ml_result = predictor.predict_graduation_probability(transcript_df, explain=True)
-                        ml_method = 'AI_MODEL'
-                        logger.info(f"🤖 ML: prob={ml_result.get('probability', 0):.3f}, conf={ml_result.get('confidence', 0):.3f}")
-        except Exception as ml_err:
-            logger.warning(f"ML prediction error: {ml_err}")
-            import traceback
-            logger.warning(traceback.format_exc())
-        
-        # Graduation analysis (rule-based + AI hybrid) - always run
-        graduation_analysis = None
-        try:
-            ai_pred = None
-            if ml_result:
-                ai_pred = {
-                    'prediction': 'จบ' if ml_result.get('probability', 0) >= 0.5 else 'ไม่จบ',
-                    'prob_pass': ml_result.get('probability', 0.5),
-                    'confidence': ml_result.get('confidence', 0.5),
-                    'models_used': ml_result.get('models_used', []),
-                    'feature_importance': ml_result.get('feature_importance', {}),
-                    'method': 'AI_MODEL'
-                }
-            graduation_analysis = analyze_graduation_failure_reasons(
-                current_grades, loaded_terms_count, prediction_result=ai_pred
-            )
-        except Exception as ga_err:
-            logger.warning(f"Graduation analysis error: {ga_err}")
-        
-        # Chart data
-        chart_data = None
-        try:
-            chart_data = generate_three_line_chart_data(current_grades, loaded_terms_count)
-        except:
-            pass
-        
-        # ========== STEP 2: Gemini AI Analysis ==========
-        gemini_result = None
-        gemini_available = is_gemini_available()
-        
-        if gemini_available:
-            can_proceed, wait_time = gemini_rate_limiter.can_proceed()
-            if can_proceed:
-                try:
-                    # สรุปเกรดสำหรับ Gemini
-                    cleaned_grades = {k: v for k, v in current_grades.items() if v}
-                    grade_summary = summarize_grades_for_gemini(cleaned_grades, loaded_terms_count)
-                    grade_summary['student_name'] = student_name
-                    
-                    # สร้าง ML context สำหรับ Gemini
-                    ml_context_for_gemini = ""
-                    if ml_result:
-                        ml_prob = ml_result.get('probability', 0.5)
-                        ml_conf = ml_result.get('confidence', 0.5)
-                        ml_models = ml_result.get('models_used', [])
-                        ml_per_model = ml_result.get('model_confidence', {})
-                        ml_fi = ml_result.get('feature_importance', {})
-                        
-                        ml_context_for_gemini = f"""
---- ผลจากโมเดล AI (Machine Learning Ensemble) ---
-- ความน่าจะเป็นจบ: {ml_prob*100:.1f}%
-- ความมั่นใจ: {ml_conf*100:.1f}%
-- โมเดลที่ใช้: {', '.join(ml_models)}
-- ผลแต่ละโมเดล: {', '.join(f'{k}={v*100:.1f}%' for k, v in ml_per_model.items())}
-- ปัจจัยสำคัญ: {', '.join(f'{k}({v:.3f})' for k, v in list(ml_fi.items())[:5])}
-- สรุปจากโมเดล: {'คาดว่าจบ' if ml_prob >= 0.5 else 'คาดว่าไม่จบ'}
-"""
-                    
-                    # สร้าง course context
-                    course_context = ""
-                    try:
-                        if model_filename:
-                            sm = storage.load_model(model_filename)
-                            if sm:
-                                cp_data = sm.get('course_profiles', {})
-                                if cp_data:
-                                    lines = []
-                                    for cid, grade in cleaned_grades.items():
-                                        if cid in cp_data:
-                                            p = cp_data[cid]
-                                            lines.append(f"- {cid}: เกรดเฉลี่ยรุ่นพี่={p.get('mean_grade', 0):.2f}, อัตราตก={p.get('fail_rate', 0)*100:.0f}%")
-                                    if lines:
-                                        course_context = "สถิติรุ่นพี่:\n" + "\n".join(lines[:15])
-                    except:
-                        pass
-                    
-                    # สร้าง Gemini prompt - เน้นให้วิเคราะห์ร่วมกับ ML
-                    failed_list = ', '.join(failed_courses_ids[:10]) if failed_courses_ids else 'ไม่มี'
-                    
-                    unified_prompt = f"""คุณเป็นที่ปรึกษาทางวิชาการ AI ระดับผู้เชี่ยวชาญ วิเคราะห์ข้อมูลนักศึกษาต่อไปนี้:
-
-**นักศึกษา:** {student_name}
-**GPA สะสม:** {avg_gpa:.2f}
-**หน่วยกิตสะสม:** {completed_credits}/{total_required_credits}
-**วิชาที่ตก (F):** {failed_list} ({len(failed_courses_ids)} วิชา)
-**วิชาที่ถูกบล็อก:** {len(blocked_courses)} วิชา
-**ความคืบหน้า:** {completion_rate:.1f}%
-
-**การกระจายเกรด:**
-{json.dumps(grade_summary.get('grade_distribution', {}), ensure_ascii=False)}
-
-**วิชาที่สอบตก:**
-{json.dumps(grade_summary.get('failed_courses', []), ensure_ascii=False)}
-
-{course_context}
-
-{ml_context_for_gemini}
-
-**เกณฑ์การจบ:** GPA >= 2.00, หน่วยกิต >= 136, ผ่านวิชาบังคับทั้งหมด
-
-**คำสั่ง (ตอบเป็นภาษาไทยทั้งหมด):**
-
-1. **ทำนายผลการจบ:** ฟันธงชัดเจนว่า "จะจบ" หรือ "ไม่จบ/จบช้า" พร้อมความมั่นใจ (%)
-2. **เปรียบเทียบกับโมเดล AI:** ถ้ามีผลจากโมเดล AI ให้บอกว่าเห็นด้วยหรือไม่ และเพราะอะไร
-3. **วิเคราะห์จุดแข็ง:** (2-3 ข้อ) 
-4. **วิเคราะห์จุดอ่อน/ความเสี่ยง:** (2-3 ข้อ)
-5. **คำแนะนำเร่งด่วน:** (2-3 ข้อ) เรียงตามความสำคัญ
-6. **สรุป 1 ประโยค:** สรุปสถานะการเรียนใน 1 ประโยค
-
-{f'เป้าหมายเพิ่มเติม: ' + analysis_goal if analysis_goal else ''}
-"""
-                    
-                    prompt_payload = {
-                        'student_name': student_name,
-                        'analysis_goal': analysis_goal or 'ทำนายโอกาสจบการศึกษาร่วมกับโมเดล AI',
-                        'grade_summary': grade_summary,
-                        'detailed_prompt': unified_prompt
-                    }
-                    
-                    gemini_result = call_gemini_with_retry(prompt_payload, 'unified_prediction')
-                    logger.info("✅ Gemini unified analysis completed")
-                    
-                except Exception as gem_err:
-                    logger.warning(f"Gemini analysis failed: {gem_err}")
-                    gemini_result = None
-            else:
-                logger.info(f"Gemini rate limited, wait {wait_time}s")
-        
-        # ========== STEP 3: Combine Results ==========
-        ml_prob = ml_result.get('probability', 0.5) if ml_result else None
-        ml_conf = ml_result.get('confidence', 0.5) if ml_result else None
-        ml_prediction = ('จบ' if ml_prob >= 0.5 else 'ไม่จบ') if ml_prob is not None else None
-        
-        # Gemini prediction parsing
-        gemini_will_graduate = None
-        gemini_confidence = None
-        if gemini_result:
-            gp = gemini_result.get('graduation_prediction', {})
-            gemini_will_graduate = gp.get('will_graduate', None)
-            gemini_confidence = gp.get('confidence_percent', None)
-            if gemini_will_graduate is None:
-                # ลอง parse จาก outcome_summary
-                os_status = gemini_result.get('outcome_summary', {}).get('status', '')
-                gemini_will_graduate = os_status == 'graduated'
-                if gemini_confidence is None:
-                    gemini_confidence = (gemini_result.get('outcome_summary', {}).get('confidence', 0.5)) * 100
-        
-        # Combined verdict: ให้น้ำหนัก ML 60% + Gemini 40% (ML มี data-driven)
-        combined_prob = None
-        combined_verdict = None
-        agreement = None
-        
-        if ml_prob is not None and gemini_will_graduate is not None:
-            gemini_prob = (gemini_confidence or 50) / 100
-            if not gemini_will_graduate:
-                gemini_prob = 1 - gemini_prob
-            
-            # Weighted average: ML 60%, Gemini 40%
-            combined_prob = ml_prob * 0.6 + gemini_prob * 0.4
-            combined_verdict = 'จบ' if combined_prob >= 0.5 else 'ไม่จบ'
-            
-            # Check agreement
-            ml_says_pass = ml_prob >= 0.5
-            gemini_says_pass = gemini_will_graduate
-            agreement = 'agree' if ml_says_pass == gemini_says_pass else 'disagree'
-            
-            logger.info(f"🔗 Combined: ML={ml_prob:.2f}, Gemini_prob={gemini_prob:.2f}, Combined={combined_prob:.2f}, Agreement={agreement}")
-        elif ml_prob is not None:
-            combined_prob = ml_prob
-            combined_verdict = ml_prediction
-        elif gemini_will_graduate is not None:
-            combined_prob = (gemini_confidence or 50) / 100
-            if not gemini_will_graduate:
-                combined_prob = 1 - combined_prob
-            combined_verdict = 'จบ' if gemini_will_graduate else 'ไม่จบ'
-        
-        # Build response
-        response = {
-            'success': True,
-            'student_name': student_name,
-            'avg_gpa': round(avg_gpa, 2),
-            'completed_credits': completed_credits,
-            'total_required_credits': total_required_credits,
-            'completion_rate': round(completion_rate, 1),
-            'failed_courses': failed_courses_ids,
-            'blocked_courses': blocked_courses,
-            'chart_data': chart_data,
-            'graduation_analysis': graduation_analysis,
-            
-            # ML Model result
-            'ml_prediction': {
-                'available': ml_result is not None,
-                'prediction': ml_prediction,
-                'probability': round(ml_prob, 4) if ml_prob is not None else None,
-                'confidence': round(ml_conf, 4) if ml_conf is not None else None,
-                'models_used': ml_result.get('models_used', []) if ml_result else [],
-                'model_confidence': ml_result.get('model_confidence', {}) if ml_result else {},
-                'feature_importance': dict(list(ml_result.get('feature_importance', {}).items())[:10]) if ml_result else {},
-                'method': ml_method
-            },
-            
-            # Gemini result
-            'gemini_prediction': {
-                'available': gemini_result is not None,
-                'will_graduate': gemini_will_graduate,
-                'confidence': gemini_confidence,
-                'analysis': gemini_result if gemini_result else None,
-                'gemini_available': gemini_available
-            },
-            
-            # Combined verdict
-            'combined_prediction': {
-                'verdict': combined_verdict,
-                'probability': round(combined_prob, 4) if combined_prob is not None else None,
-                'agreement': agreement,
-                'method': 'ML+Gemini' if (ml_result and gemini_result) else ('ML' if ml_result else ('Gemini' if gemini_result else 'none')),
-                'ml_weight': 0.6,
-                'gemini_weight': 0.4,
-            }
-        }
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        logger.error(f"Unified prediction error: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
-
-
 @app.route('/api/gemini/predict', methods=['POST'])
 def gemini_predict_route():
     """ให้ Gemini วิเคราะห์ข้อมูลเกรดที่ผู้ใช้กรอกแบบสด"""
@@ -5824,94 +6007,8 @@ def gemini_predict_route():
         logger.warning(f"Error building course context: {context_exc}")
         course_context_str = ""
     
-    # =========================================================
-    # 🤖 CO-PREDICTION: เรียก ML Model ก่อน แล้วส่งผลให้ Gemini
-    # =========================================================
-    ml_prediction_result = None
-    ml_context_str = ""
-    
     try:
-        # สร้าง transcript DataFrame จากเกรดที่กรอก
-        grade_mapping_for_ml = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
-        courses_data = ACTIVE_CONFIG.COURSES_DATA
-        COURSE_LOOKUP_LOCAL = {c['id']: c for c in courses_data}
-        
-        transcript_rows = []
-        for course_id, grade in cleaned_grades.items():
-            course = COURSE_LOOKUP_LOCAL.get(course_id) or COURSE_LOOKUP.get(course_id)
-            if course and grade:
-                course_name = course.get('thaiName', '')
-                normalized_id = normalize_course_code(course_id, course_name)
-                grade_point = grade_mapping_for_ml.get(grade.upper() if isinstance(grade, str) else str(grade).upper(), 0)
-                transcript_rows.append({
-                    'Dummy StudentNO': student_name,
-                    'COURSE_CODE': normalized_id,
-                    'COURSE_TITLE_TH': course_name,
-                    'CREDIT': course.get('credit', 3),
-                    'GRADE': grade.upper() if isinstance(grade, str) else str(grade).upper(),
-                    'GRADE_POINT': grade_point,
-                })
-        
-        if transcript_rows:
-            transcript_df = pd.DataFrame(transcript_rows)
-            
-            # โหลดโมเดล
-            stored_model = None
-            if model_filename:
-                stored_model = storage.load_model(model_filename)
-            else:
-                models_list = storage.list_models()
-                if models_list:
-                    stored_model = storage.load_model(models_list[0]['filename'])
-            
-            if stored_model:
-                models_dict = stored_model.get('models', {})
-                scaler = stored_model.get('scaler')
-                feature_names = stored_model.get('feature_names', [])
-                cp = stored_model.get('course_profiles', {})
-                mw = stored_model.get('model_weights', {})
-                
-                if models_dict:
-                    engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping_for_ml)
-                    engineer.course_profiles = cp or (course_profiles or {})
-                    
-                    predictor = ContextAwarePredictor(
-                        feature_engineer=engineer,
-                        models=models_dict,
-                        scaler=scaler,
-                        feature_names=feature_names,
-                        model_weights=mw
-                    )
-                    
-                    ml_prediction_result = predictor.predict_graduation_probability(transcript_df, explain=False)
-                    
-                    ml_prob = ml_prediction_result.get('probability', 0.5)
-                    ml_conf = ml_prediction_result.get('confidence', 0.5)
-                    ml_models = ml_prediction_result.get('models_used', [])
-                    ml_per_model = ml_prediction_result.get('model_confidence', {})
-                    ml_fi = ml_prediction_result.get('feature_importance', {})
-                    
-                    ml_context_str = f"""
-**ผลการทำนายจากโมเดล AI (Machine Learning Ensemble):**
-- ความน่าจะเป็นจบ: {ml_prob*100:.1f}%
-- ความมั่นใจ: {ml_conf*100:.1f}%
-- โมเดลที่ใช้: {', '.join(ml_models)}
-- ผลแต่ละโมเดล: {', '.join(f'{k}={v*100:.1f}%' for k, v in ml_per_model.items())}
-- ปัจจัยสำคัญที่โมเดลใช้ตัดสิน (เรียงจากมากไปน้อย): {', '.join(f'{k}({v:.3f})' for k, v in list(ml_fi.items())[:5])}
-- สรุป: {'คาดว่าจบ' if ml_prob >= 0.5 else 'คาดว่าไม่จบ'}
-
-**คำแนะนำสำหรับ Gemini:** กรุณาวิเคราะห์ผลจากโมเดล AI ด้านบนร่วมกับข้อมูลเกรด
-ถ้าผลโมเดล AI สอดคล้องกับการวิเคราะห์ของคุณ ให้ระบุว่าสอดคล้อง
-ถ้าขัดแย้ง ให้อธิบายว่าเหตุใดจึงเห็นต่าง และให้น้ำหนักกับข้อมูลที่น่าเชื่อถือกว่า
-"""
-                    logger.info(f"ML co-prediction: prob={ml_prob:.3f}, conf={ml_conf:.3f}")
-        
-    except Exception as ml_exc:
-        logger.warning(f"ML co-prediction failed (Gemini will predict alone): {ml_exc}")
-        ml_context_str = ""
-    
-    try:
-        logger.info(f"Starting Gemini prediction for {student_name} with {len(cleaned_grades)} courses")
+        logger.info(f"🔮 Starting Gemini prediction for {student_name} with {len(cleaned_grades)} courses")
         
         grade_summary = summarize_grades_for_gemini(cleaned_grades, loaded_terms_count)
         grade_summary['student_name'] = student_name
@@ -5948,8 +6045,7 @@ def gemini_predict_route():
 {json.dumps(grade_summary.get('failed_courses', []), ensure_ascii=False, indent=2)}
 
 {course_context_str}
-
-{ml_context_str}
+(ข้อมูลข้างบนคือข้อมูลเปรียบเทียบกับสถิติรุ่นพี่ที่เทรนมาแล้ว)
 
 **งานของคุณ (ตอบเป็นภาษาไทยทั้งหมด):**
 
@@ -5957,7 +6053,6 @@ def gemini_predict_route():
    - ทำนายว่านักศึกษาคนนี้ "จะจบตามเกณฑ์" หรือ "จะไม่จบ/จบช้า"
    - เกณฑ์การจบ: GPA >= 2.00 และหน่วยกิต >= 136 และผ่านวิชาบังคับ/วิชาปราบเซียน
    - ระบุความมั่นใจในการทำนายเป็นเปอร์เซ็นต์ (0-100%)
-   - ถ้ามีผลจากโมเดล AI ให้วิเคราะห์ร่วมกัน ระบุว่า Gemini เห็นด้วยหรือไม่ และเพราะอะไร
 
 **2. อธิบายเหตุผลว่าทำไมถึงจบ (ถ้าทำนายว่าจบ):**
    - อธิบายเป็นภาษาไทยว่าทำไมถึงทำนายว่าจบ
@@ -6022,25 +6117,14 @@ def gemini_predict_route():
                 'suggestion': 'กรุณาตรวจสอบว่า GEMINI_API_KEY ถูกตั้งค่าถูกต้องและลองใหม่อีกครั้ง'
             }), 400
         
-        # --- รวมผลจาก ML model เข้ากับ response ---
-        response_data = {
+        return jsonify({
             'success': True,
             'source': 'live_grades',
             'analysis': grade_summary,
             'gemini': gemini_output,
             'training_analysis': training_analysis,
             'model_metadata': model_metadata
-        }
-        if ml_prediction_result:
-            response_data['ml_prediction'] = {
-                'probability': ml_prediction_result.get('probability', None),
-                'confidence': ml_prediction_result.get('confidence', None),
-                'prediction': 'จบการศึกษา' if ml_prediction_result.get('probability', 0) >= 0.5 else 'ไม่จบ/จบช้า',
-                'models_used': ml_prediction_result.get('models_used', []),
-                'model_confidence': ml_prediction_result.get('model_confidence', {}),
-                'feature_importance': dict(list(ml_prediction_result.get('feature_importance', {}).items())[:10])
-            }
-        return jsonify(response_data)
+        })
     except Exception as exc:
         error_msg = str(exc)
         
@@ -6065,7 +6149,6 @@ def gemini_predict_route():
         }), 500
 
 @app.route('/upload', methods=['POST'])
-@admin_required
 def upload_file():
     """Handles file upload and basic data format detection."""
     try:
@@ -6178,7 +6261,6 @@ def upload_file():
 
 # Keep all other routes unchanged...
 @app.route('/analyze', methods=['POST'])
-@admin_required
 def analyze_subjects():
     """Analyzes subjects from a CSV/Excel file (for Subject-based data)."""
     try:
@@ -6646,17 +6728,14 @@ def analyze_curriculum():
                         for course_id, grade in current_grades.items():
                             if grade:  # มีเกรด
                                 course = next((c for c in courses_data if c['id'] == course_id), None)
-                                course_name = course.get('thaiName', '') if course else ''
-                                # Normalize course code (เก่า → ใหม่)
-                                normalized_id = normalize_course_code(course_id, course_name)
                                 if course:
                                     # แปลงเกรดเป็น GRADE_POINT
                                     grade_point = grade_mapping.get(grade, 0)
                                     
                                     transcript_data.append({
                                         'Dummy StudentNO': student_name,
-                                        'COURSE_CODE': normalized_id,
-                                        'COURSE_TITLE_TH': course_name,
+                                        'COURSE_CODE': course_id,
+                                        'COURSE_TITLE_TH': course.get('thaiName', ''),
                                         'CREDIT': course.get('credit', 3),
                                         'GRADE': grade,
                                         'GRADE_POINT': grade_point,
@@ -6675,8 +6754,7 @@ def analyze_curriculum():
                                 feature_engineer=engineer,
                                 models=models,
                                 scaler=scaler,
-                                feature_names=feature_names,
-                                model_weights=model_data.get('model_weights', {})
+                                feature_names=feature_names
                             )
                             
                             # ทำนายด้วย Context-Aware AI System
@@ -6753,82 +6831,6 @@ def analyze_curriculum():
             logger.error(traceback.format_exc())
             response_data['graduation_analysis'] = None
         
-        # ✨ เพิ่ม Gemini AI ร่วมวิเคราะห์ผลทำนาย (ถ้า API Key พร้อม)
-        try:
-            gemini_api_key = os.environ.get('GEMINI_API_KEY', '')
-            use_gemini = data.get('use_gemini', True)  # default True ถ้าไม่ระบุ
-            
-            if gemini_api_key and use_gemini:
-                # สร้างสรุปเกรดสำหรับ Gemini
-                grade_lines = []
-                for course_id, grade in current_grades.items():
-                    if grade:
-                        course = next((c for c in courses_data if c['id'] == course_id), None)
-                        name = course.get('thaiName', course_id) if course else course_id
-                        credit = course.get('credit', 3) if course else 3
-                        grade_lines.append(f"- {name} ({course_id}): เกรด {grade}, {credit} หน่วยกิต")
-                
-                grade_text = "\n".join(grade_lines[:50]) if grade_lines else "ไม่มีข้อมูลเกรด"
-                
-                # สร้างสรุปผลจาก ML model
-                ml_summary = ""
-                pred_result = response_data.get('prediction_result', {})
-                if pred_result:
-                    ml_summary = f"""
---- ผลจากโมเดล AI (Machine Learning) ---
-- ผลทำนาย: {pred_result.get('prediction', 'N/A')}
-- ความน่าจะเป็นจบ: {pred_result.get('prob_pass', 0):.1%}
-- ความมั่นใจ: {pred_result.get('confidence', 0):.1%}
-- ระดับความเสี่ยง: {pred_result.get('risk_level', 'N/A')}
-- วิธีที่ใช้: {pred_result.get('method', 'N/A')}
-- โมเดลที่ใช้: {', '.join(pred_result.get('models_used', []))}
-"""
-                
-                gemini_curriculum_prompt = f"""คุณเป็นที่ปรึกษาทางวิชาการ AI วิเคราะห์ข้อมูลต่อไปนี้และให้ความเห็นเพิ่มเติม:
-
-**ข้อมูลนักศึกษา: {student_name}**
-
-**สถิติปัจจุบัน:**
-- GPA: {avg_gpa:.2f}
-- หน่วยกิตสะสม: {completed_credits}/{total_required_credits}
-- อัตราความสำเร็จ: {completion_rate:.1f}%
-- วิชาตก (F): {len(failed_courses_ids)} วิชา
-- วิชาที่ถูกบล็อก: {len(blocked_courses)} วิชา
-
-**รายละเอียดเกรด:**
-{grade_text}
-
-{ml_summary}
-
-**ให้วิเคราะห์สั้นๆ (ตอบเป็นภาษาไทย):**
-1. สรุปสถานะการเรียน (1-2 ประโยค)
-2. จุดแข็งของนักศึกษา (1-2 ข้อ)
-3. จุดที่ต้องปรับปรุง (1-2 ข้อ)
-4. คำแนะนำเร่งด่วนที่สุด (1 ข้อ)
-5. ถ้ามีผลจากโมเดล AI ให้บอกว่าเห็นด้วยหรือไม่ และเพราะอะไร
-
-ตอบกระชับไม่เกิน 200 คำ"""
-
-                gemini_payload = {
-                    'student_name': student_name,
-                    'analysis_goal': 'curriculum_analysis',
-                    'grade_summary': grade_text[:500],
-                    'detailed_prompt': gemini_curriculum_prompt
-                }
-                
-                try:
-                    gemini_analysis = call_gemini_with_retry(gemini_payload, 'curriculum_analysis')
-                    response_data['gemini_analysis'] = gemini_analysis
-                    logger.info("✅ Gemini co-analysis added to curriculum prediction")
-                except Exception as gemini_err:
-                    logger.warning(f"⚠️ Gemini co-analysis failed (non-critical): {gemini_err}")
-                    response_data['gemini_analysis'] = None
-            else:
-                response_data['gemini_analysis'] = None
-        except Exception as e:
-            logger.warning(f"⚠️ Gemini integration error (non-critical): {e}")
-            response_data['gemini_analysis'] = None
-        
         return jsonify(response_data)
         
     except Exception as e:
@@ -6895,8 +6897,7 @@ def explain_prediction():
                     feature_engineer=app.advanced_trainer.feature_engineer,
                     models=app.advanced_trainer.models if hasattr(app.advanced_trainer, 'models') else {},
                     scaler=app.advanced_trainer.scaler if hasattr(app.advanced_trainer, 'scaler') else None,
-                    feature_names=app.advanced_trainer.feature_names if hasattr(app.advanced_trainer, 'feature_names') else [],
-                    model_weights=getattr(app.advanced_trainer, 'model_weights', {})
+                    feature_names=app.advanced_trainer.feature_names if hasattr(app.advanced_trainer, 'feature_names') else []
                 )
                 prediction_result = predictor.predict_graduation_probability(student_data, explain=True)
         except Exception as e:
@@ -7019,7 +7020,6 @@ def model_status():
 
 
 @app.route('/api/sync-models', methods=['POST'])
-@admin_required
 def sync_local_models_to_storage():
     """Sync local models to cloud storage"""
     try:
@@ -7207,1030 +7207,12 @@ def advanced_test_page():
 
 @app.route('/predict-batch')
 def predict_batch_page():
-    """Page for batch prediction from uploaded file."""
-    courses_data = app.config.get('COURSES_DATA', [])
-    all_terms_data = app.config.get('ALL_TERMS_DATA', [])
-    return render_template('predict_batch.html',
-                           coursesData=json.dumps(courses_data, ensure_ascii=False),
-                           allTermsData=json.dumps(all_terms_data, ensure_ascii=False))
-
-
-# ==========================================
-# BATCH PREDICTION HELPERS
-# ==========================================
-def _detect_batch_columns(df):
-    """Detect common column names in batch prediction file."""
-    col_map = {}
-    columns_lower = {col: col.lower().strip() for col in df.columns}
-
-    for col, lower in columns_lower.items():
-        if lower in ['student_id', 'studentid', 'id', 'student_no', 'studentno',
-                      'dummy studentno', 'dummy_studentno']:
-            col_map['student_id'] = col
-            break
-
-    for col, lower in columns_lower.items():
-        if lower in ['course_code', 'course_id', 'coursecode', 'courseid',
-                      'subject_code', 'subject_id', 'course']:
-            col_map['course_code'] = col
-            break
-
-    for col, lower in columns_lower.items():
-        if lower in ['grade', 'grades']:
-            col_map['grade'] = col
-            break
-
-    for col, lower in columns_lower.items():
-        if lower in ['credit', 'credits']:
-            col_map['credit'] = col
-            break
-
-    for col, lower in columns_lower.items():
-        if lower in ['student_name', 'studentname', 'name', 'fullname', 'full_name']:
-            col_map['student_name'] = col
-            break
-
-    for col, lower in columns_lower.items():
-        if lower in ['gpa']:
-            col_map['gpa'] = col
-            break
-
-    return col_map
-
-
-def _detect_file_format(df):
-    """Detect if file is Wide Format or Long Format.
-    Wide Format: columns are course IDs (e.g., 03-407-100-101)
-    Long Format: has STUDENT_ID, COURSE_CODE, GRADE columns
-    Returns: 'wide', 'long', or 'unknown'
-    """
-    col_map = _detect_batch_columns(df)
-
-    # Check for Long Format: must have student_id, course_code, grade
-    if col_map.get('student_id') and col_map.get('course_code') and col_map.get('grade'):
-        return 'long', col_map
-
-    # Check for Wide Format: columns look like course IDs (XX-XXX-XXX-XXX pattern)
-    course_pattern = re.compile(r'^\d{2}-\d{3}-\d{3}-\d{3}$')
-    courses_data = app.config.get('COURSES_DATA', [])
-    known_course_ids = {c['id'] for c in courses_data}
-
-    course_columns = []
-    for col in df.columns:
-        col_stripped = str(col).strip()
-        if course_pattern.match(col_stripped) or col_stripped in known_course_ids:
-            course_columns.append(col)
-
-    if len(course_columns) >= 3:  # At least 3 course columns to be considered wide format
-        return 'wide', {'course_columns': course_columns, **col_map}
-
-    return 'unknown', col_map
-
-
-def _convert_wide_to_long(df, col_info):
-    """Convert Wide Format DataFrame to Long Format (STUDENT_ID, COURSE_CODE, GRADE, CREDIT).
-    Wide Format has course IDs as column headers and grades as values.
-    """
-    courses_data = app.config.get('COURSES_DATA', [])
-    credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
-    course_columns = col_info.get('course_columns', [])
-
-    # Detect student_id column
-    student_id_col = col_info.get('student_id')
-    if not student_id_col:
-        # Try first column as student_id
-        student_id_col = df.columns[0]
-
-    student_name_col = col_info.get('student_name')
-
-    long_rows = []
-    student_names = {}
-
-    for _, row in df.iterrows():
-        student_id = str(row[student_id_col]).strip()
-        if not student_id or student_id.lower() in ['nan', 'none', '']:
-            continue
-
-        if student_name_col and pd.notna(row.get(student_name_col)):
-            student_names[student_id] = str(row[student_name_col]).strip()
-
-        for course_col in course_columns:
-            grade = str(row[course_col]).strip().upper() if pd.notna(row[course_col]) else ''
-            if grade and grade not in ['', 'NAN', 'NONE']:
-                course_id = str(course_col).strip()
-                credit = credit_lookup.get(course_id, 3)
-                long_rows.append({
-                    'STUDENT_ID': student_id,
-                    'COURSE_CODE': course_id,
-                    'GRADE': grade,
-                    'CREDIT': credit
-                })
-
-    result_df = pd.DataFrame(long_rows)
-    return result_df, student_names
-
-
-def _calc_prob_distribution(probabilities):
-    """Calculate probability distribution for chart data."""
-    bins = [
-        {'range': '0-20%', 'min': 0, 'max': 0.2, 'count': 0},
-        {'range': '21-40%', 'min': 0.2, 'max': 0.4, 'count': 0},
-        {'range': '41-60%', 'min': 0.4, 'max': 0.6, 'count': 0},
-        {'range': '61-80%', 'min': 0.6, 'max': 0.8, 'count': 0},
-        {'range': '81-100%', 'min': 0.8, 'max': 1.01, 'count': 0},
-    ]
-    for p in probabilities:
-        for b in bins:
-            if b['min'] <= p < b['max']:
-                b['count'] += 1
-                break
-    return [{'range': b['range'], 'count': b['count']} for b in bins]
-
-
-def _run_batch_prediction_on_df(df, model_filename):
-    """Core batch prediction logic. df must have columns: STUDENT_ID, COURSE_CODE, GRADE, CREDIT.
-    Returns dict: {success, results, summary, errors}."""
-    import traceback
-
-    grade_mapping = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
-
-    # Normalize course codes before processing
-    if 'COURSE_CODE' in df.columns:
-        # หาชื่อวิชาไทย (ถ้ามี) สำหรับ name-based fallback
-        course_name_col = None
-        for c in df.columns:
-            if c.upper() in ['COURSE_TITLE_TH', 'COURSE_NAME_TH']:
-                course_name_col = c
-                break
-        df['COURSE_CODE'] = df.apply(
-            lambda row: normalize_course_code(
-                str(row['COURSE_CODE']).strip(),
-                str(row[course_name_col]).strip() if course_name_col and pd.notna(row.get(course_name_col)) else None
-            ), axis=1
-        )
-        logger.info(f"🔄 Batch prediction: Normalized {len(df)} course codes")
-
-    # Load model
-    loaded_model_data = storage.load_model(model_filename)
-    if not loaded_model_data:
-        return {'success': False, 'error': f'ไม่พบโมเดล: {model_filename}'}
-
-    models_dict = loaded_model_data.get('models', {})
-    scaler = loaded_model_data.get('scaler', None)
-    feature_names = loaded_model_data.get('feature_columns',
-                     loaded_model_data.get('feature_names', []))
-    course_profiles = loaded_model_data.get('course_profiles', {})
-
-    engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping)
-    engineer.course_profiles = course_profiles
-
-    predictor = ContextAwarePredictor(
-        feature_engineer=engineer,
-        models=models_dict,
-        scaler=scaler,
-        feature_names=feature_names,
-        model_weights=model_data.get('model_weights', {}) if isinstance(model_data, dict) else {}
-    )
-
-    unique_students = df['STUDENT_ID'].unique()
-
-    MAX_BATCH = 500
-    if len(unique_students) > MAX_BATCH:
-        return {
-            'success': False,
-            'error': f'จำนวนนักศึกษามากเกินไป ({len(unique_students)} คน) รองรับสูงสุด {MAX_BATCH} คน'
-        }
-
-    results = []
-    errors = []
-
-    for student_id in unique_students:
-        try:
-            student_df = df[df['STUDENT_ID'] == student_id].copy()
-
-            student_grades = []
-            student_credits = []
-            total_courses = len(student_df)
-            failed_count = 0
-
-            for _, row in student_df.iterrows():
-                grade = str(row['GRADE']).strip().upper()
-                gp = grade_mapping.get(grade, None)
-                credit = float(row['CREDIT']) if pd.notna(row.get('CREDIT')) else 3.0
-
-                if gp is not None:
-                    student_grades.append(gp)
-                    student_credits.append(credit)
-                    if grade == 'F':
-                        failed_count += 1
-
-            # Calculate GPA
-            if student_credits:
-                total_points = sum(g * c for g, c in zip(student_grades, student_credits))
-                total_credit = sum(student_credits)
-                gpa = total_points / total_credit if total_credit > 0 else 0
-            else:
-                gpa = 0
-                total_credit = 0
-
-            # Build transcript for predictor
-            transcript_rows = []
-            for _, row in student_df.iterrows():
-                grade = str(row['GRADE']).strip().upper()
-                gp = grade_mapping.get(grade, 0)
-                credit = float(row['CREDIT']) if pd.notna(row.get('CREDIT')) else 3.0
-                transcript_rows.append({
-                    'Dummy StudentNO': str(student_id),
-                    'COURSE_CODE': str(row['COURSE_CODE']),
-                    'CREDIT': credit,
-                    'GRADE': grade,
-                    'GRADE_POINT': gp,
-                })
-
-            transcript_df = pd.DataFrame(transcript_rows)
-
-            # Predict
-            try:
-                prediction_result = predictor.predict_graduation_probability(transcript_df)
-                prob_pass = prediction_result.get('probability', 0.5)
-                confidence = prediction_result.get('confidence', 0.5)
-            except Exception:
-                # Fallback: simple heuristic if model fails
-                prob_pass = min(1.0, max(0.0, (gpa - 1.0) / 2.0)) if gpa > 0 else 0.3
-                confidence = 0.3
-
-            prediction = 'ผ่าน' if prob_pass >= 0.5 else 'ไม่ผ่าน'
-
-            if prob_pass >= 0.8:
-                risk_level = 'ต่ำ'
-            elif prob_pass >= 0.5:
-                risk_level = 'ปานกลาง'
-            else:
-                risk_level = 'สูง'
-
-            # Recommendation
-            if prediction == 'ไม่ผ่าน' and gpa < 2.0:
-                recommendation = 'GPA ต่ำกว่าเกณฑ์ ควรปรึกษาอาจารย์ที่ปรึกษาทันที'
-            elif prediction == 'ไม่ผ่าน' and failed_count >= 3:
-                recommendation = f'มีวิชาตก {failed_count} วิชา ควรลงทะเบียนเรียนซ้ำ'
-            elif prediction == 'ไม่ผ่าน':
-                recommendation = 'มีความเสี่ยง ควรปรับปรุงผลการเรียนและพบอาจารย์ที่ปรึกษา'
-            elif prediction == 'ผ่าน' and gpa >= 3.0:
-                recommendation = 'ผลการเรียนดี ควรรักษามาตรฐาน'
-            elif prediction == 'ผ่าน':
-                recommendation = 'มีแนวโน้มจบการศึกษา ควรตั้งใจเรียนต่อ'
-            else:
-                recommendation = 'ควรติดตามผลการเรียนอย่างใกล้ชิด'
-
-            results.append({
-                'student_id': str(student_id),
-                'gpa': round(gpa, 2),
-                'total_credits': round(total_credit, 1),
-                'total_courses': total_courses,
-                'failed_count': failed_count,
-                'probability': round(float(prob_pass), 4),
-                'prediction': prediction,
-                'confidence': round(float(confidence), 4),
-                'risk_level': risk_level,
-                'recommendation': recommendation
-            })
-
-        except Exception as student_err:
-            errors.append({
-                'student_id': str(student_id),
-                'error': str(student_err)
-            })
-            logger.warning(f"Batch prediction error for student {student_id}: {student_err}")
-
-    # Summary
-    if results:
-        passed = [r for r in results if r['prediction'] == 'ผ่าน']
-        failed = [r for r in results if r['prediction'] == 'ไม่ผ่าน']
-        all_gpas = [r['gpa'] for r in results]
-        all_probs = [r['probability'] for r in results]
-
-        summary = {
-            'total_students': len(results),
-            'pass_count': len(passed),
-            'pass_percentage': round(len(passed) / len(results) * 100, 1),
-            'fail_count': len(failed),
-            'fail_percentage': round(len(failed) / len(results) * 100, 1),
-            'avg_gpa': round(sum(all_gpas) / len(all_gpas), 2),
-            'min_gpa': round(min(all_gpas), 2),
-            'max_gpa': round(max(all_gpas), 2),
-            'avg_probability': round(sum(all_probs) / len(all_probs), 4),
-            'risk_distribution': {
-                'high': len([r for r in results if r['risk_level'] == 'สูง']),
-                'medium': len([r for r in results if r['risk_level'] == 'ปานกลาง']),
-                'low': len([r for r in results if r['risk_level'] == 'ต่ำ'])
-            },
-            'probability_distribution': _calc_prob_distribution(all_probs)
-        }
-    else:
-        summary = {'total_students': 0}
-
-    return {
-        'success': True,
-        'results': results,
-        'summary': summary,
-        'errors': errors,
-        'model_used': model_filename
-    }
-
-
-# ==========================================
-# BATCH PREDICTION API
-# ==========================================
-@app.route('/api/predict_batch', methods=['POST'])
-def predict_batch():
-    """
-    Batch prediction API: accepts CSV/Excel in Wide Format or Long Format.
-    Wide Format: STUDENT_ID, STUDENT_NAME, GPA, [course_id columns with grades]
-    Long Format: STUDENT_ID, COURSE_CODE, GRADE, CREDIT
-    Auto-detects format and processes accordingly.
-    """
-    import traceback
-    try:
-        # 1. Validate file upload
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'ไม่พบไฟล์ในคำขอ'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'ไม่ได้เลือกไฟล์'}), 400
-
-        if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
-            return jsonify({'success': False, 'error': 'รองรับเฉพาะไฟล์ .csv, .xlsx, .xls'}), 400
-
-        model_filename = request.form.get('model_filename')
-        if not model_filename:
-            return jsonify({'success': False, 'error': 'กรุณาเลือกโมเดลสำหรับการทำนาย'}), 400
-
-        # 2. Save and read file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        original_ext = ''
-        if '.' in file.filename:
-            original_ext = '.' + file.filename.rsplit('.', 1)[1].lower()
-        safe_name = secure_filename(file.filename)
-        if original_ext and not safe_name.lower().endswith(original_ext):
-            temp_filename = f"batch_{timestamp}_{safe_name}{original_ext}"
-        else:
-            temp_filename = f"batch_{timestamp}_{safe_name}"
-
-        upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, temp_filename)
-        file.save(filepath)
-
-        try:
-            df = None
-            if filepath.lower().endswith('.csv'):
-                for enc in ['utf-8-sig', 'utf-8', 'cp874', 'tis-620', 'iso-8859-1']:
-                    try:
-                        df = pd.read_csv(filepath, encoding=enc)
-                        break
-                    except Exception:
-                        continue
-            else:
-                df = pd.read_excel(filepath, engine='openpyxl')
-
-            if df is None or df.empty:
-                return jsonify({'success': False, 'error': 'ไม่สามารถอ่านไฟล์ได้ หรือไฟล์ว่าง'}), 400
-        finally:
-            if os.path.exists(filepath):
-                os.remove(filepath)
-
-        # 3. Auto-detect file format
-        file_format, col_info = _detect_file_format(df)
-        student_names = {}
-
-        if file_format == 'wide':
-            # Wide Format: convert to long format
-            logger.info(f"Detected Wide Format with {len(col_info.get('course_columns', []))} course columns")
-            normalized_df, student_names = _convert_wide_to_long(df, col_info)
-            if normalized_df.empty:
-                return jsonify({
-                    'success': False,
-                    'error': 'ไม่พบข้อมูลเกรดในไฟล์ กรุณาตรวจสอบว่ามีเกรดกรอกอยู่',
-                    'detected_format': 'wide',
-                    'detected_columns': df.columns.tolist()[:20]
-                }), 400
-            detected_format_label = 'Wide Format (รหัสวิชาเป็นหัวคอลัมน์)'
-
-        elif file_format == 'long':
-            # Long Format: normalize columns
-            col_map = col_info
-            normalized_df = pd.DataFrame()
-            normalized_df['STUDENT_ID'] = df[col_map['student_id']]
-            normalized_df['COURSE_CODE'] = df[col_map['course_code']]
-            normalized_df['GRADE'] = df[col_map['grade']]
-            if col_map.get('credit'):
-                normalized_df['CREDIT'] = df[col_map['credit']]
-            else:
-                normalized_df['CREDIT'] = 3.0
-            # Collect student names if available
-            if col_map.get('student_name'):
-                for _, row in df.iterrows():
-                    sid = str(row[col_map['student_id']]).strip()
-                    name = str(row[col_map['student_name']]).strip() if pd.notna(row.get(col_map['student_name'])) else ''
-                    if sid and name:
-                        student_names[sid] = name
-            detected_format_label = 'Long Format (แต่ละแถว = 1 วิชา)'
-
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'ไม่สามารถระบุรูปแบบไฟล์ได้ กรุณาใช้รูปแบบ Wide Format หรือ Long Format',
-                'detected_columns': df.columns.tolist()[:20],
-                'hint': 'Wide Format: STUDENT_ID, [รหัสวิชาเป็นหัวคอลัมน์]\nLong Format: STUDENT_ID, COURSE_CODE, GRADE'
-            }), 400
-
-        # 4. Run prediction
-        result = _run_batch_prediction_on_df(normalized_df, model_filename)
-
-        if result.get('success'):
-            # Attach student names and detected format info
-            result['detected_format'] = detected_format_label
-            for r in result.get('results', []):
-                sid = r['student_id']
-                if sid in student_names:
-                    r['student_name'] = student_names[sid]
-                else:
-                    r['student_name'] = ''
-            return jsonify(result)
-        else:
-            return jsonify(result), 400
-
-    except Exception as e:
-        logger.error(f"Batch prediction error: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาด: {str(e)}'}), 500
-
-
-@app.route('/api/batch_template/<fmt>')
-def download_batch_template(fmt):
-    """Download a CSV template for batch prediction.
-    fmt: 'wide' or 'long'
-    """
-    import io
-    courses_data = app.config.get('COURSES_DATA', [])
-    all_terms = app.config.get('ALL_TERMS_DATA', [])
-
-    output = io.StringIO()
-    output.write('\ufeff')  # BOM for Thai Excel support
-
-    if fmt == 'wide':
-        # Wide format: STUDENT_ID, STUDENT_NAME, GPA, [course_id columns]
-        all_course_ids = []
-        for term in all_terms:
-            all_course_ids.extend(term.get('ids', []))
-        headers = ['STUDENT_ID', 'STUDENT_NAME', 'GPA'] + all_course_ids
-        output.write(','.join(f'"{h}"' for h in headers) + '\n')
-        # Example row
-        example = ['"6301001"', '"ชื่อ-นามสกุล"', '""'] + ['""'] * len(all_course_ids)
-        output.write(','.join(example) + '\n')
-    else:
-        # Long format
-        headers = ['STUDENT_ID', 'STUDENT_NAME', 'COURSE_CODE', 'GRADE', 'CREDIT']
-        output.write(','.join(f'"{h}"' for h in headers) + '\n')
-        output.write('"6301001","ชื่อ-นามสกุล","03-407-100-101","B+","3"\n')
-        output.write('"6301001","ชื่อ-นามสกุล","02-005-011-109","C+","3"\n')
-
-    csv_content = output.getvalue()
-    from flask import Response
-    response = Response(csv_content, mimetype='text/csv; charset=utf-8')
-    response.headers['Content-Disposition'] = f'attachment; filename="batch_template_{fmt}.csv"'
-    return response
-
-
-# ==========================================
-# GRADE COLLECTION FORM SYSTEM
-# ==========================================
-
-@app.route('/admin/grade-forms')
-@admin_required
-def admin_grade_forms_page():
-    """Admin dashboard for managing grade collection forms."""
-    courses_json = json.dumps(app.config.get('COURSES_DATA', []))
-    terms_json = json.dumps(app.config.get('ALL_TERMS_DATA', []))
-    return render_template('admin_grade_forms.html',
-                           coursesData=courses_json,
-                           allTermsData=terms_json)
-
-
-@app.route('/api/grade-forms/sessions', methods=['GET'])
-@admin_required
-def api_list_grade_sessions():
-    """List all grade collection sessions."""
-    try:
-        sessions = grade_form_db.list_sessions()
-        return jsonify({'success': True, 'sessions': sessions})
-    except Exception as e:
-        logger.error(f"Error listing grade form sessions: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions', methods=['POST'])
-@admin_required
-def api_create_grade_session():
-    """Create a new grade collection session."""
-    try:
-        data = request.get_json()
-        title = data.get('title', '').strip()
-        if not title:
-            return jsonify({'success': False, 'error': 'กรุณากรอกชื่อ session'}), 400
-
-        term_indices = data.get('term_indices', [])
-        all_terms = app.config.get('ALL_TERMS_DATA', [])
-        if not term_indices or not all(isinstance(i, int) and 0 <= i < len(all_terms) for i in term_indices):
-            return jsonify({'success': False, 'error': 'กรุณาเลือกเทอมอย่างน้อย 1 เทอม'}), 400
-
-        sess = grade_form_db.create_session(
-            title=title,
-            description=data.get('description', ''),
-            term_indices=term_indices,
-            show_prediction=data.get('show_prediction', False),
-            model_filename=data.get('model_filename', ''),
-            expires_at=data.get('expires_at')
-        )
-        form_url = f"/form/{sess['token']}"
-        return jsonify({'success': True, 'session': sess, 'form_url': form_url})
-    except Exception as e:
-        logger.error(f"Error creating grade form session: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>', methods=['PUT'])
-@admin_required
-def api_update_grade_session(session_id):
-    """Update a grade collection session."""
-    try:
-        data = request.get_json()
-        grade_form_db.update_session(session_id, **data)
-        sess = grade_form_db.get_session_by_id(session_id)
-        return jsonify({'success': True, 'session': sess})
-    except Exception as e:
-        logger.error(f"Error updating grade form session: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>', methods=['DELETE'])
-@admin_required
-def api_delete_grade_session(session_id):
-    """Delete a grade collection session and all its submissions."""
-    try:
-        grade_form_db.delete_session(session_id)
-        return jsonify({'success': True})
-    except Exception as e:
-        logger.error(f"Error deleting grade form session: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>/submissions', methods=['GET'])
-@admin_required
-def api_get_grade_submissions(session_id):
-    """Get all submissions for a session."""
-    try:
-        submissions = grade_form_db.get_submissions(session_id)
-        # Parse grades_json for each submission
-        for sub in submissions:
-            if isinstance(sub.get('grades_json'), str):
-                sub['grades'] = json.loads(sub['grades_json'])
-            else:
-                sub['grades'] = sub.get('grades_json', {})
-        return jsonify({'success': True, 'submissions': submissions})
-    except Exception as e:
-        logger.error(f"Error getting submissions: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>/submissions/<int:sub_id>', methods=['DELETE'])
-@admin_required
-def api_delete_grade_submission(session_id, sub_id):
-    """Delete a single submission."""
-    try:
-        grade_form_db.delete_submission(sub_id)
-        return jsonify({'success': True})
-    except Exception as e:
-        logger.error(f"Error deleting submission: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>/export-template', methods=['GET'])
-@admin_required
-def api_export_grade_template(session_id):
-    """Generate and download an empty CSV template for a session."""
-    try:
-        sess = grade_form_db.get_session_by_id(session_id)
-        if not sess:
-            return jsonify({'success': False, 'error': 'ไม่พบ session'}), 404
-
-        term_indices = json.loads(sess['term_indices']) if isinstance(sess['term_indices'], str) else sess['term_indices']
-        all_terms = app.config.get('ALL_TERMS_DATA', [])
-        courses_data = app.config.get('COURSES_DATA', [])
-        course_lookup = {c['id']: c for c in courses_data}
-
-        # Collect courses for selected terms
-        course_ids = []
-        for idx in term_indices:
-            if 0 <= idx < len(all_terms):
-                course_ids.extend(all_terms[idx].get('ids', []))
-
-        # Build CSV header
-        import io
-        output = io.StringIO()
-        # BOM for Excel Thai support
-        output.write('\ufeff')
-        # Header: STUDENT_ID, STUDENT_NAME, then course columns
-        headers = ['STUDENT_ID', 'STUDENT_NAME']
-        for cid in course_ids:
-            course = course_lookup.get(cid, {})
-            name = course.get('thaiName', cid)
-            credit = course.get('credit', 3)
-            headers.append(f"{cid} {name} ({credit} หน่วยกิต)")
-        output.write(','.join(f'"{h}"' for h in headers) + '\n')
-        # Add one empty example row
-        output.write('"6301001","ชื่อ-นามสกุล"' + ',""' * len(course_ids) + '\n')
-
-        csv_content = output.getvalue()
-        from flask import Response
-        response = Response(csv_content, mimetype='text/csv; charset=utf-8')
-        safe_title = re.sub(r'[^\w\s-]', '', sess['title'])[:30]
-        response.headers['Content-Disposition'] = f'attachment; filename="template_{safe_title}.csv"'
-        return response
-    except Exception as e:
-        logger.error(f"Error exporting template: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>/export', methods=['GET'])
-@admin_required
-def api_export_grade_submissions(session_id):
-    """Export all submissions as CSV (wide or long format)."""
-    try:
-        fmt = request.args.get('format', 'wide')
-        sess = grade_form_db.get_session_by_id(session_id)
-        if not sess:
-            return jsonify({'success': False, 'error': 'ไม่พบ session'}), 404
-
-        submissions = grade_form_db.get_submissions(session_id)
-        if not submissions:
-            return jsonify({'success': False, 'error': 'ยังไม่มีข้อมูล'}), 404
-
-        courses_data = app.config.get('COURSES_DATA', [])
-
-        import io
-        output = io.StringIO()
-        output.write('\ufeff')  # BOM
-
-        if fmt == 'long':
-            # Long format: STUDENT_ID, STUDENT_NAME, COURSE_CODE, GRADE, CREDIT
-            output.write('STUDENT_ID,STUDENT_NAME,COURSE_CODE,GRADE,CREDIT\n')
-            credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
-            for sub in submissions:
-                grades = json.loads(sub['grades_json']) if isinstance(sub['grades_json'], str) else sub['grades_json']
-                for course_id, grade in grades.items():
-                    if grade and grade.strip():
-                        credit = credit_lookup.get(course_id, 3)
-                        name = sub.get('student_name', '').replace('"', '""')
-                        output.write(f'"{sub["student_id"]}","{name}","{course_id}","{grade}",{credit}\n')
-        else:
-            # Wide format: STUDENT_ID, STUDENT_NAME, GPA, [course columns]
-            term_indices = json.loads(sess['term_indices']) if isinstance(sess['term_indices'], str) else sess['term_indices']
-            all_terms = app.config.get('ALL_TERMS_DATA', [])
-            course_ids = []
-            for idx in term_indices:
-                if 0 <= idx < len(all_terms):
-                    course_ids.extend(all_terms[idx].get('ids', []))
-
-            headers = ['STUDENT_ID', 'STUDENT_NAME', 'GPA'] + course_ids
-            output.write(','.join(f'"{h}"' for h in headers) + '\n')
-            for sub in submissions:
-                grades = json.loads(sub['grades_json']) if isinstance(sub['grades_json'], str) else sub['grades_json']
-                name = sub.get('student_name', '').replace('"', '""')
-                row = [f'"{sub["student_id"]}"', f'"{name}"', str(round(sub.get('gpa', 0), 2))]
-                for cid in course_ids:
-                    row.append(f'"{grades.get(cid, "")}"')
-                output.write(','.join(row) + '\n')
-
-        csv_content = output.getvalue()
-        from flask import Response
-        response = Response(csv_content, mimetype='text/csv; charset=utf-8')
-        safe_title = re.sub(r'[^\w\s-]', '', sess['title'])[:30]
-        response.headers['Content-Disposition'] = f'attachment; filename="submissions_{safe_title}_{fmt}.csv"'
-        return response
-    except Exception as e:
-        logger.error(f"Error exporting submissions: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/sessions/<int:session_id>/run-prediction', methods=['POST'])
-@admin_required
-def api_run_grade_prediction(session_id):
-    """Run batch prediction on all submissions in a session."""
-    try:
-        data = request.get_json() or {}
-        model_filename = data.get('model_filename', '')
-
-        sess = grade_form_db.get_session_by_id(session_id)
-        if not sess:
-            return jsonify({'success': False, 'error': 'ไม่พบ session'}), 404
-
-        if not model_filename:
-            model_filename = sess.get('model_filename', '')
-        if not model_filename:
-            return jsonify({'success': False, 'error': 'กรุณาเลือกโมเดลสำหรับการทำนาย'}), 400
-
-        courses_data = app.config.get('COURSES_DATA', [])
-        long_rows = grade_form_db.export_submissions_as_long_format(session_id, courses_data)
-        if not long_rows:
-            return jsonify({'success': False, 'error': 'ยังไม่มีข้อมูลสำหรับทำนาย'}), 400
-
-        df = pd.DataFrame(long_rows)
-        result = _run_batch_prediction_on_df(df, model_filename)
-        return jsonify(result)
-    except Exception as e:
-        logger.error(f"Error running prediction on grade form session: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# --- Public Grade Form Routes (no login required) ---
-
-@app.route('/form/<token>')
-def public_grade_form(token):
-    """Public page for students to fill in their grades."""
-    sess = grade_form_db.get_session(token)
-    if not sess:
-        return render_template('grade_form_public.html', error='ไม่พบแบบฟอร์มนี้'), 404
-
-    # Check if active
-    if not sess.get('is_active'):
-        return render_template('grade_form_public.html', error='แบบฟอร์มนี้ถูกปิดแล้ว')
-
-    # Check expiry
-    if sess.get('expires_at'):
-        try:
-            expires = datetime.fromisoformat(sess['expires_at'])
-            if datetime.now() > expires:
-                return render_template('grade_form_public.html', error='แบบฟอร์มนี้หมดอายุแล้ว')
-        except (ValueError, TypeError):
-            pass
-
-    # Resolve courses for the selected terms
-    term_indices = json.loads(sess['term_indices']) if isinstance(sess['term_indices'], str) else sess['term_indices']
-    all_terms = app.config.get('ALL_TERMS_DATA', [])
-    courses_data = app.config.get('COURSES_DATA', [])
-    grades_json = json.dumps(app.config.get('DATA_CONFIG', {}).get('grade_mapping', {}))
-
-    # Build resolved terms with full course info
-    resolved_terms = []
-    course_lookup = {c['id']: c for c in courses_data}
-    for idx in term_indices:
-        if 0 <= idx < len(all_terms):
-            term = all_terms[idx]
-            term_courses = []
-            for cid in term.get('ids', []):
-                course = course_lookup.get(cid)
-                if course:
-                    term_courses.append(course)
-            resolved_terms.append({
-                'year': term['year'],
-                'term': term['term'],
-                'courses': term_courses
-            })
-
-    return render_template('grade_form_public.html',
-                           session=sess,
-                           resolved_terms=json.dumps(resolved_terms),
-                           gradeMapping=grades_json,
-                           error=None)
-
-
-@app.route('/api/grade-forms/submit/<token>', methods=['POST'])
-def api_submit_student_grades(token):
-    """Student submits grades via the public form."""
-    try:
-        sess = grade_form_db.get_session(token)
-        if not sess:
-            return jsonify({'success': False, 'error': 'ไม่พบแบบฟอร์มนี้'}), 404
-        if not sess.get('is_active'):
-            return jsonify({'success': False, 'error': 'แบบฟอร์มนี้ถูกปิดแล้ว'}), 400
-        if sess.get('expires_at'):
-            try:
-                if datetime.now() > datetime.fromisoformat(sess['expires_at']):
-                    return jsonify({'success': False, 'error': 'แบบฟอร์มนี้หมดอายุแล้ว'}), 400
-            except (ValueError, TypeError):
-                pass
-
-        data = request.get_json()
-        student_id = str(data.get('student_id', '')).strip()
-        if not student_id:
-            return jsonify({'success': False, 'error': 'กรุณากรอกรหัสนักศึกษา'}), 400
-
-        student_name = str(data.get('student_name', '')).strip()
-        grades = data.get('grades', {})
-
-        # Validate grades
-        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
-        valid_grades = set(grade_mapping.keys())
-        for course_id, grade in grades.items():
-            if grade and grade.strip() and grade.strip().upper() not in valid_grades:
-                return jsonify({'success': False, 'error': f'เกรด "{grade}" ไม่ถูกต้องสำหรับวิชา {course_id}'}), 400
-
-        # Calculate GPA
-        courses_data = app.config.get('COURSES_DATA', [])
-        credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
-        total_points = 0
-        total_credits = 0
-        for course_id, grade in grades.items():
-            if grade and grade.strip():
-                grade_upper = grade.strip().upper()
-                gp = grade_mapping.get(grade_upper)
-                if gp is not None and grade_upper not in ('W', 'I', 'AU', 'S', 'U'):
-                    credit = credit_lookup.get(course_id, 3)
-                    total_points += gp * credit
-                    total_credits += credit
-
-        gpa = round(total_points / total_credits, 2) if total_credits > 0 else 0.0
-
-        # Save submission
-        ip_address = request.remote_addr or ''
-        submission = grade_form_db.submit_grades(
-            session_id=sess['id'],
-            student_id=student_id,
-            student_name=student_name,
-            grades_json=grades,
-            gpa=gpa,
-            total_credits=total_credits,
-            ip_address=ip_address
-        )
-
-        response_data = {
-            'success': True,
-            'message': 'บันทึกข้อมูลเรียบร้อยแล้ว',
-            'gpa': gpa,
-            'total_credits': total_credits,
-            'is_update': bool(data.get('is_update'))
-        }
-
-        # Run prediction if enabled
-        if sess.get('show_prediction') and sess.get('model_filename'):
-            try:
-                # Build long format for this student
-                long_rows = []
-                for course_id, grade in grades.items():
-                    if grade and grade.strip():
-                        long_rows.append({
-                            'STUDENT_ID': student_id,
-                            'COURSE_CODE': course_id,
-                            'GRADE': grade.strip().upper(),
-                            'CREDIT': credit_lookup.get(course_id, 3)
-                        })
-                if long_rows:
-                    pred_df = pd.DataFrame(long_rows)
-                    pred_result = _run_batch_prediction_on_df(pred_df, sess['model_filename'])
-                    if pred_result.get('success') and pred_result.get('results'):
-                        response_data['prediction'] = pred_result['results'][0]
-            except Exception as pred_err:
-                logger.warning(f"Prediction failed for student {student_id}: {pred_err}")
-
-        return jsonify(response_data)
-    except Exception as e:
-        logger.error(f"Error submitting grades: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/grade-forms/submit-file/<token>', methods=['POST'])
-def api_submit_grades_file(token):
-    """Student uploads CSV/Excel file with their grades."""
-    try:
-        sess = grade_form_db.get_session(token)
-        if not sess:
-            return jsonify({'success': False, 'error': 'ไม่พบแบบฟอร์มนี้'}), 404
-        if not sess.get('is_active'):
-            return jsonify({'success': False, 'error': 'แบบฟอร์มนี้ถูกปิดแล้ว'}), 400
-
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'ไม่พบไฟล์'}), 400
-
-        file = request.files['file']
-        student_id = request.form.get('student_id', '').strip()
-        student_name = request.form.get('student_name', '').strip()
-
-        if not student_id:
-            return jsonify({'success': False, 'error': 'กรุณากรอกรหัสนักศึกษา'}), 400
-
-        if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
-            return jsonify({'success': False, 'error': 'รองรับเฉพาะไฟล์ .csv, .xlsx, .xls'}), 400
-
-        # Save and read file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        original_ext = ''
-        if '.' in file.filename:
-            original_ext = '.' + file.filename.rsplit('.', 1)[1].lower()
-        safe_name = secure_filename(file.filename)
-        if original_ext and not safe_name.lower().endswith(original_ext):
-            temp_filename = f"form_{timestamp}_{safe_name}{original_ext}"
-        else:
-            temp_filename = f"form_{timestamp}_{safe_name}"
-
-        upload_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-        os.makedirs(upload_folder, exist_ok=True)
-        filepath = os.path.join(upload_folder, temp_filename)
-        file.save(filepath)
-
-        try:
-            df = None
-            if filepath.lower().endswith('.csv'):
-                for enc in ['utf-8-sig', 'utf-8', 'cp874', 'tis-620', 'iso-8859-1']:
-                    try:
-                        df = pd.read_csv(filepath, encoding=enc)
-                        break
-                    except Exception:
-                        continue
-            else:
-                df = pd.read_excel(filepath, engine='openpyxl')
-
-            if df is None or df.empty:
-                return jsonify({'success': False, 'error': 'ไม่สามารถอ่านไฟล์ได้ หรือไฟล์ว่าง'}), 400
-        finally:
-            if os.path.exists(filepath):
-                os.remove(filepath)
-
-        # Detect format: wide (course columns) or long (COURSE_CODE, GRADE)
-        courses_data = app.config.get('COURSES_DATA', [])
-        course_ids = {c['id'] for c in courses_data}
-        grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {})
-        credit_lookup = {c['id']: c.get('credit', 3) for c in courses_data}
-
-        grades = {}
-
-        # Check if it's long format (has COURSE_CODE and GRADE columns)
-        col_map = _detect_batch_columns(df)
-        if col_map.get('course_code') and col_map.get('grade'):
-            # Long format
-            for _, row in df.iterrows():
-                course_code = str(row[col_map['course_code']]).strip()
-                grade = str(row[col_map['grade']]).strip().upper()
-                if course_code in course_ids and grade in grade_mapping:
-                    grades[course_code] = grade
-        else:
-            # Wide format: column names contain course IDs
-            for col in df.columns:
-                col_str = str(col).strip()
-                # Extract course ID from column name (first part before space)
-                course_id = col_str.split(' ')[0].strip().strip('"')
-                if course_id in course_ids:
-                    grade_val = str(df.iloc[0][col]).strip().upper() if len(df) > 0 else ''
-                    if grade_val and grade_val in grade_mapping:
-                        grades[course_id] = grade_val
-
-        if not grades:
-            return jsonify({
-                'success': False,
-                'error': 'ไม่พบข้อมูลเกรดในไฟล์ กรุณาตรวจสอบรูปแบบไฟล์',
-                'detected_columns': df.columns.tolist()[:20]
-            }), 400
-
-        # Calculate GPA
-        total_points = 0
-        total_credits = 0
-        for course_id, grade in grades.items():
-            gp = grade_mapping.get(grade)
-            if gp is not None and grade not in ('W', 'I', 'AU', 'S', 'U'):
-                credit = credit_lookup.get(course_id, 3)
-                total_points += gp * credit
-                total_credits += credit
-
-        gpa = round(total_points / total_credits, 2) if total_credits > 0 else 0.0
-
-        # Save
-        ip_address = request.remote_addr or ''
-        submission = grade_form_db.submit_grades(
-            session_id=sess['id'],
-            student_id=student_id,
-            student_name=student_name,
-            grades_json=grades,
-            gpa=gpa,
-            total_credits=total_credits,
-            ip_address=ip_address
-        )
-
-        return jsonify({
-            'success': True,
-            'message': f'บันทึกข้อมูลเรียบร้อย ({len(grades)} วิชา)',
-            'gpa': gpa,
-            'total_credits': total_credits,
-            'grades_count': len(grades)
-        })
-    except Exception as e:
-        logger.error(f"Error submitting grade file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
+    return render_template('index.html')
 
 @app.route('/models')
-@admin_required
 def models_page():
+    if admin_manager.enabled and not has_any_role('admin', 'super_admin'):
+        return redirect(url_for('index'))
     return render_template('model_management.html')
 @app.route('/predict_manual_input', methods=['POST'])
 def predict_manual_input():
@@ -8241,7 +7223,12 @@ def predict_manual_input():
         model_filename = data.get('model_filename')
 
         if not model_filename:
-            return jsonify({'success': False, 'error': 'No model filename provided for manual prediction.'})
+            models_list = storage.list_models()
+            subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+            if subject_models:
+                model_filename = subject_models[0]['filename']
+            else:
+                return jsonify({'success': False, 'error': 'No model filename provided and no trained model found.'})
 
         # โหลดโมเดลจาก storage
         loaded_model_data = storage.load_model(model_filename)
@@ -8524,16 +7511,13 @@ if __name__ == '__main__':
     logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     logger.info(f"Model folder: {app.config['MODEL_FOLDER']}")
     logger.info(f"S3 Storage: {'Enabled' if not storage.use_local else 'Disabled (using local)'}")
-
+    
     # สร้างโฟลเดอร์ถ้ายังไม่มี
     for folder in [app.config['UPLOAD_FOLDER'], app.config['MODEL_FOLDER']]:
         if not os.path.exists(folder):
             os.makedirs(folder)
             logger.info(f"✅ Created folder: {folder}")
-
-    # Initialize grade form database
-    grade_form_db.init_db()
-
+    
     # โหลดโมเดลที่มีอยู่
     load_existing_models()
     
