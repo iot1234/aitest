@@ -1,1 +1,1 @@
-web: sh -c "PORT_SAFE=\"${PORT:-8000}\"; case \"$PORT_SAFE\" in (''|*[!0-9]*) PORT_SAFE=8000 ;; esac; gunicorn app:app --bind 0.0.0.0:$PORT_SAFE --timeout 600 --workers 1 --threads 4 --worker-class gthread --log-level warning --access-logfile - --error-logfile -"
+web: sh -c "PORT_SAFE=\"${PORT:-8080}\"; case \"$PORT_SAFE\" in (''|*[!0-9]*) PORT_SAFE=8080 ;; esac; gunicorn app:app --bind 0.0.0.0:$PORT_SAFE --timeout 600 --workers 1 --threads 4 --worker-class gthread --log-level warning --access-logfile - --error-logfile -"
