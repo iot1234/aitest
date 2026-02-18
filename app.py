@@ -709,45 +709,43 @@ class AdvancedModelTrainer:
         
         return results
     
-    def save_model(self, model_path, course_profiles=None, training_results=None):
-        """บันทึกโมเดลและ scaler ในรูปแบบเดียวกับ advanced path"""
-        if self.best_model is not None:
-            # สร้าง performance_metrics ที่ serializable (ไม่เก็บ model objects / numpy arrays)
-            clean_metrics = {}
-            if training_results:
-                for name, res in training_results.items():
-                    clean_metrics[name] = {
-                        'accuracy': float(res.get('accuracy', 0)),
-                        'f1_score': float(res.get('f1_score', 0)),
-                        'precision': float(res.get('precision', 0)),
-                        'recall': float(res.get('recall', 0)),
-                    }
-            model_data = {
-                'models': {'rf': self.best_model},  # Wrap in dict like ensemble format
-                'scaler': self.scaler,
-                'feature_columns': [
-                    'current_gpa', 'gpa_std', 'min_grade', 'max_grade', 'grade_range',
-                    'high_grades', 'medium_grades', 'low_grades',
-                    'avg_course_difficulty', 'avg_course_fail_rate',
-                    'num_killer_courses', 'num_easy_courses',
-                    'num_failed_courses', 'killer_course_ratio', 'gpa_gap',
-                    'recent_trend', 'progress_ratio', 'consistency_score',
-                    'academic_momentum', 'risk_score',
-                    'credits_earned', 'graduation_progress', 'credits_per_semester',
-                    'on_track_ratio', 'semester_progress',
-                    'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure'
-                ],
-                'course_profiles': course_profiles or getattr(self, 'course_profiles', {}),
-                'course_credit_map': self.course_credit_map,
-                'grade_mapping': self.grade_mapping,
-                'data_format': 'subject_based',
-                'training_type': 'tan1_advanced',
-                'created_at': datetime.now().isoformat(),
-                'performance_metrics': clean_metrics,
-            }
-            joblib.dump(model_data, model_path)
-            return True
-        return False
+    def build_model_data(self, course_profiles=None, training_results=None):
+        """สร้าง model_data dict สำหรับบันทึก (ไม่บันทึกเอง — ให้ storage จัดการ)"""
+        if self.best_model is None:
+            return None
+        # สร้าง performance_metrics ที่ serializable (ไม่เก็บ model objects / numpy arrays)
+        clean_metrics = {}
+        if training_results:
+            for name, res in training_results.items():
+                clean_metrics[name] = {
+                    'accuracy': float(res.get('accuracy', 0)),
+                    'f1_score': float(res.get('f1_score', 0)),
+                    'precision': float(res.get('precision', 0)),
+                    'recall': float(res.get('recall', 0)),
+                }
+        return {
+            'models': {'rf': self.best_model},
+            'scaler': self.scaler,
+            'feature_columns': [
+                'current_gpa', 'gpa_std', 'min_grade', 'max_grade', 'grade_range',
+                'high_grades', 'medium_grades', 'low_grades',
+                'avg_course_difficulty', 'avg_course_fail_rate',
+                'num_killer_courses', 'num_easy_courses',
+                'num_failed_courses', 'killer_course_ratio', 'gpa_gap',
+                'recent_trend', 'progress_ratio', 'consistency_score',
+                'academic_momentum', 'risk_score',
+                'credits_earned', 'graduation_progress', 'credits_per_semester',
+                'on_track_ratio', 'semester_progress',
+                'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure'
+            ],
+            'course_profiles': course_profiles or getattr(self, 'course_profiles', {}),
+            'course_credit_map': self.course_credit_map,
+            'grade_mapping': self.grade_mapping,
+            'data_format': 'subject_based',
+            'training_type': 'tan1_advanced',
+            'created_at': datetime.now().isoformat(),
+            'performance_metrics': clean_metrics,
+        }
     
     def load_model(self, model_path):
         """โหลดโมเดลและ scaler"""
@@ -2263,23 +2261,38 @@ class S3Storage:
             except Exception as e:
                 logger.warning(f"R2 list failed: {str(e)}")
         
-        # Also check local
+        # Also check local (skip files already listed from R2)
+        r2_filenames = {m['filename'] for m in models}
         try:
             model_folder = app.config['MODEL_FOLDER']
             if os.path.exists(model_folder):
+                local_count = 0
                 for filename in os.listdir(model_folder):
-                    if filename.endswith('.joblib'):
+                    if filename.endswith('.joblib') and filename not in r2_filenames:
                         filepath = os.path.join(model_folder, filename)
                         try:
                             model_data = joblib.load(filepath)
+                            # ดึงเฉพาะ metrics ที่ JSON-safe (ไม่เอา model objects)
+                            raw_perf = model_data.get('performance_metrics', {})
+                            safe_perf = {}
+                            if isinstance(raw_perf, dict):
+                                for k, v in raw_perf.items():
+                                    if isinstance(v, dict):
+                                        safe_perf[k] = {
+                                            mk: float(mv) for mk, mv in v.items()
+                                            if isinstance(mv, (int, float)) or (hasattr(mv, 'item') and callable(mv.item))
+                                        }
+                                    elif isinstance(v, (int, float)):
+                                        safe_perf[k] = float(v)
                             models.append({
                                 'filename': filename,
                                 'created_at': model_data.get('created_at', ''),
                                 'data_format': model_data.get('data_format', 'unknown'),
-                                'performance_metrics': model_data.get('performance_metrics', {}),
+                                'performance_metrics': safe_perf,
                                 'storage': 'local'
                             })
-                        except:
+                            local_count += 1
+                        except Exception:
                             models.append({
                                 'filename': filename,
                                 'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
@@ -2287,7 +2300,8 @@ class S3Storage:
                                 'performance_metrics': {},
                                 'data_format': 'unknown'
                             })
-                logger.info(f"📂 Found {len([m for m in models if m['storage'] == 'local'])} models locally")
+                            local_count += 1
+                logger.info(f"📂 Found {local_count} models locally")
         except Exception as e:
             logger.error(f"Local list error: {str(e)}")
         
@@ -3110,11 +3124,18 @@ def train_model():
                 # เทรนโมเดล
                 results = trainer.train_models(X, y)
                 
-                # บันทึกโมเดล (unified format with course_profiles and results)
-                model_path = os.path.join(app.config['MODEL_FOLDER'], f"advanced_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib")
-                trainer.save_model(model_path, course_profiles=course_profiles, training_results=results)
-                
-                logger.info(f"💾 Model saved to: {model_path}")
+                # บันทึกโมเดลผ่าน storage (R2 + local fallback)
+                model_fname = f"subject_based_model_tan1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib"
+                model_data_to_save = trainer.build_model_data(course_profiles=course_profiles, training_results=results)
+                if model_data_to_save:
+                    save_ok = storage.save_model(model_data_to_save, model_fname)
+                    if save_ok:
+                        logger.info(f"💾 Model saved: {model_fname} (storage: {'R2' if not storage.use_local else 'local'})")
+                    else:
+                        logger.warning(f"⚠️ Model save returned False for {model_fname}")
+                else:
+                    logger.error("❌ build_model_data returned None — no best model")
+                model_path = os.path.join(app.config['MODEL_FOLDER'], model_fname)
 
                 tan1_gemini_analysis = None
                 if enable_gemini_analysis and is_gemini_available():
@@ -3392,6 +3413,12 @@ def train_model():
         return jsonify({'success': False, 'error': f'Training error: {str(e)}'})
 
 
+def _is_subject_model(m):
+    """ตรวจสอบว่าโมเดลเป็น subject-based (รวม TAN1 advanced) หรือไม่"""
+    fn = m.get('filename', '').lower()
+    return ('subject_based' in fn or 'advanced_model' in fn or
+            m.get('data_format') == 'subject_based')
+
 @app.route('/predict', methods=['POST'])
 def predict():
     """Predicts outcome from an uploaded CSV/Excel file using a specified model."""
@@ -3408,7 +3435,7 @@ def predict():
         if not model_filename:
             logger.info("🔍 No model specified, finding latest subject-based model...")
             models_list = storage.list_models()
-            subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+            subject_models = [m for m in models_list if _is_subject_model(m)]
             if subject_models:
                 model_filename = subject_models[0]['filename']
                 logger.info(f"✅ Auto-selected latest model: {model_filename}")
@@ -3566,57 +3593,13 @@ def list_models():
             return _json_error('เฉพาะแอดมินเท่านั้นที่ดูรายการโมเดลได้', 403)
 
         model_files = []
-        
-        # Get models from storage
+
+        # Get all models (R2 + local, deduplicated, safe metrics)
         try:
-            storage_models = storage.list_models()
-            model_files.extend(storage_models)
-        except Exception as e:
-            logger.warning(f"Could not get models from storage: {e}")
-        
-        # Also check local folder
-        try:
-            model_folder = app.config['MODEL_FOLDER']
-            if os.path.exists(model_folder):
-                for filename in os.listdir(model_folder):
-                    if filename.endswith('.joblib'):
-                        # ตรวจสอบว่าไม่ซ้ำ
-                        if not any(m.get('filename') == filename for m in model_files):
-                            filepath = os.path.join(model_folder, filename)
-                            try:
-                                model_data = joblib.load(filepath)
-                                # ดึงเฉพาะ metrics ที่ serializable (ไม่เอา model objects)
-                                raw_perf = model_data.get('performance_metrics', {})
-                                safe_perf = {}
-                                if isinstance(raw_perf, dict):
-                                    for k, v in raw_perf.items():
-                                        if isinstance(v, dict):
-                                            safe_perf[k] = {
-                                                mk: float(mv) for mk, mv in v.items()
-                                                if isinstance(mv, (int, float)) or (hasattr(mv, 'item') and callable(mv.item))
-                                            }
-                                        elif isinstance(v, (int, float)):
-                                            safe_perf[k] = float(v)
-                                model_info = {
-                                    'filename': filename,
-                                    'created_at': model_data.get('created_at', datetime.fromtimestamp(os.path.getctime(filepath)).isoformat()),
-                                    'data_format': model_data.get('data_format', 'subject_based'),
-                                    'performance_metrics': safe_perf,
-                                    'storage': 'local'
-                                }
-                            except:
-                                # ถ้าอ่านไม่ได้ ให้ข้อมูลพื้นฐาน
-                                model_info = {
-                                    'filename': filename,
-                                    'created_at': datetime.fromtimestamp(os.path.getctime(filepath)).isoformat(),
-                                    'data_format': 'subject_based' if 'subject' in filename else 'unknown',
-                                    'performance_metrics': {},
-                                    'storage': 'local'
-                                }
-                            model_files.append(model_info)
+            model_files = storage.list_models()
             logger.info(f"Found {len(model_files)} models total")
         except Exception as e:
-            logger.error(f"Error checking local models: {e}")
+            logger.warning(f"Could not list models: {e}")
         
         # กรองเอาเฉพาะ subject_based (ตัด GPA-based ออก)
         model_files = [m for m in model_files if 'gpa_based' not in m.get('filename', '').lower() and m.get('data_format') != 'gpa_based']
@@ -3681,7 +3664,7 @@ def load_existing_models():
             return
         
         # Load subject-based model
-        subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '')]
+        subject_models = [m for m in models_list if _is_subject_model(m)]
         if subject_models:
             latest_subject = subject_models[0]
             loaded_data = storage.load_model(latest_subject['filename'])
@@ -7703,7 +7686,7 @@ def predict_manual_input():
 
         if not model_filename:
             models_list = storage.list_models()
-            subject_models = [m for m in models_list if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+            subject_models = [m for m in models_list if _is_subject_model(m)]
             if subject_models:
                 model_filename = subject_models[0]['filename']
             else:
@@ -7938,7 +7921,7 @@ def load_existing_models():
             return
         
         # Load subject-based model เท่านั้น (ตัด GPA-based ออก)
-        subject_models = [m for m in models_found if 'subject_based' in m.get('filename', '') or m.get('data_format') == 'subject_based']
+        subject_models = [m for m in models_found if _is_subject_model(m)]
         
         if subject_models:
             # เรียงตามวันที่สร้าง
