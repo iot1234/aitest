@@ -967,12 +967,23 @@
     <!-- Terms Container -->
     <div id="termsContainer"></div>
 
-    <!-- Prediction Action (Unified) -->
+    <!-- Prediction Mode & Action -->
     <div class="text-center my-4" data-aos="fade-up">
-        <div id="unifiedGoalConfig" class="mb-4" style="max-width: 500px; margin: 0 auto;">
+        <div class="mode-toggle mb-4">
+            <input type="radio" class="btn-check" name="predictionMode" id="modeNormal" value="normal" checked>
+            <label class="btn" for="modeNormal">
+                <i class="bi bi-cpu me-1"></i> AI Model
+            </label>
+
+            <input type="radio" class="btn-check" name="predictionMode" id="modeGemini" value="gemini">
+            <label class="btn" for="modeGemini">
+                <i class="bi bi-stars me-1"></i> Gemini AI
+            </label>
+        </div>
+
+        <div id="geminiModeConfig" class="mb-4" style="display: none; max-width: 500px; margin: 0 auto;">
             <textarea class="form-control" rows="2" id="geminiModeGoalInput"
-                placeholder="ระบุสิ่งที่ต้องการให้ AI เน้นวิเคราะห์ (ไม่จำเป็น)..."
-                style="border-radius: 12px; border: 2px solid #e2e8f0;"></textarea>
+                placeholder="ระบุสิ่งที่ต้องการให้ Gemini เน้นวิเคราะห์..."></textarea>
         </div>
 
         <div class="action-buttons">
@@ -982,8 +993,8 @@
             <button class="btn-action btn-success" id="openFutureCoursesModalBtn">
                 <i class="bi bi-calendar-plus"></i> วิชาอนาคต
             </button>
-            <button class="btn-action btn-predict" id="analyzeAndPredictBtn" style="background: linear-gradient(135deg, #667eea, #764ba2); font-size: 1.1rem; padding: 0.8rem 2rem;">
-                <i class="bi bi-stars me-1"></i> AI + Gemini วิเคราะห์และทำนาย
+            <button class="btn-action btn-predict" id="analyzeAndPredictBtn">
+                <i class="bi bi-graph-up-arrow"></i> วิเคราะห์และทำนาย
             </button>
         </div>
     </div>
@@ -994,39 +1005,6 @@
         <div id="resultHero" class="result-hero success">
             <h2><i class="bi bi-check-circle-fill me-2"></i>คาดว่าจะจบการศึกษา</h2>
             <p class="mb-0">ความมั่นใจ: <strong>85%</strong></p>
-        </div>
-
-        <!-- AI Sources Comparison (ML vs Gemini) -->
-        <div class="row g-3 mb-4" id="aiSourcesComparison" style="display: none;">
-            <div class="col-md-6">
-                <div class="p-3 rounded-3 h-100" id="mlSourceCard" style="background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 2px solid #3b82f6;">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-cpu-fill text-primary fs-4 me-2"></i>
-                        <h6 class="mb-0 fw-bold text-primary">ML Model</h6>
-                        <span class="badge bg-primary ms-auto" id="mlSourceBadge">-</span>
-                    </div>
-                    <div class="fs-2 fw-bold mb-1" id="mlSourceProb">-</div>
-                    <small class="text-muted" id="mlSourceDetail">-</small>
-                    <div class="mt-2" id="mlSourceModels" style="font-size: 0.8rem;"></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="p-3 rounded-3 h-100" id="geminiSourceCard" style="background: linear-gradient(135deg, #faf5ff, #ede9fe); border: 2px solid #8b5cf6;">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-stars text-purple fs-4 me-2" style="color: #8b5cf6;"></i>
-                        <h6 class="mb-0 fw-bold" style="color: #8b5cf6;">Gemini AI</h6>
-                        <span class="badge ms-auto" id="geminiSourceBadge" style="background: #8b5cf6;">-</span>
-                    </div>
-                    <div class="fs-2 fw-bold mb-1" id="geminiSourceProb">-</div>
-                    <small class="text-muted" id="geminiSourceDetail">-</small>
-                    <div class="mt-2" id="geminiSourceNote" style="font-size: 0.8rem;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Agreement Badge -->
-        <div class="text-center mb-3" id="agreementSection" style="display: none;">
-            <span class="badge px-4 py-2 fs-6" id="agreementBadge" style="border-radius: 20px;">-</span>
         </div>
 
         <!-- Probability Bar -->
@@ -1177,40 +1155,6 @@
             </div>
         </div>
 
-        <!-- Gemini AI Deep Analysis (Unified) -->
-        <div class="chart-container mb-4" id="unifiedGeminiCard" style="display: none; border: 2px solid #8b5cf6; background: linear-gradient(135deg, #faf5ff, #f5f3ff);">
-            <div class="d-flex align-items-center mb-3">
-                <i class="bi bi-stars fs-4 me-2" style="color: #8b5cf6;"></i>
-                <h5 class="mb-0 fw-bold" style="color: #8b5cf6;">Gemini AI วิเคราะห์เชิงลึก</h5>
-                <span class="badge ms-auto" id="geminiAnalysisStatusBadge" style="background: #8b5cf6; color: white;">AI Analysis</span>
-            </div>
-            
-            <!-- Gemini Graduation prediction summary -->
-            <div id="unifiedGeminiGradSummary" class="p-3 rounded-3 mb-3" style="background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3);">
-                <div class="text-center">
-                    <h5 class="mb-1 fw-bold" id="unifiedGeminiPredText" style="color: #8b5cf6;">กำลังวิเคราะห์...</h5>
-                    <p class="mb-0 text-muted" id="unifiedGeminiPredDetail">-</p>
-                </div>
-            </div>
-            
-            <!-- Gemini markdown analysis -->
-            <div class="p-3 rounded-3" style="background: white; max-height: 500px; overflow-y: auto; border: 1px solid #e5e7eb;">
-                <div class="markdown-body" id="unifiedGeminiMarkdown"></div>
-            </div>
-            
-            <!-- Gemini recommendations -->
-            <div class="mt-3" id="unifiedGeminiRecsContainer" style="display: none;">
-                <h6 class="fw-bold" style="color: #8b5cf6;"><i class="bi bi-lightbulb-fill text-warning me-1"></i> คำแนะนำจาก Gemini AI</h6>
-                <ul class="list-unstyled" id="unifiedGeminiRecsList"></ul>
-            </div>
-        </div>
-
-        <!-- Feature Importance (ML) -->
-        <div class="chart-container mb-4" id="unifiedFeatureCard" style="display: none; border-left: 4px solid #3b82f6;">
-            <h6 class="fw-bold"><i class="bi bi-bar-chart-steps text-primary me-2"></i>ปัจจัยสำคัญที่โมเดล AI ใช้ตัดสิน</h6>
-            <div id="unifiedFeatureList"></div>
-        </div>
-
         <!-- Export Buttons -->
         <div class="text-center mt-4">
             <button class="btn btn-outline-secondary me-2" id="exportExcelBtn">
@@ -1269,11 +1213,6 @@
     // ===== Initialization =====
     document.addEventListener('DOMContentLoaded', async function () {
         console.log('🚀 Starting initialization...');
-        
-        // Always attach event listeners first so buttons work
-        console.log('🔧 Setting up event listeners...');
-        setupEventListeners();
-        
         try {
             const configLoaded = await loadConfigFromAPI();
             console.log('📦 Config loaded:', configLoaded);
@@ -1340,7 +1279,10 @@
             return;
         }
 
-        console.log(' Loading models...');
+        console.log('🔧 Setting up event listeners...');
+        setupEventListeners();
+
+        console.log('📊 Loading models...');
         await loadModels();
 
         console.log('📈 Updating live stats...');
@@ -1667,21 +1609,27 @@
 
     // ===== Prediction =====
     function getSelectedPredictionMode() {
-        return 'unified'; // Always unified now
+        return document.querySelector('input[name="predictionMode"]:checked')?.value || 'normal';
     }
 
     function updatePredictionModeUI() {
-        // No mode toggle needed - always unified
+        const mode = getSelectedPredictionMode();
+        const config = document.getElementById('geminiModeConfig');
+        config.style.display = mode === 'gemini' ? 'block' : 'none';
     }
 
     function updateGeminiStatus() {
         const badge = document.getElementById('geminiStatusBadge');
+        const geminiRadio = document.getElementById('modeGemini');
+
         if (geminiEnabled) {
             badge.className = 'badge bg-success ms-auto';
             badge.textContent = 'พร้อมใช้งาน';
+            if (geminiRadio) geminiRadio.disabled = false;
         } else {
-            badge.className = 'badge bg-warning ms-auto';
-            badge.textContent = 'Gemini ไม่พร้อม (ใช้ ML อย่างเดียว)';
+            badge.className = 'badge bg-danger ms-auto';
+            badge.textContent = 'ไม่พร้อมใช้งาน';
+            if (geminiRadio) geminiRadio.disabled = true;
         }
     }
 
@@ -1705,32 +1653,34 @@
             } catch (e) { }
         }
 
-        const goalInput = document.getElementById('geminiModeGoalInput');
-        const payload = {
-            student_name: studentName,
-            current_grades: courseGrades,
-            loaded_terms_count: loadedTermsCount,
-            model_filename: modelFilename,
-            analysis_goal: goalInput?.value.trim() || ''
-        };
+        const mode = getSelectedPredictionMode();
 
-        showCustomLoadingModal('🤖 AI + Gemini กำลังวิเคราะห์ร่วมกัน...');
+        if (mode === 'gemini' && geminiEnabled) {
+            await analyzeWithGemini(studentName, modelFilename);
+            return;
+        }
+
+        showCustomLoadingModal('กำลังวิเคราะห์ด้วย AI...');
         currentAnalysisController = new AbortController();
 
         try {
-            const response = await fetch('/api/predict_unified', {
+            const response = await fetch('/api/analyze_curriculum', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    student_name: studentName,
+                    current_grades: courseGrades,
+                    loaded_terms_count: loadedTermsCount,
+                    model_filename: modelFilename
+                }),
                 signal: currentAnalysisController.signal
             });
 
             const result = await response.json();
 
             if (result.success) {
-                displayUnifiedResult(result);
-                const method = result.combined_prediction?.method || 'AI';
-                showAlert(`✅ วิเคราะห์เสร็จสิ้น (${method})`, 'success');
+                displayResults(result);
+                showAlert('✅ วิเคราะห์เสร็จสิ้น', 'success');
             } else {
                 showAlert('เกิดข้อผิดพลาด: ' + result.error, 'danger');
             }
@@ -2432,442 +2382,6 @@
         });
     }
 
-    // ===== UNIFIED RESULT DISPLAY =====
-    function displayUnifiedResult(data) {
-        const resultsSection = document.getElementById('resultsSection');
-        resultsSection.classList.remove('d-none');
-        
-        const ml = data.ml_prediction || {};
-        const gemini = data.gemini_prediction || {};
-        const combined = data.combined_prediction || {};
-        const gradAnalysis = data.graduation_analysis || {};
-        
-        const combinedProb = (combined.probability !== null && combined.probability !== undefined) ? combined.probability : 0.5;
-        const combinedVerdict = combined.verdict || 'ไม่ทราบ';
-        const willGraduate = combinedVerdict === 'จบ';
-        const probPass = Math.min(100, (combinedProb * 100)).toFixed(1);
-        const probFail = (100 - parseFloat(probPass)).toFixed(1);
-        
-        // === Result Hero ===
-        const resultHero = document.getElementById('resultHero');
-        resultHero.className = `result-hero ${willGraduate ? 'success' : 'danger'}`;
-        
-        const methodLabel = combined.method === 'ML+Gemini' ? '🤖 AI Model + ✨ Gemini' : 
-                           combined.method === 'ML' ? '🤖 AI Model' : 
-                           combined.method === 'Gemini' ? '✨ Gemini' : 'Analysis';
-        
-        resultHero.innerHTML = `
-            <h2><i class="bi bi-${willGraduate ? 'mortarboard-fill' : 'exclamation-triangle-fill'} me-2"></i>${willGraduate ? '🎓 คาดว่าจะจบการศึกษา' : '⚠️ เสี่ยงไม่จบการศึกษา'}</h2>
-            <p class="mb-0">
-                โอกาสจบ: <strong>${probPass}%</strong> | 
-                GPA: <strong>${(data.avg_gpa || 0).toFixed(2)}</strong> |
-                วิธี: <strong>${methodLabel}</strong>
-            </p>
-            ${combined.agreement ? `
-            <p class="mb-0 mt-1">
-                <span class="badge ${combined.agreement === 'agree' ? 'bg-success' : 'bg-warning text-dark'} px-3 py-1">
-                    ${combined.agreement === 'agree' ? '✅ ML + Gemini เห็นตรงกัน' : '⚡ ML + Gemini เห็นต่างกัน'}
-                </span>
-            </p>` : ''}
-        `;
-        
-        // === AI Sources Comparison ===
-        const sourcesDiv = document.getElementById('aiSourcesComparison');
-        if (ml.available || gemini.available) {
-            sourcesDiv.style.display = 'flex';
-            
-            // ML Card
-            const mlCard = document.getElementById('mlSourceCard');
-            if (ml.available) {
-                const mlProb = (ml.probability * 100).toFixed(1);
-                const mlPass = ml.prediction === 'จบ';
-                mlCard.style.borderColor = mlPass ? '#10b981' : '#ef4444';
-                document.getElementById('mlSourceBadge').textContent = ml.prediction || '-';
-                document.getElementById('mlSourceBadge').className = `badge ${mlPass ? 'bg-success' : 'bg-danger'}`;
-                document.getElementById('mlSourceProb').textContent = `${mlProb}%`;
-                document.getElementById('mlSourceProb').style.color = mlPass ? '#10b981' : '#ef4444';
-                document.getElementById('mlSourceDetail').textContent = `ความมั่นใจ: ${(ml.confidence * 100).toFixed(0)}% | โมเดล: ${ml.models_used?.join(', ') || '-'}`;
-                
-                // Per-model scores
-                const modelsDiv = document.getElementById('mlSourceModels');
-                if (ml.model_confidence && Object.keys(ml.model_confidence).length > 0) {
-                    modelsDiv.innerHTML = Object.entries(ml.model_confidence).map(([name, score]) => {
-                        const pct = (score * 100).toFixed(0);
-                        const color = score >= 0.5 ? '#10b981' : '#ef4444';
-                        return `<span class="badge me-1 mb-1" style="background: ${color};">${name}: ${pct}%</span>`;
-                    }).join('');
-                }
-            } else {
-                mlCard.style.opacity = '0.5';
-                document.getElementById('mlSourceProb').textContent = 'ไม่พร้อม';
-                document.getElementById('mlSourceDetail').textContent = 'ไม่พบโมเดลที่เทรนไว้';
-            }
-            
-            // Gemini Card
-            const geminiCard = document.getElementById('geminiSourceCard');
-            if (gemini.available) {
-                const gPass = gemini.will_graduate;
-                geminiCard.style.borderColor = gPass ? '#10b981' : '#ef4444';
-                document.getElementById('geminiSourceBadge').textContent = gPass ? 'จบ' : 'ไม่จบ';
-                document.getElementById('geminiSourceBadge').style.background = gPass ? '#10b981' : '#ef4444';
-                document.getElementById('geminiSourceProb').textContent = `${(gemini.confidence || 0).toFixed(0)}%`;
-                document.getElementById('geminiSourceProb').style.color = gPass ? '#10b981' : '#ef4444';
-                document.getElementById('geminiSourceDetail').textContent = gPass ? 'Gemini คาดว่าจะจบ' : 'Gemini คาดว่าเสี่ยงไม่จบ';
-                document.getElementById('geminiSourceNote').innerHTML = '<span class="text-muted">Gemini วิเคราะห์เชิงบริบทและเหตุผล</span>';
-            } else {
-                geminiCard.style.opacity = '0.5';
-                document.getElementById('geminiSourceProb').textContent = 'ไม่พร้อม';
-                document.getElementById('geminiSourceDetail').textContent = gemini.gemini_available ? 'Rate limited' : 'ไม่ได้ตั้ง API Key';
-            }
-        }
-        
-        // === Agreement Badge ===
-        const agreeSection = document.getElementById('agreementSection');
-        const agreeBadge = document.getElementById('agreementBadge');
-        if (combined.agreement) {
-            agreeSection.style.display = 'block';
-            if (combined.agreement === 'agree') {
-                agreeBadge.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-                agreeBadge.style.color = 'white';
-                agreeBadge.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>ML Model + Gemini AI เห็นตรงกัน — ผลน่าเชื่อถือสูง';
-            } else {
-                agreeBadge.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
-                agreeBadge.style.color = 'white';
-                agreeBadge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>ML Model + Gemini AI เห็นต่างกัน — ควรพิจารณาเพิ่มเติม';
-            }
-        }
-        
-        // === Probability Bar ===
-        document.getElementById('probabilityBar').innerHTML = `
-            <div class="pass" style="width: ${probPass}%">โอกาสจบ ${probPass}%</div>
-            <div class="fail" style="width: ${probFail}%">${probFail}%</div>
-        `;
-        
-        // === Graduation Reason Card ===
-        const reasonCard = document.getElementById('graduationReasonContent');
-        const predHeader = document.getElementById('graduationPredictionHeader');
-        const predTitle = document.getElementById('graduationPredictionTitle');
-        const predSubtitle = document.getElementById('graduationPredictionSubtitle');
-        
-        if (predHeader) {
-            predHeader.style.background = willGraduate ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #ef4444, #dc2626)';
-        }
-        if (predTitle) {
-            predTitle.innerHTML = willGraduate 
-                ? '<i class="bi bi-mortarboard-fill me-2"></i>🎓 คาดว่าจะจบการศึกษา'
-                : '<i class="bi bi-exclamation-triangle-fill me-2"></i>⚠️ เสี่ยงไม่จบการศึกษา';
-        }
-        if (predSubtitle) {
-            predSubtitle.textContent = `${methodLabel} | โอกาสจบ: ${probPass}% | GPA: ${(data.avg_gpa || 0).toFixed(2)}`;
-        }
-        
-        const graduationCard = document.getElementById('graduationReasonCard');
-        if (graduationCard) graduationCard.style.borderColor = willGraduate ? '#10b981' : '#ef4444';
-        
-        if (reasonCard) {
-            let reasons = [];
-            
-            // ML Model reason
-            if (ml.available) {
-                reasons.push({
-                    icon: '🤖', 
-                    title: `ML Model: ${ml.prediction} (${(ml.probability * 100).toFixed(0)}%)`,
-                    description: `ความมั่นใจ ${(ml.confidence * 100).toFixed(0)}% | โมเดล: ${ml.models_used?.join(', ') || '-'}`,
-                    type: ml.prediction === 'จบ' ? 'success' : 'critical'
-                });
-            }
-            
-            // Gemini reason
-            if (gemini.available) {
-                reasons.push({
-                    icon: '✨',
-                    title: `Gemini AI: ${gemini.will_graduate ? 'คาดว่าจบ' : 'เสี่ยงไม่จบ'} (${(gemini.confidence || 0).toFixed(0)}%)`,
-                    description: 'วิเคราะห์แบบเชิงบริบทโดย AI',
-                    type: gemini.will_graduate ? 'success' : 'critical'
-                });
-            }
-            
-            // Graduation analysis reasons
-            const gaReasons = gradAnalysis.reasons_for_graduation || gradAnalysis.reasons_for_not_graduation || gradAnalysis.reasons || [];
-            gaReasons.forEach(r => {
-                reasons.push({
-                    icon: r.icon || (r.type === 'critical' ? '❌' : r.type === 'success' ? '✅' : '⚠️'),
-                    title: r.title,
-                    description: r.description || '',
-                    type: r.type || 'info'
-                });
-            });
-            
-            // GPA check  
-            if (data.avg_gpa >= 2.0 && !reasons.some(r => r.title?.includes('GPA'))) {
-                reasons.push({ icon: '✅', title: 'GPA ผ่านเกณฑ์', description: `GPA ${(data.avg_gpa).toFixed(2)} ≥ 2.00`, type: 'success' });
-            } else if (data.avg_gpa < 2.0 && !reasons.some(r => r.title?.includes('GPA'))) {
-                reasons.push({ icon: '❌', title: 'GPA ต่ำกว่าเกณฑ์', description: `GPA ${(data.avg_gpa).toFixed(2)} < 2.00`, type: 'critical' });
-            }
-            
-            if (data.failed_courses?.length > 0 && !reasons.some(r => r.title?.includes('ตก'))) {
-                reasons.push({ icon: '❌', title: `วิชาที่ตก ${data.failed_courses.length} วิชา`, description: data.failed_courses.slice(0, 3).join(', '), type: 'critical' });
-            }
-            
-            const bgColor = willGraduate ? '#ecfdf5' : '#fef2f2';
-            const bgGrad = willGraduate ? '#d1fae5' : '#fecaca';
-            const borderColor = willGraduate ? '#10b981' : '#ef4444';
-            const textClass = willGraduate ? 'text-success' : 'text-danger';
-            
-            reasonCard.innerHTML = `
-                <div class="alert mb-0 border-0" style="background: linear-gradient(135deg, ${bgColor}, ${bgGrad}); border-radius: 12px;">
-                    <h6 class="alert-heading fw-bold ${textClass} mb-3">
-                        <i class="bi bi-${willGraduate ? 'check-circle-fill' : 'exclamation-triangle-fill'} me-2"></i>
-                        ${willGraduate ? 'เหตุผลที่คาดว่าจะจบ' : 'เหตุผลที่เสี่ยงไม่จบ'}
-                        <span class="badge bg-primary ms-2"><i class="bi bi-cpu-fill me-1"></i>${combined.method}</span>
-                    </h6>
-                    <div class="row g-2">
-                        ${reasons.slice(0, 8).map(r => `
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start p-2 rounded" style="background: rgba(255,255,255,0.8); border-left: 4px solid ${r.type === 'success' ? '#10b981' : r.type === 'critical' ? '#ef4444' : '#f59e0b'};">
-                                    <span class="me-2" style="font-size: 1.2rem;">${r.icon}</span>
-                                    <div>
-                                        <div class="fw-bold ${r.type === 'success' ? 'text-success' : r.type === 'critical' ? 'text-danger' : 'text-warning'}">${r.title}</div>
-                                        <small class="text-muted">${r.description}</small>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-        
-        // === Stats Cards ===
-        document.getElementById('resultStats').innerHTML = `
-            <div class="result-stat-card">
-                <div class="icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-speedometer2"></i></div>
-                <div class="value">${(data.avg_gpa || 0).toFixed(2)}</div>
-                <div class="label">GPA เฉลี่ย</div>
-            </div>
-            <div class="result-stat-card">
-                <div class="icon bg-success bg-opacity-10 text-success"><i class="bi bi-journal-check"></i></div>
-                <div class="value">${data.completed_credits || 0}</div>
-                <div class="label">หน่วยกิตที่ผ่าน</div>
-            </div>
-            <div class="result-stat-card">
-                <div class="icon bg-info bg-opacity-10 text-info"><i class="bi bi-percent"></i></div>
-                <div class="value">${(data.completion_rate || 0).toFixed(1)}%</div>
-                <div class="label">ความคืบหน้า</div>
-            </div>
-            <div class="result-stat-card">
-                <div class="icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-x-circle"></i></div>
-                <div class="value">${data.failed_courses?.length || 0}</div>
-                <div class="label">วิชาที่ตก</div>
-            </div>
-        `;
-        
-        // === Graduation Analysis Card ===
-        if (gradAnalysis) {
-            const analysisCard = document.getElementById('graduationAnalysisCard');
-            analysisCard.style.display = 'block';
-            document.getElementById('analysisCurrentGpa').textContent = (data.avg_gpa || 0).toFixed(2);
-            document.getElementById('analysisGradProb').textContent = `${probPass}%`;
-            document.getElementById('analysisRiskLevel').textContent = gradAnalysis.risk_level || (willGraduate ? 'ต่ำ' : 'สูง');
-            document.getElementById('analysisCredits').textContent = Math.max(0, (data.total_required_credits || 136) - (data.completed_credits || 0));
-        }
-        
-        // === Gemini Deep Analysis ===
-        const geminiCard = document.getElementById('unifiedGeminiCard');
-        if (gemini.available && gemini.analysis) {
-            geminiCard.style.display = 'block';
-            const ga = gemini.analysis;
-            const gp = ga.graduation_prediction || {};
-            const gWillGrad = gemini.will_graduate;
-            
-            // Gemini prediction summary
-            const gemPredText = document.getElementById('unifiedGeminiPredText');
-            const gemPredDetail = document.getElementById('unifiedGeminiPredDetail');
-            const gemGradDiv = document.getElementById('unifiedGeminiGradSummary');
-            
-            gemGradDiv.style.background = gWillGrad ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)';
-            gemGradDiv.style.borderColor = gWillGrad ? '#10b981' : '#ef4444';
-            gemPredText.innerHTML = gWillGrad 
-                ? '<i class="bi bi-mortarboard-fill me-2"></i>🎓 Gemini: คาดว่าจะจบ'
-                : '<i class="bi bi-exclamation-triangle-fill me-2"></i>⚠️ Gemini: เสี่ยงไม่จบ';
-            gemPredText.style.color = gWillGrad ? '#10b981' : '#ef4444';
-            
-            const reasonText = gWillGrad 
-                ? (gp.reason_why_graduate || ga.outcome_summary?.description || '')
-                : (gp.reason_why_not_graduate || ga.outcome_summary?.description || '');
-            gemPredDetail.textContent = reasonText;
-            
-            // Gemini markdown analysis
-            const mkDiv = document.getElementById('unifiedGeminiMarkdown');
-            let mkContent = '';
-            
-            if (gWillGrad) {
-                mkContent += `<div class="p-2 rounded mb-2" style="background: rgba(16,185,129,0.1); border-left: 3px solid #10b981;">
-                    <strong class="text-success">เหตุผลที่คาดว่าจะจบ:</strong> ${gp.reason_why_graduate || ''}
-                </div>`;
-            } else {
-                mkContent += `<div class="p-2 rounded mb-2" style="background: rgba(239,68,68,0.1); border-left: 3px solid #ef4444;">
-                    <strong class="text-danger">เหตุผลที่เสี่ยงไม่จบ:</strong> ${gp.reason_why_not_graduate || ''}
-                </div>`;
-            }
-            
-            if (ga.analysis_markdown) {
-                const parsed = typeof marked !== 'undefined' ? marked.parse(ga.analysis_markdown) : ga.analysis_markdown.replace(/\n/g, '<br>');
-                mkContent += `<div class="mt-2">${parsed}</div>`;
-            }
-            mkDiv.innerHTML = mkContent || '<p class="text-muted">ไม่มีข้อมูล</p>';
-            
-            // Gemini recommendations
-            if (ga.recommendations?.length > 0) {
-                document.getElementById('unifiedGeminiRecsContainer').style.display = 'block';
-                document.getElementById('unifiedGeminiRecsList').innerHTML = ga.recommendations.map(r => `
-                    <li class="mb-2 d-flex align-items-start">
-                        <i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i>
-                        <span>${r}</span>
-                    </li>
-                `).join('');
-            }
-        }
-        
-        // === Feature Importance ===
-        const featureCard = document.getElementById('unifiedFeatureCard');
-        if (ml.available && ml.feature_importance && Object.keys(ml.feature_importance).length > 0) {
-            featureCard.style.display = 'block';
-            const sorted = Object.entries(ml.feature_importance).sort((a, b) => b[1] - a[1]).slice(0, 8);
-            const maxVal = sorted[0]?.[1] || 1;
-            
-            document.getElementById('unifiedFeatureList').innerHTML = sorted.map(([name, val]) => {
-                const pct = ((val / maxVal) * 100).toFixed(0);
-                return `
-                    <div class="d-flex align-items-center mb-2">
-                        <div style="width: 140px; font-size: 0.85rem;" class="text-truncate fw-bold">${name}</div>
-                        <div class="flex-grow-1 mx-2">
-                            <div class="progress" style="height: 8px;">
-                                <div class="progress-bar" style="width: ${pct}%; background: linear-gradient(90deg, #3b82f6, #8b5cf6);"></div>
-                            </div>
-                        </div>
-                        <div style="width: 50px; font-size: 0.8rem; text-align: right;">${(val * 100).toFixed(1)}%</div>
-                    </div>`;
-            }).join('');
-        }
-        
-        // === AI Insights Card (legacy) - hide as we have the new display ===
-        const aiCard = document.getElementById('aiInsightsCard');
-        if (aiCard) aiCard.style.display = 'none';
-        
-        // === Problem & Blocked Courses ===
-        const problemDiv = document.getElementById('problemCourses');
-        if (data.failed_courses?.length > 0) {
-            problemDiv.innerHTML = data.failed_courses.map(id => `
-                <div class="d-flex align-items-center mb-2 p-2 rounded" style="background: #fef2f2;">
-                    <i class="bi bi-x-circle-fill text-danger me-2"></i>
-                    <span>${id}</span>
-                </div>
-            `).join('');
-        } else {
-            problemDiv.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-check-circle text-success me-1"></i>ไม่มีวิชาที่ตก</p>';
-        }
-        
-        const blockedDiv = document.getElementById('blockedCoursesDetail');
-        if (data.blocked_courses?.length > 0) {
-            blockedDiv.innerHTML = data.blocked_courses.map(bc => `
-                <div class="d-flex align-items-center mb-2 p-2 rounded" style="background: #fffbeb;">
-                    <i class="bi bi-lock-fill text-warning me-2"></i>
-                    <span>${bc.course_id || bc}: ${bc.reason || 'ติดเงื่อนไขวิชาก่อนหน้า'}</span>
-                </div>
-            `).join('');
-        } else {
-            blockedDiv.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-unlock text-success me-1"></i>ไม่มีวิชาติดเงื่อนไข</p>';
-        }
-        
-        // === Recommendations ===
-        const recsDiv = document.getElementById('personalRecommendations');
-        const recs = gradAnalysis.suggestions || gradAnalysis.improvements || [];
-        if (recs.length > 0) {
-            recsDiv.innerHTML = recs.map(r => {
-                const text = typeof r === 'string' ? r : (r.text || r.description || r.title || '');
-                return `<div class="recommendation-card"><i class="bi bi-lightbulb text-success me-2"></i>${text}</div>`;
-            }).join('');
-        } else {
-            recsDiv.innerHTML = '<div class="recommendation-card"><i class="bi bi-info-circle text-info me-2"></i>ไม่มีคำแนะนำเพิ่มเติม</div>';
-        }
-        
-        // === Risk Factors Section ===
-        const riskSection = document.getElementById('riskFactorsSection');
-        const riskList = document.getElementById('riskFactorsList');
-        const criticalReasons = gradAnalysis.reasons?.filter(r => r.type === 'critical' || r.type === 'warning') || [];
-        
-        if (criticalReasons.length > 0 && riskSection && riskList) {
-            riskSection.style.display = 'block';
-            riskList.innerHTML = criticalReasons.map(r => `
-                <div class="d-flex align-items-start mb-2">
-                    <i class="bi bi-exclamation-${r.type === 'critical' ? 'triangle' : 'circle'}-fill text-${r.type === 'critical' ? 'danger' : 'warning'} me-2 mt-1"></i>
-                    <div>
-                        <div class="fw-bold">${r.title}</div>
-                        <small class="text-muted">${r.description || ''}</small>
-                        ${r.solution ? `<div class="mt-1"><small class="text-success"><i class="bi bi-lightbulb me-1"></i>${r.solution}</small></div>` : ''}
-                    </div>
-                </div>
-            `).join('');
-        } else if (riskSection) {
-            riskSection.style.display = 'none';
-        }
-        
-        // === Improvement Suggestions ===
-        const improvementSection = document.getElementById('improvementSection');
-        const improvementList = document.getElementById('improvementList');
-        if (gradAnalysis.recommendations?.length > 0 && improvementSection && improvementList) {
-            improvementSection.style.display = 'block';
-            improvementList.innerHTML = gradAnalysis.recommendations.slice(0, 5).map(s =>
-                `<div class="d-flex align-items-start mb-2"><i class="bi bi-lightbulb-fill text-success me-2 mt-1"></i><span>${s}</span></div>`
-            ).join('');
-        } else if (improvementSection) {
-            improvementSection.style.display = 'none';
-        }
-        
-        // === AI Insights Card (show if ML has data) ===
-        const aiCard = document.getElementById('aiInsightsCard');
-        if (aiCard && ml.available && ml.feature_importance && Object.keys(ml.feature_importance).length > 0) {
-            aiCard.style.display = 'block';
-            const methodBadge = document.getElementById('predictionMethodBadge');
-            if (methodBadge) methodBadge.textContent = ml.method || 'AI_MODEL';
-            
-            const modelsList = document.getElementById('modelsUsedList');
-            if (modelsList && ml.models_used) {
-                modelsList.innerHTML = ml.models_used.map(m =>
-                    `<span class="badge bg-primary me-1 mb-1">${m.toUpperCase()}</span>`
-                ).join('');
-            }
-            
-            const featureList = document.getElementById('featureImportanceList');
-            if (featureList) {
-                const features = Object.entries(ml.feature_importance).slice(0, 5);
-                featureList.innerHTML = features.map(([name, imp], i) => `
-                    <div class="feature-item">
-                        <span class="rank">${i + 1}</span>
-                        <span class="name">${name}</span>
-                        <div class="bar"><div class="bar-fill" style="width: ${(imp * 100).toFixed(0)}%"></div></div>
-                        <span class="value">${(imp * 100).toFixed(1)}%</span>
-                    </div>
-                `).join('');
-            }
-        } else if (aiCard) {
-            aiCard.style.display = 'none';
-        }
-        
-        // === Charts - use existing display functions ===
-        if (data.chart_data) {
-            displayThreeLineChart(data.chart_data);
-        }
-        displayGpaChart(data);
-        displayGradeDistChart(data);
-        
-        // Scroll to results
-        setTimeout(() => {
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-    }
-
     function displayGeminiResult(result) {
         const card = document.getElementById('geminiResultCard');
         card.classList.remove('d-none');
@@ -3042,8 +2556,10 @@
     }
 
     async function analyzeLiveGradesWithGemini() {
-        // Redirect to unified prediction
-        await analyzeAndPredict();
+        await analyzeWithGemini(
+            document.getElementById('studentName').value,
+            document.getElementById('modelSelect').value
+        );
     }
 
     // ===== Modals =====
