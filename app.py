@@ -1196,6 +1196,7 @@ class MongoAdminManager:
 
     def __init__(self):
         self.enabled = False
+        self.init_error = None
         self.client = None
         self.db = None
         self.users = None
@@ -1208,9 +1209,11 @@ class MongoAdminManager:
         self._enc_key = os.environ.get('APP_MASTER_ENCRYPTION_KEY', '').strip()
 
         if not self._mongo_uri:
+            self.init_error = 'MONGODB_URI not configured'
             logger.warning("⚠️ MONGODB_URI not configured. Admin backend is disabled.")
             return
         if MongoClient is None:
+            self.init_error = 'pymongo not installed'
             logger.warning("⚠️ pymongo package not installed. Admin backend is disabled.")
             return
 
@@ -1227,10 +1230,12 @@ class MongoAdminManager:
             self.audit.create_index('created_at')
 
             self.enabled = True
+            self.init_error = None
             self._bootstrap_default_admin()
             logger.info(f"✅ Mongo admin backend ready (db={self._db_name})")
         except Exception as e:
             logger.error(f"❌ Mongo admin backend init failed: {e}")
+            self.init_error = str(e)
             self.enabled = False
 
     def _log_audit(self, actor_user_id, action, target, status='success', details=None):
@@ -5377,7 +5382,8 @@ def refresh_r2_storage_from_settings():
 def admin_login():
     fallback_auth = has_fallback_admin_auth()
     if not admin_manager.enabled and not fallback_auth:
-        return "MongoDB admin backend is not configured (and fallback ADMIN_USERNAME/ADMIN_PASSWORD not set)", 503
+        reason = admin_manager.init_error or 'MongoDB admin backend is not available'
+        return f"MongoDB admin backend is not available: {reason}", 503
 
     if request.method == 'GET':
         if session.get('user_id'):
