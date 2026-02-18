@@ -1370,21 +1370,38 @@ COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COUR
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-# Use gemini-2.0-flash as default (stable, fast, widely available)
-# Fallback chain: gemini-2.0-flash → gemini-2.5-flash → gemini-2.5-pro → gemini-1.5-pro
-# Reference: https://ai.google.dev/gemini-api/docs/models
-GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
+# Use gemini-2.5-flash as default (stable, free, fast)
+# Fallback chain: gemini-2.5-flash → gemini-2.5-flash-lite → gemini-2.5-pro → gemini-2.0-flash
+# Reference: https://ai.google.dev/gemini-api/docs/models (updated Feb 2026)
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.5-flash')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
 # Default fallback models for high availability (in order of preference)
-GEMINI_DEFAULT_FALLBACKS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-pro-preview-05-06']
+GEMINI_DEFAULT_FALLBACKS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash']
+
+# Deprecated model name → recommended replacement (auto-fix on startup)
+GEMINI_DEPRECATED_MODELS = {
+    'gemini-1.5-flash': 'gemini-2.5-flash',
+    'gemini-1.5-pro': 'gemini-2.5-pro',
+    'gemini-2.5-flash-preview-05-20': 'gemini-2.5-flash',
+    'gemini-2.5-pro-preview-05-06': 'gemini-2.5-pro',
+    'gemini-3-flash-preview': 'gemini-2.5-flash',
+}
+
+# Auto-fix deprecated model name stored in env/MongoDB
+if GEMINI_MODEL_NAME in GEMINI_DEPRECATED_MODELS:
+    _old_model = GEMINI_MODEL_NAME
+    GEMINI_MODEL_NAME = GEMINI_DEPRECATED_MODELS[_old_model]
+    os.environ['GEMINI_MODEL_NAME'] = GEMINI_MODEL_NAME
+    logger.warning(f"⚠️ Auto-corrected deprecated model '{_old_model}' → '{GEMINI_MODEL_NAME}'")
 
 # Known Gemini models for the admin dropdown (label → model id)
 # Use exact model IDs from Google AI — click 🔄 in admin to fetch live list
 GEMINI_KNOWN_MODELS = [
-    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'desc': '⭐ แนะนำ — เร็ว เสถียร ฟรี'},
-    {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash Lite', 'desc': 'เบาที่สุด ประหยัด ฟรี'},
-    {'id': 'gemini-2.5-flash-preview-05-20', 'name': 'Gemini 2.5 Flash Preview', 'desc': 'รุ่นใหม่ ฉลาด เร็ว'},
-    {'id': 'gemini-2.5-pro-preview-05-06', 'name': 'Gemini 2.5 Pro Preview', 'desc': 'ฉลาดสุด ช้ากว่า'},
+    {'id': 'gemini-2.5-flash', 'name': 'Gemini 2.5 Flash', 'desc': '⭐ แนะนำ — เร็ว เสถียร ฟรี'},
+    {'id': 'gemini-2.5-flash-lite', 'name': 'Gemini 2.5 Flash Lite', 'desc': 'เบาที่สุด ประหยัด ฟรี'},
+    {'id': 'gemini-2.5-pro', 'name': 'Gemini 2.5 Pro', 'desc': 'ฉลาดสุด ช้ากว่า'},
+    {'id': 'gemini-2.0-flash', 'name': 'Gemini 2.0 Flash', 'desc': '⚠️ deprecated มี.ค. 2026'},
+    {'id': 'gemini-2.0-flash-lite', 'name': 'Gemini 2.0 Flash Lite', 'desc': '⚠️ deprecated มี.ค. 2026'},
 ]
 
 
@@ -1435,7 +1452,19 @@ def refresh_gemini_runtime_from_settings():
         admin_manager.apply_runtime_env()
 
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.0-flash')
+    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-2.5-flash')
+    # Auto-fix deprecated model names
+    if GEMINI_MODEL_NAME in GEMINI_DEPRECATED_MODELS:
+        _old = GEMINI_MODEL_NAME
+        GEMINI_MODEL_NAME = GEMINI_DEPRECATED_MODELS[_old]
+        os.environ['GEMINI_MODEL_NAME'] = GEMINI_MODEL_NAME
+        logger.warning(f"⚠️ Auto-corrected deprecated model '{_old}' → '{GEMINI_MODEL_NAME}'")
+        # Also update MongoDB if available
+        if admin_manager.enabled:
+            try:
+                admin_manager.set_setting('GEMINI_MODEL_NAME', GEMINI_MODEL_NAME)
+            except Exception:
+                pass
     GEMINI_MODEL_CANDIDATES = _build_gemini_model_candidates(GEMINI_MODEL_NAME)
 
     gemini_client_ready = False
@@ -5507,7 +5536,7 @@ def admin_settings():
 
     current_values = {
         'gemini_api_key': _get_val('GEMINI_API_KEY'),
-        'gemini_model_name': _get_val('GEMINI_MODEL_NAME', 'gemini-3-flash-preview'),
+        'gemini_model_name': _get_val('GEMINI_MODEL_NAME', 'gemini-2.5-flash'),
         'gemini_model_fallbacks': _get_val('GEMINI_MODEL_FALLBACKS'),
         'r2_access_key': _get_val('CLOUDFLARE_R2_ACCESS_KEY_ID'),
         'r2_secret_key': _get_val('CLOUDFLARE_R2_SECRET_ACCESS_KEY'),
