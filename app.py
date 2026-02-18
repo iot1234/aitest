@@ -1545,7 +1545,7 @@ def enforce_first_login_password_change():
 
 @app.before_request
 def enforce_login_for_non_prediction_pages():
-    """Allow anonymous access only to prediction page and required prediction APIs."""
+    """Allow anonymous access only to home, prediction page and required prediction APIs."""
     if not admin_manager.enabled:
         return None
 
@@ -1557,9 +1557,9 @@ def enforce_login_for_non_prediction_pages():
         'admin_logout',
         'admin_change_password',
 
-        # Public prediction pages
+        # Public pages
+        'main_page',
         'curriculum_prediction_form',
-        'curriculum_page',
 
         # Public prediction APIs
         'get_config_for_frontend',
@@ -5632,8 +5632,8 @@ def admin_test_connections():
 
 @app.route('/')
 def index():
-    """Landing page: redirect users to prediction page."""
-    return redirect(url_for('curriculum_prediction_form'))
+    """Landing page: redirect users to home page."""
+    return redirect(url_for('main_page'))
 
 @app.route('/test')
 def curriculum_prediction_form():

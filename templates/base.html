@@ -657,6 +657,7 @@
 </head>
 
 <body>
+    {% set is_logged_in = session.get('user_id') %}
     <!-- Top Bar -->
     <div class="top-bar d-none d-md-block">
         <div class="container">
@@ -668,10 +669,21 @@
                     </small>
                 </div>
                 <div class="col-md-6 text-end">
+                    {% if is_logged_in %}
                     <a href="{{ url_for('status_page') }}" class="me-3 animate__animated animate__fadeInRight"
                         style="animation-delay: 0.1s;">
                         <i class="bi bi-activity me-1"></i> สถานะระบบ
                     </a>
+                    <a href="{{ url_for('admin_logout') }}" class="me-3 animate__animated animate__fadeInRight"
+                        style="animation-delay: 0.15s;">
+                        <i class="bi bi-box-arrow-right me-1"></i> ออกจากระบบ
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('admin_login') }}" class="me-3 animate__animated animate__fadeInRight"
+                        style="animation-delay: 0.1s;">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ
+                    </a>
+                    {% endif %}
                     <button class="btn btn-sm btn-link text-gray-300 p-0 animate__animated animate__fadeInRight"
                         style="animation-delay: 0.2s;" onclick="toggleDarkMode()" id="darkModeBtn">
                         <i class="bi bi-moon-fill"></i>
@@ -708,14 +720,15 @@
                             <i class="bi bi-house me-1"></i> หน้าหลัก
                         </a>
                     </li>
-                    <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.2s;">
-                        <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="bi bi-cpu me-1"></i> ฝึกโมเดล
-                        </a>
-                    </li>
                     <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.3s;">
                         <a class="nav-link" href="{{ url_for('curriculum_prediction_form') }}">
                             <i class="bi bi-person-check me-1"></i> ทำนายรายบุคคล
+                        </a>
+                    </li>
+                    {% if is_logged_in %}
+                    <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.2s;">
+                        <a class="nav-link" href="{{ url_for('index') }}">
+                            <i class="bi bi-cpu me-1"></i> ฝึกโมเดล
                         </a>
                     </li>
                     <li class="nav-item dropdown animate__animated animate__fadeInDown" style="animation-delay: 0.4s;">
@@ -736,8 +749,20 @@
                                     <i class="bi bi-activity me-2"></i> สถานะระบบ
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('admin_settings') }}">
+                                    <i class="bi bi-gear me-2"></i> ตั้งค่าระบบ
+                                </a>
+                            </li>
                         </ul>
                     </li>
+                    {% else %}
+                    <li class="nav-item animate__animated animate__fadeInDown" style="animation-delay: 0.4s;">
+                        <a class="nav-link" href="{{ url_for('admin_login') }}">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
@@ -786,16 +811,25 @@
                     <h6 class="text-white fw-bold mb-3">เมนูหลัก</h6>
                     <ul class="list-unstyled mb-0">
                         <li><a href="{{ url_for('main_page') }}">หน้าหลัก</a></li>
-                        <li><a href="{{ url_for('index') }}">ฝึกโมเดล</a></li>
                         <li><a href="{{ url_for('curriculum_prediction_form') }}">ทำนายรายบุคคล</a></li>
+                        {% if is_logged_in %}
+                        <li><a href="{{ url_for('index') }}">ฝึกโมเดล</a></li>
+                        {% else %}
+                        <li><a href="{{ url_for('admin_login') }}">เข้าสู่ระบบ</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 <div class="col-lg-2 col-md-4 mb-4 mb-lg-0" data-aos="fade-up" data-aos-delay="200">
                     <h6 class="text-white fw-bold mb-3">เครื่องมือ</h6>
                     <ul class="list-unstyled mb-0">
+                        {% if is_logged_in %}
                         <li><a href="{{ url_for('models_page') }}">จัดการโมเดล</a></li>
                         <li><a href="{{ url_for('curriculum_page') }}">วิเคราะห์หลักสูตร</a></li>
                         <li><a href="{{ url_for('status_page') }}">สถานะระบบ</a></li>
+                        <li><a href="{{ url_for('admin_settings') }}">ตั้งค่าระบบ</a></li>
+                        {% else %}
+                        <li><a href="{{ url_for('admin_login') }}">เข้าสู่ระบบเพื่อใช้งานเมนูขั้นสูง</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 <div class="col-lg-4 col-md-4" data-aos="fade-up" data-aos-delay="300">

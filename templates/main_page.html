@@ -285,6 +285,7 @@
 {% endblock %}
 
 {% block content %}
+{% set is_logged_in = session.get('user_id') %}
 <!-- Hero Section -->
 <section class="hero-section">
     <div data-aos="zoom-in">
@@ -300,9 +301,15 @@
             <a href="{{ url_for('curriculum_prediction_form') }}" class="btn btn-light btn-lg px-5 py-3 rounded-pill shadow-lg">
                 <i class="bi bi-person-check-fill text-primary"></i> ทดสอบการทำนาย
             </a>
+            {% if is_logged_in %}
             <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
                 <i class="bi bi-cpu"></i> ฝึกโมเดล AI
             </a>
+            {% else %}
+            <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+                <i class="bi bi-box-arrow-in-right"></i> เข้าสู่ระบบเพื่อเมนูขั้นสูง
+            </a>
+            {% endif %}
         </div>
     </div>
 </section>
@@ -355,10 +362,17 @@
 <section class="features-section">
     <div class="section-title" data-aos="fade-up">
         <h2><i class="bi bi-grid-3x3-gap-fill me-2"></i>ฟีเจอร์อัจฉริยะ</h2>
-        <p>เครื่องมือครบครันสำหรับการวิเคราะห์และทำนายผลการเรียนด้วย AI</p>
+        <p>
+            {% if is_logged_in %}
+            เครื่องมือครบครันสำหรับการวิเคราะห์และทำนายผลการเรียนด้วย AI
+            {% else %}
+            ผู้ใช้ทั่วไปสามารถใช้งานหน้าทำนายได้ทันที และเข้าสู่ระบบเพื่อใช้งานเมนูขั้นสูง
+            {% endif %}
+        </p>
     </div>
     
     <div class="row g-4">
+        {% if is_logged_in %}
         <!-- Feature 1: Train Model -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="100">
             <div class="card feature-card">
@@ -374,6 +388,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- Feature 2: Individual Prediction -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="200">
@@ -390,7 +405,7 @@
                 </div>
             </div>
         </div>
-        
+        {% if is_logged_in %}
         <!-- Feature 3: Batch Prediction -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="300">
             <div class="card feature-card">
@@ -406,7 +421,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Feature 4: Subject Analysis -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="400">
             <div class="card feature-card">
@@ -422,7 +437,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Feature 5: Curriculum Analysis -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="500">
             <div class="card feature-card">
@@ -438,7 +453,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Feature 6: Model Management -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="600">
             <div class="card feature-card">
@@ -454,6 +469,22 @@
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="300">
+            <div class="card feature-card">
+                <div class="card-body">
+                    <div class="feature-icon bg-primary text-white">
+                        <i class="bi bi-box-arrow-in-right"></i>
+                    </div>
+                    <h5>เข้าสู่ระบบแอดมิน</h5>
+                    <p>หลังเข้าสู่ระบบจะใช้งานเมนูเทรนโมเดล จัดการโมเดล และตั้งค่าระบบได้</p>
+                    <a href="{{ url_for('admin_login') }}" class="btn btn-primary w-100 rounded-pill">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </section>
 
@@ -507,9 +538,15 @@
             <a href="{{ url_for('curriculum_prediction_form') }}" class="btn btn-light btn-lg px-5 py-3 rounded-pill shadow-lg text-primary fw-bold">
                 <i class="bi bi-play-fill"></i> ทดลองใช้งาน
             </a>
+            {% if is_logged_in %}
             <a href="{{ url_for('status_page') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
                 <i class="bi bi-activity"></i> ดูสถานะระบบ
             </a>
+            {% else %}
+            <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+                <i class="bi bi-box-arrow-in-right"></i> เข้าสู่ระบบ
+            </a>
+            {% endif %}
         </div>
     </div>
 </section>
