@@ -1480,22 +1480,21 @@ def current_user_role() -> str:
 
 
 def has_any_role(*roles) -> bool:
-    if not admin_manager.enabled:
-        return True
     return current_user_role() in roles
 
 
 def is_logged_in() -> bool:
-    if not admin_manager.enabled:
-        return True
     return bool(session.get('user_id'))
+
+
+def has_fallback_admin_auth() -> bool:
+    """Fallback admin auth via environment variables when MongoDB backend is unavailable."""
+    return bool(os.environ.get('ADMIN_USERNAME') and os.environ.get('ADMIN_PASSWORD'))
 
 
 def admin_login_required(view_func):
     @wraps(view_func)
     def wrapper(*args, **kwargs):
-        if not admin_manager.enabled:
-            return _json_error('Admin backend is disabled (MongoDB not configured)', 503)
         if not is_logged_in():
             if request.path.startswith('/api/'):
                 return _json_error('Unauthorized', 401)
@@ -1508,8 +1507,6 @@ def roles_required(*roles):
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(*args, **kwargs):
-            if not admin_manager.enabled:
-                return view_func(*args, **kwargs)
             if not is_logged_in():
                 return _json_error('Unauthorized', 401)
             if not has_any_role(*roles):
@@ -1546,9 +1543,6 @@ def enforce_first_login_password_change():
 @app.before_request
 def enforce_login_for_non_prediction_pages():
     """Allow anonymous access only to home, prediction page and required prediction APIs."""
-    if not admin_manager.enabled:
-        return None
-
     endpoint = request.endpoint or ''
 
     public_endpoints = {
@@ -5381,8 +5375,9 @@ def refresh_r2_storage_from_settings():
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
-    if not admin_manager.enabled:
-        return "MongoDB admin backend is not configured", 503
+    fallback_auth = has_fallback_admin_auth()
+    if not admin_manager.enabled and not fallback_auth:
+        return "MongoDB admin backend is not configured (and fallback ADMIN_USERNAME/ADMIN_PASSWORD not set)", 503
 
     if request.method == 'GET':
         if session.get('user_id'):
@@ -5393,7 +5388,20 @@ def admin_login():
     username = (payload.get('username') or '').strip()
     password = payload.get('password') or ''
 
-    user = admin_manager.authenticate(username, password)
+    user = None
+    if admin_manager.enabled:
+        user = admin_manager.authenticate(username, password)
+    else:
+        fallback_username = os.environ.get('ADMIN_USERNAME', 'admin')
+        fallback_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+        if username == fallback_username and password == fallback_password:
+            user = {
+                '_id': 'local-admin',
+                'username': fallback_username,
+                'role': 'super_admin',
+                'must_change_password': False,
+            }
+
     if not user:
         if request.path.startswith('/api/') or request.is_json:
             return _json_error('Invalid credentials', 401)
@@ -5405,7 +5413,8 @@ def admin_login():
     session['must_change_password'] = bool(user.get('must_change_password', False))
     session.permanent = True
 
-    admin_manager._log_audit(session['user_id'], 'LOGIN', 'admin_login')
+    if admin_manager.enabled:
+        admin_manager._log_audit(session['user_id'], 'LOGIN', 'admin_login')
 
     if session.get('must_change_password'):
         return redirect(url_for('admin_change_password'))
@@ -5414,8 +5423,6 @@ def admin_login():
 
 @app.route('/admin')
 def admin_home():
-    if not admin_manager.enabled:
-        return "MongoDB admin backend is not configured", 503
     if not is_logged_in():
         return redirect(url_for('admin_login'))
     if session.get('must_change_password'):
@@ -5436,6 +5443,9 @@ def admin_logout():
 @app.route('/admin/change-password', methods=['GET', 'POST'])
 @admin_login_required
 def admin_change_password():
+    if not admin_manager.enabled:
+        return render_template('admin_change_password.html', error='โหมด fallback ไม่รองรับการเปลี่ยนรหัสผ่าน กรุณาตั้งค่า MongoDB เพื่อจัดการผู้ใช้')
+
     if request.method == 'GET':
         return render_template('admin_change_password.html')
 
@@ -5467,30 +5477,37 @@ def admin_change_password():
 @admin_login_required
 @roles_required('admin', 'super_admin')
 def admin_settings():
+    setting_map = {
+        'gemini_api_key': 'GEMINI_API_KEY',
+        'gemini_model_name': 'GEMINI_MODEL_NAME',
+        'gemini_model_fallbacks': 'GEMINI_MODEL_FALLBACKS',
+        'r2_access_key': 'CLOUDFLARE_R2_ACCESS_KEY_ID',
+        'r2_secret_key': 'CLOUDFLARE_R2_SECRET_ACCESS_KEY',
+        'r2_endpoint': 'CLOUDFLARE_R2_ENDPOINT',
+        'r2_bucket_name': 'CLOUDFLARE_R2_BUCKET_NAME',
+    }
+
     if request.method == 'POST':
         form = request.get_json(silent=True) or request.form
-
-        setting_map = {
-            'gemini_api_key': 'GEMINI_API_KEY',
-            'gemini_model_name': 'GEMINI_MODEL_NAME',
-            'gemini_model_fallbacks': 'GEMINI_MODEL_FALLBACKS',
-            'r2_access_key': 'CLOUDFLARE_R2_ACCESS_KEY_ID',
-            'r2_secret_key': 'CLOUDFLARE_R2_SECRET_ACCESS_KEY',
-            'r2_endpoint': 'CLOUDFLARE_R2_ENDPOINT',
-            'r2_bucket_name': 'CLOUDFLARE_R2_BUCKET_NAME',
-        }
 
         for form_key, setting_key in setting_map.items():
             if form_key in form and form.get(form_key) is not None:
                 value = str(form.get(form_key)).strip()
                 if value:
-                    admin_manager.set_setting(setting_key, value, actor_user_id=session.get('user_id'))
+                    if admin_manager.enabled:
+                        admin_manager.set_setting(setting_key, value, actor_user_id=session.get('user_id'))
+                    else:
+                        # Fallback mode: runtime only (not persisted in DB)
+                        os.environ[setting_key] = value
 
-        admin_manager.apply_runtime_env()
+        if admin_manager.enabled:
+            admin_manager.apply_runtime_env()
         refresh_gemini_runtime_from_settings()
         refresh_r2_storage_from_settings()
 
-        return render_template('admin_settings.html', success='บันทึกค่าเรียบร้อยแล้ว')
+        if admin_manager.enabled:
+            return render_template('admin_settings.html', success='บันทึกค่าเรียบร้อยแล้ว')
+        return render_template('admin_settings.html', success='บันทึกค่าแบบ runtime แล้ว (โหมด fallback: ยังไม่บันทึกลง MongoDB)')
 
     current_values = {
         'gemini_api_key': admin_manager.get_setting('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', '')),
@@ -5523,6 +5540,9 @@ def admin_me():
 @admin_login_required
 @roles_required('super_admin')
 def admin_users_api():
+    if not admin_manager.enabled:
+        return _json_error('MongoDB admin backend is not configured', 503)
+
     if request.method == 'GET':
         users = []
         for u in admin_manager.users.find({}, {'password_hash': 0}):
