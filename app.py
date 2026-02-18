@@ -100,70 +100,171 @@ def preprocess_tan1_data(file_path):
     """
     ประมวลผลข้อมูล TAN1.csv จาก Long Format เป็น Wide Format
     และคำนวณ RESULT (จบการศึกษา/ไม่จบการศึกษา)
+
+    รวมการแก้ไขปัญหาคุณภาพข้อมูล:
+    - Auto-mapping ชื่อคอลัมน์ (Dummy StudentNO → STUDENT_ID, COURSE_CODE → COURSE_ID)
+    - ลบแถว duplicate (นศ.+วิชา+ปี+เทอม เดียวกัน)
+    - จัดการ retake: เก็บเฉพาะ attempt สุดท้าย
+    - จัดการเกรดพิเศษ (I, AU, U, S*, W)
+    - นับหน่วยกิตเฉพาะวิชาที่ผ่าน (ไม่นับ W, F, I, U)
+    - กรองนศ.ที่ยังเรียนอยู่ออก (ไม่ label ว่าจบ/ไม่จบ)
     """
-    
+    import logging
+    logger = logging.getLogger(__name__)
+
     # อ่านข้อมูล
     df_long = pd.read_csv(file_path)
-    
+    logger.info(f"📖 Read {len(df_long)} rows, {len(df_long.columns)} columns")
+
+    # === Step 1: ลบคอลัมน์ขยะ (คอลัมน์แรกที่ชื่อยาวมากและมีค่าเดียว) ===
+    first_col = df_long.columns[0]
+    if len(first_col) > 50 and df_long[first_col].nunique() <= 1:
+        logger.info(f"🗑️ Removing junk column: '{first_col[:50]}...'")
+        df_long = df_long.drop(columns=[first_col])
+
+    # === Step 2: Auto-mapping ชื่อคอลัมน์ ===
+    column_mapping = {
+        'Dummy StudentNO': 'STUDENT_ID', 'dummy studentno': 'STUDENT_ID',
+        'STUDENT NO': 'STUDENT_ID', 'student_id': 'STUDENT_ID',
+        'COURSE_CODE': 'COURSE_ID', 'course_code': 'COURSE_ID',
+        'Course Code': 'COURSE_ID',
+    }
+    rename_map = {col: column_mapping[col] for col in df_long.columns if col in column_mapping}
+    if rename_map:
+        logger.info(f"🔄 Column mapping: {rename_map}")
+        df_long = df_long.rename(columns=rename_map)
+
     # ตรวจสอบคอลัมน์ที่จำเป็น
     required_columns = ['STUDENT_ID', 'COURSE_ID', 'GRADE', 'CREDIT']
     for col in required_columns:
         if col not in df_long.columns:
-            raise ValueError(f"ไม่พบคอลัมน์ {col} ในไฟล์ข้อมูล")
-    
-    # สร้าง grade mapping
+            raise ValueError(f"ไม่พบคอลัมน์ {col} ในไฟล์ข้อมูล (คอลัมน์ที่มี: {list(df_long.columns)})")
+
+    # === Step 3: ลบ exact duplicates (นศ.+วิชา+ปี+เทอม เดียวกัน) ===
+    before_dedup = len(df_long)
+    dedup_cols = ['STUDENT_ID', 'COURSE_ID']
+    # ใช้คอลัมน์ ปีการศึกษา และ เทอม ถ้ามี
+    if 'ปีการศึกษา' in df_long.columns:
+        dedup_cols.append('ปีการศึกษา')
+    if 'เทอม' in df_long.columns:
+        dedup_cols.append('เทอม')
+    df_long = df_long.drop_duplicates(subset=dedup_cols, keep='first')
+    removed_dupes = before_dedup - len(df_long)
+    logger.info(f"🧹 Removed {removed_dupes} exact duplicate rows ({before_dedup} → {len(df_long)})")
+
+    # === Step 4: จัดการ retake — เก็บเฉพาะ attempt สุดท้าย ===
+    before_retake = len(df_long)
+    sort_cols = ['STUDENT_ID', 'COURSE_ID']
+    if 'ปีการศึกษา' in df_long.columns:
+        sort_cols.append('ปีการศึกษา')
+    if 'เทอม' in df_long.columns:
+        sort_cols.append('เทอม')
+    df_long = df_long.sort_values(sort_cols)
+    df_long = df_long.drop_duplicates(subset=['STUDENT_ID', 'COURSE_ID'], keep='last')
+    removed_retakes = before_retake - len(df_long)
+    if removed_retakes > 0:
+        logger.info(f"🔁 Removed {removed_retakes} retake duplicates (kept last attempt)")
+
+    # === Step 5: สร้าง grade mapping รวมเกรดพิเศษ ===
     grade_mapping = {
-        'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 
-        'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'S': None  # S ไม่นำมาคำนวณ GPA
+        'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+        'D+': 1.5, 'D': 1.0, 'F': 0.0,
+        'W': None,              # ถอน — ไม่นับ GPA/หน่วยกิต
+        'S': None, 'S*': None,  # ผ่าน/สอบผ่าน — ไม่มีเกรดตัวเลข
+        'AU': None,             # Audit — ไม่มีเกรด
+        'I': None,              # Incomplete — ไม่สมบูรณ์
+        'U': None,              # Unsatisfactory — ไม่ผ่าน (ไม่นับ credit)
     }
-    
+
     # เพิ่มคอลัมน์ GRADE_POINT_NUM
     df_long['GRADE_POINT_NUM'] = df_long['GRADE'].map(grade_mapping)
-    
-    # แปลงเป็น Wide Format
+
+    # Log เกรดที่ไม่รู้จัก
+    unknown_grades = df_long[~df_long['GRADE'].isin(grade_mapping.keys())]['GRADE'].unique()
+    if len(unknown_grades) > 0:
+        logger.warning(f"⚠️ Unknown grades found (will be excluded): {list(unknown_grades)}")
+
+    # === Step 6: กรองนศ.ที่ยังเรียนอยู่ ===
+    has_entry_year = 'ปีที่เข้า' in df_long.columns
+    has_academic_year = 'ปีการศึกษา' in df_long.columns
+    excluded_students = set()
+
+    if has_entry_year and has_academic_year:
+        current_year_be = 2568  # พ.ศ. 2568 = ค.ศ. 2025
+        for student_id in df_long['STUDENT_ID'].unique():
+            student_data = df_long[df_long['STUDENT_ID'] == student_id]
+            entry_year_ce = student_data['ปีที่เข้า'].iloc[0]  # ค.ศ.
+            entry_year_be = entry_year_ce + 543                  # แปลงเป็น พ.ศ.
+            last_academic_year = student_data['ปีการศึกษา'].max()  # พ.ศ.
+            years_studied = last_academic_year - entry_year_be + 1
+
+            # ถ้าเรียนไม่ถึง 4 ปี AND ปีล่าสุดคือปีปัจจุบัน/ปีก่อน → ยังเรียนอยู่
+            if years_studied < 4 and last_academic_year >= current_year_be - 1:
+                excluded_students.add(student_id)
+
+        if excluded_students:
+            df_long = df_long[~df_long['STUDENT_ID'].isin(excluded_students)]
+            logger.info(f"🎓 Excluded {len(excluded_students)} still-studying students (< 4 years, recent data)")
+    else:
+        logger.info("ℹ️ No ปีที่เข้า/ปีการศึกษา columns — skipping still-studying filter")
+
+    logger.info(f"📊 Clean data: {len(df_long)} rows, {df_long['STUDENT_ID'].nunique()} students, {df_long['COURSE_ID'].nunique()} courses")
+
+    # === Step 7: แปลงเป็น Wide Format ===
     df_wide = df_long.pivot_table(
-        index='STUDENT_ID', 
-        columns='COURSE_ID', 
-        values='GRADE', 
+        index='STUDENT_ID',
+        columns='COURSE_ID',
+        values='GRADE',
         aggfunc='first'
     ).reset_index()
-    
-    # คำนวณ GPA และหน่วยกิตรวมสำหรับแต่ละนักศึกษา
+
+    # === Step 8: คำนวณ GPA และหน่วยกิต (แก้ไข: นับเฉพาะวิชาที่ผ่าน) ===
+    # เกรดที่ไม่นับใน GPA (เกรดพิเศษ)
+    non_gpa_grades = {'W', 'S', 'S*', 'AU', 'I', 'U'}
+    # เกรดที่ "ผ่าน" = ได้หน่วยกิต
+    passed_grades = {'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'S', 'S*'}
+
     student_stats = []
-    
     for student_id in df_long['STUDENT_ID'].unique():
         student_data = df_long[df_long['STUDENT_ID'] == student_id]
-        
-        # คำนวณ GPA (ไม่รวม S)
-        gpa_data = student_data[student_data['GRADE'] != 'S']
+
+        # คำนวณ GPA — เฉพาะวิชาที่มีเกรดตัวเลข (ไม่รวมเกรดพิเศษ)
+        gpa_data = student_data[~student_data['GRADE'].isin(non_gpa_grades)]
+        gpa_data = gpa_data[gpa_data['GRADE_POINT_NUM'].notna()]
+
         if len(gpa_data) > 0:
             total_grade_points = (gpa_data['GRADE_POINT_NUM'] * gpa_data['CREDIT']).sum()
-            total_credits = gpa_data['CREDIT'].sum()
-            gpa = total_grade_points / total_credits if total_credits > 0 else 0
+            total_credits_for_gpa = gpa_data['CREDIT'].sum()
+            gpa = total_grade_points / total_credits_for_gpa if total_credits_for_gpa > 0 else 0
         else:
             gpa = 0
-            total_credits = 0
-        
-        # หน่วยกิตรวม (รวม S)
-        total_credits_all = student_data['CREDIT'].sum()
-        
-        # กำหนดเกณฑ์จบการศึกษา: GPA >= 2.00 และหน่วยกิต >= 136
-        result = 1 if (gpa >= 2.00 and total_credits_all >= 136) else 0
-        
+
+        # หน่วยกิตสะสม — เฉพาะวิชาที่ผ่าน (D ขึ้นไป หรือ S/S*)
+        passed_data = student_data[student_data['GRADE'].isin(passed_grades)]
+        total_credits_earned = passed_data['CREDIT'].sum()
+
+        # กำหนดเกณฑ์จบการศึกษา: GPA >= 2.00 และหน่วยกิตที่ผ่าน >= 136
+        result = 1 if (gpa >= 2.00 and total_credits_earned >= 136) else 0
+
         student_stats.append({
             'STUDENT_ID': student_id,
             'GPA': gpa,
-            'TOTAL_CREDITS': total_credits_all,
+            'TOTAL_CREDITS': total_credits_earned,
             'RESULT': result
         })
-    
+
     # รวม RESULT เข้ากับ df_wide
     stats_df = pd.DataFrame(student_stats)
     df_wide = df_wide.merge(stats_df[['STUDENT_ID', 'RESULT']], on='STUDENT_ID')
-    
+
+    # Log สรุปผลลัพธ์
+    graduated = stats_df['RESULT'].sum()
+    total = len(stats_df)
+    logger.info(f"📋 Labels: {graduated}/{total} graduated ({graduated/total*100:.1f}%), {total-graduated} not graduated")
+
     # สร้าง course_credit_map
     course_credit_map = df_long.groupby('COURSE_ID')['CREDIT'].first().to_dict()
-    
+
     return df_wide, df_long, course_credit_map
 
 # เพิ่มคลาส AdvancedModelTrainer ลงใน app.py
@@ -179,8 +280,9 @@ class AdvancedModelTrainer:
         self.best_score = 0
         self.scaler = StandardScaler()
         self.grade_mapping = {
-            'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 
-            'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'S': None
+            'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+            'D+': 1.5, 'D': 1.0, 'F': 0.0,
+            'W': None, 'S': None, 'S*': None, 'AU': None, 'I': None, 'U': None
         }
         self.course_credit_map = {}
         
@@ -188,196 +290,330 @@ class AdvancedModelTrainer:
         """เตรียมข้อมูลสำหรับการเทรน"""
         import logging
         logger = logging.getLogger(__name__)
-        
-        logger.info("🎯 เตรียมข้อมูลแบบ Dynamic Snapshots...")
-        
+
+        logger.info("🎯 เตรียมข้อมูลแบบ Semester-based Dynamic Snapshots...")
+
         # เก็บ course_credit_map
         self.course_credit_map = df_long_format_original.groupby('COURSE_ID')['CREDIT'].first().to_dict()
-        
+
         # สร้างโปรไฟล์รายวิชา
         logger.info("🏛️ สร้างโปรไฟล์รายวิชา (Course Profiling)...")
         course_profiles = self.create_course_profiles(df_wide_format, df_long_format_original)
         logger.info(f"✅ สร้างโปรไฟล์ {len(course_profiles)} รายวิชาเสร็จสิ้น")
-        
-        # สร้างข้อมูลเทรนแบบ Dynamic Snapshots
-        X, y = self.create_dynamic_snapshots(df_wide_format, course_profiles)
-        
+
+        # สร้างข้อมูลเทรนแบบ Semester-based Snapshots (เรียงตามเวลาจริง)
+        X, y = self.create_dynamic_snapshots(df_wide_format, df_long_format_original, course_profiles)
+
         logger.info(f"✅ สร้างข้อมูลเทรน {len(X)} ตัวอย่างจาก {len(df_wide_format)} นักศึกษา")
-        
+
         return X, y, course_profiles
     
     def create_course_profiles(self, df_wide_format, df_long_format_original):
-        """สร้างโปรไฟล์รายวิชา (DNA ของแต่ละวิชา)"""
+        """สร้างโปรไฟล์รายวิชา (Course DNA) — enriched version
+
+        แต่ละวิชาจะมี:
+        - avg_grade, grade_std — สถิติเกรดตัวเลข
+        - fail_rate — อัตราได้ F จริงๆ (ไม่ใช่ < 2.0)
+        - low_grade_rate — อัตราได้ต่ำกว่า C (< 2.0 รวม D+, D, F)
+        - pass_rate — อัตราผ่าน (D ขึ้นไป)
+        - w_rate — อัตราถอน (W) — สัญญาณวิชายาก
+        - difficulty_score — 4.0 - avg_grade
+        - credits, total_students, total_enrollments
+        """
         course_profiles = {}
-        
-        # ใช้ข้อมูลจาก df_long_format_original เพื่อความแม่นยำ
+
         for course_id in df_long_format_original['COURSE_ID'].unique():
             course_data = df_long_format_original[df_long_format_original['COURSE_ID'] == course_id]
-            
-            # คำนวณสถิติจากข้อมูลจริง
-            grades = course_data['GRADE'].tolist()
-            credits = course_data['CREDIT'].iloc[0] if len(course_data) > 0 else 3  # default 3 credits
-            
-            # แปลงเกรดเป็นตัวเลข (ไม่รวม S)
+
+            all_grades = course_data['GRADE'].tolist()
+            credits = course_data['CREDIT'].iloc[0] if len(course_data) > 0 else 3
+            total_enrollments = len(all_grades)
+
+            if total_enrollments == 0:
+                continue
+
+            # W rate (นับจากทุกแถวก่อน filter)
+            w_count = sum(1 for g in all_grades if g == 'W')
+            w_rate = w_count / total_enrollments
+
+            # แปลงเป็นตัวเลข (A-F เท่านั้น, ไม่รวม W/S/S*/AU/I/U)
             numeric_grades = []
-            for grade in grades:
+            for grade in all_grades:
                 if grade in self.grade_mapping and self.grade_mapping[grade] is not None:
                     numeric_grades.append(self.grade_mapping[grade])
-            
-            if numeric_grades:
-                avg_grade = np.mean(numeric_grades)
-                fail_rate = len([g for g in numeric_grades if g < 2.0]) / len(numeric_grades)
-                difficulty_score = 4.0 - avg_grade  # ยิ่งยาก avg_grade ยิ่งต่ำ
-                
-                course_profiles[course_id] = {
-                    'avg_grade': avg_grade,
-                    'fail_rate': fail_rate,
-                    'difficulty_score': difficulty_score,
-                    'credits': credits,
-                    'total_students': len(numeric_grades)
-                }
-        
+
+            if not numeric_grades:
+                continue
+
+            n = len(numeric_grades)
+            avg_grade = np.mean(numeric_grades)
+            grade_std = np.std(numeric_grades) if n > 1 else 0
+
+            # fail_rate = F จริงๆ (0.0 only)
+            f_rate = len([g for g in numeric_grades if g == 0.0]) / n
+            # low_grade_rate = ต่ำกว่า C (< 2.0 รวม D+, D, F)
+            low_grade_rate = len([g for g in numeric_grades if g < 2.0]) / n
+            # pass_rate = D ขึ้นไป (>= 1.0)
+            pass_rate = len([g for g in numeric_grades if g >= 1.0]) / n
+
+            difficulty_score = 4.0 - avg_grade
+
+            course_profiles[course_id] = {
+                'avg_grade': avg_grade,
+                'grade_std': grade_std,
+                'fail_rate': f_rate,
+                'low_grade_rate': low_grade_rate,
+                'pass_rate': pass_rate,
+                'w_rate': w_rate,
+                'difficulty_score': difficulty_score,
+                'credits': credits,
+                'total_students': n,
+                'total_enrollments': total_enrollments,
+            }
+
         return course_profiles
     
-    def create_dynamic_snapshots(self, df_wide_format, course_profiles):
-        """สร้างข้อมูลแบบ Dynamic Snapshots (Journey-based Training)"""
+    def create_dynamic_snapshots(self, df_wide_format, df_long_format, course_profiles):
+        """สร้างข้อมูลแบบ Semester-based Snapshots (เรียงตามเวลาจริง)
+
+        สร้าง training example ทุกเทอม: หลังเทอม 1 เห็นวิชาเทอม 1,
+        หลังเทอม 2 เห็นวิชาเทอม 1+2, ฯลฯ → โมเดลเรียนรู้ "ระหว่างทาง" จริงๆ
+        """
         X = []
         y = []
-        
-        for _, student in df_wide_format.iterrows():
-            # หาวิชาที่นักศึกษาเรียน
-            student_courses = {}
-            for col in df_wide_format.columns:
-                if col not in ['STUDENT_ID', 'RESULT'] and pd.notna(student[col]):
-                    student_courses[col] = student[col]
-            
-            # สร้าง snapshots ยืดหยุ่นตามจำนวนวิชาที่เรียนจริง
-            course_list = list(student_courses.items())
-            total_courses = len(course_list)
-            
-            # สร้าง snapshots ที่หลากหลาย
-            snapshot_sizes = []
-            if total_courses >= 3:
-                snapshot_sizes.append(3)
-            if total_courses >= 6:
-                snapshot_sizes.append(6)
-            if total_courses >= 9:
-                snapshot_sizes.append(9)
-            if total_courses >= 12:
-                snapshot_sizes.append(12)
-            if total_courses > 12:
-                snapshot_sizes.append(total_courses)
-            
-            for snapshot_size in snapshot_sizes:
-                if total_courses >= snapshot_size:
-                    # เลือกวิชาแรก snapshot_size วิชา
+
+        passed_grades = {'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'S', 'S*'}
+        has_time_cols = 'ปีการศึกษา' in df_long_format.columns and 'เทอม' in df_long_format.columns
+
+        # สร้าง RESULT lookup จาก df_wide
+        result_lookup = df_wide_format.set_index('STUDENT_ID')['RESULT'].to_dict()
+
+        for student_id in df_long_format['STUDENT_ID'].unique():
+            if student_id not in result_lookup:
+                continue
+
+            student_result = result_lookup[student_id]
+            student_data = df_long_format[df_long_format['STUDENT_ID'] == student_id].copy()
+
+            if has_time_cols:
+                # === เรียงตามเวลาจริง (ปีการศึกษา + เทอม) ===
+                student_data = student_data.sort_values(['ปีการศึกษา', 'เทอม'])
+                student_data['_semester_key'] = (
+                    student_data['ปีการศึกษา'].astype(str) + '_' + student_data['เทอม'].astype(str)
+                )
+                unique_semesters = student_data['_semester_key'].unique()
+                total_semesters = len(unique_semesters)
+
+                # สะสมวิชาทีละเทอม
+                cumulative_grades = {}
+
+                for sem_idx, semester in enumerate(unique_semesters):
+                    sem_data = student_data[student_data['_semester_key'] == semester]
+
+                    # เพิ่มวิชาของเทอมนี้
+                    for _, row in sem_data.iterrows():
+                        cumulative_grades[row['COURSE_ID']] = row['GRADE']
+
+                    # สร้าง snapshot หลังเทอมนี้ (ต้องมีอย่างน้อย 2 วิชาสะสม)
+                    if len(cumulative_grades) >= 2:
+                        semester_number = sem_idx + 1
+
+                        # คำนวณหน่วยกิตสะสมที่ผ่าน
+                        credits_earned = sum(
+                            self.course_credit_map.get(cid, 3)
+                            for cid, grade in cumulative_grades.items()
+                            if grade in passed_grades
+                        )
+
+                        features = self.create_dynamic_features(
+                            cumulative_grades, course_profiles, len(cumulative_grades),
+                            credits_earned=credits_earned,
+                            semester_number=semester_number,
+                            total_semesters=total_semesters
+                        )
+
+                        X.append(features)
+                        y.append(student_result)
+            else:
+                # === Fallback: ไม่มีข้อมูลเวลา — ใช้ snapshot ตามจำนวนวิชา ===
+                student_courses = {}
+                for _, row in student_data.iterrows():
+                    student_courses[row['COURSE_ID']] = row['GRADE']
+
+                total_courses = len(student_courses)
+                course_list = list(student_courses.items())
+
+                snapshot_sizes = []
+                if total_courses >= 3: snapshot_sizes.append(3)
+                if total_courses >= 6: snapshot_sizes.append(6)
+                if total_courses >= 9: snapshot_sizes.append(9)
+                if total_courses >= 12: snapshot_sizes.append(12)
+                if total_courses > 12: snapshot_sizes.append(total_courses)
+
+                for snapshot_size in snapshot_sizes:
                     current_courses = dict(course_list[:snapshot_size])
-                    
-                    # สร้างฟีเจอร์
-                    features = self.create_dynamic_features(current_courses, course_profiles, total_courses)
-                    
+                    features = self.create_dynamic_features(
+                        current_courses, course_profiles, total_courses
+                    )
                     X.append(features)
-                    y.append(student['RESULT'])
-        
+                    y.append(student_result)
+
         return np.array(X), np.array(y)
     
-    def create_dynamic_features(self, grades_dict, course_profiles, total_courses_taken):
-        """สร้างฟีเจอร์แบบ Dynamic พร้อม Context-Aware Features"""
-        
+    def create_dynamic_features(self, grades_dict, course_profiles, total_courses_taken,
+                                credits_earned=None, semester_number=None, total_semesters=None):
+        """สร้างฟีเจอร์แบบ Dynamic พร้อม Context-Aware + Temporal Features (25 ตัว)
+
+        Parameters:
+            grades_dict: dict {COURSE_ID: GRADE} — วิชาที่เรียนมาถึงจุดนี้
+            course_profiles: dict — โปรไฟล์รายวิชา
+            total_courses_taken: int — จำนวนวิชาทั้งหมดของนศ.คนนี้
+            credits_earned: float|None — หน่วยกิตสะสมที่ผ่าน (None = คำนวณเอง)
+            semester_number: int|None — เทอมที่เท่าไหร่ (None = ประมาณจากจำนวนวิชา)
+            total_semesters: int|None — จำนวนเทอมทั้งหมดของนศ. (None = ประมาณ)
+        """
+        NUM_FEATURES = 28
+
         if not grades_dict:
-            return np.zeros(20)  # เพิ่มฟีเจอร์เป็น 20 ตัว
-        
+            return np.zeros(NUM_FEATURES)
+
         # ฟีเจอร์พื้นฐาน - สถิติเกรด
         numeric_grades = []
         for grade in grades_dict.values():
             if grade in self.grade_mapping and self.grade_mapping[grade] is not None:
                 numeric_grades.append(self.grade_mapping[grade])
-        
+
         if not numeric_grades:
-            return np.zeros(20)
-        
+            return np.zeros(NUM_FEATURES)
+
+        # === คำนวณ temporal defaults ถ้าไม่ได้ส่งมา (prediction time) ===
+        passed_grades_set = {'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'S', 'S*'}
+        if credits_earned is None:
+            credits_earned = sum(
+                self.course_credit_map.get(cid, 3)
+                for cid, grade in grades_dict.items()
+                if grade in passed_grades_set
+            )
+        if semester_number is None:
+            # ประมาณ: ~6-7 วิชาต่อเทอม
+            semester_number = max(1, round(len(grades_dict) / 6.5))
+        if total_semesters is None:
+            total_semesters = max(semester_number, max(1, round(total_courses_taken / 6.5)))
+
         # 1-5: สถิติเกรดพื้นฐาน
         current_gpa = np.mean(numeric_grades)
         gpa_std = np.std(numeric_grades) if len(numeric_grades) > 1 else 0
         min_grade = min(numeric_grades)
         max_grade = max(numeric_grades)
         grade_range = max_grade - min_grade
-        
+
         # 6-8: การกระจายเกรด
-        high_grades = len([g for g in numeric_grades if g >= 3.5]) / len(numeric_grades)
-        medium_grades = len([g for g in numeric_grades if 2.5 <= g < 3.5]) / len(numeric_grades)
-        low_grades = len([g for g in numeric_grades if g < 2.5]) / len(numeric_grades)
-        
-        # 9-12: Context-Aware Features (ใหม่)
+        n = len(numeric_grades)
+        high_grades = len([g for g in numeric_grades if g >= 3.5]) / n
+        medium_grades = len([g for g in numeric_grades if 2.5 <= g < 3.5]) / n
+        low_grades = len([g for g in numeric_grades if g < 2.5]) / n
+
+        # 9-12: Context-Aware Features
         avg_course_difficulty = 0
         avg_course_fail_rate = 0
-        num_killer_courses = 0  # วิชายาก (difficulty > 2.0)
-        num_easy_courses = 0    # วิชาง่าย (difficulty < 1.0)
-        
+        num_killer_courses = 0
+        num_easy_courses = 0
+
         if course_profiles:
             difficulties = []
             fail_rates = []
-            
+
             for course in grades_dict.keys():
                 if course in course_profiles:
                     difficulty = course_profiles[course]['difficulty_score']
                     fail_rate = course_profiles[course]['fail_rate']
-                    
                     difficulties.append(difficulty)
                     fail_rates.append(fail_rate)
-                    
-                    # นับวิชายากและง่าย
                     if difficulty > 2.0:
                         num_killer_courses += 1
                     elif difficulty < 1.0:
                         num_easy_courses += 1
-            
+
             avg_course_difficulty = np.mean(difficulties) if difficulties else 0
             avg_course_fail_rate = np.mean(fail_rates) if fail_rates else 0
-        
-        # 13-15: ฟีเจอร์เพิ่มเติม
+
+        # 13-15: Risk features
         num_failed_courses = len([g for g in numeric_grades if g < 2.0])
         killer_course_ratio = num_killer_courses / len(grades_dict) if len(grades_dict) > 0 else 0
-        
-        # คำนวณ GPA Gap (ความแตกต่างระหว่าง GPA ปัจจุบันกับ GPA เฉลี่ยของวิชาที่เรียน)
-        expected_gpa = 0
+
+        expected_gpa = current_gpa
         if course_profiles:
-            expected_grades = []
-            for course in grades_dict.keys():
-                if course in course_profiles:
-                    expected_grades.append(course_profiles[course]['avg_grade'])
-            expected_gpa = np.mean(expected_grades) if expected_grades else current_gpa
-        
+            expected_grades = [course_profiles[c]['avg_grade'] for c in grades_dict if c in course_profiles]
+            if expected_grades:
+                expected_gpa = np.mean(expected_grades)
         gpa_gap = current_gpa - expected_gpa
-        
+
         # 16-20: แนวโน้มและข้อมูลเพิ่มเติม
         if len(numeric_grades) >= 3:
             recent_trend = np.mean(numeric_grades[-3:]) - np.mean(numeric_grades[:-3])
         else:
             recent_trend = 0
-        
-        # Progress ratio
+
         progress_ratio = len(grades_dict) / total_courses_taken if total_courses_taken > 0 else 0
-        
-        # Consistency score (ความสม่ำเสมอของเกรด)
-        consistency_score = 1 / (1 + gpa_std)  # ยิ่ง std น้อย ยิ่งสม่ำเสมอ
-        
-        # Academic momentum (แรงผลักดันทางการเรียน)
+        consistency_score = 1 / (1 + gpa_std)
         academic_momentum = current_gpa * progress_ratio
-        
-        # Risk score (คะแนนความเสี่ยง)
         risk_score = (num_failed_courses + num_killer_courses) / len(grades_dict) if len(grades_dict) > 0 else 0
-        
+
+        # === 21-25: Temporal / Progress features ===
+        # 21: หน่วยกิตสะสมที่ผ่าน
+        # 22: ความก้าวหน้าสู่จบ (credits_earned / 136)
+        graduation_progress = min(1.0, credits_earned / 136) if credits_earned > 0 else 0
+        # 23: หน่วยกิตต่อเทอม (pace)
+        credits_per_semester = credits_earned / semester_number if semester_number > 0 else 0
+        # 24: อยู่ในเกณฑ์ที่ควรจะเป็นไหม (17 หน่วยกิต/เทอม = on track)
+        expected_credits = semester_number * 17
+        on_track_ratio = credits_earned / expected_credits if expected_credits > 0 else 0
+        # 25: ความก้าวหน้าของเวลา (เทอมที่เท่าไหร่ / 8 เทอม)
+        semester_progress = semester_number / 8
+
+        # === 26-28: Course DNA-powered features ===
+        # 26: credit-weighted difficulty (วิชายาก+หน่วยกิตเยอะ = เสี่ยงมาก)
+        weighted_difficulty = 0
+        if course_profiles:
+            wd_num, wd_den = 0, 0
+            for course in grades_dict.keys():
+                if course in course_profiles:
+                    cp = course_profiles[course]
+                    c = cp.get('credits', 3)
+                    wd_num += cp['difficulty_score'] * c
+                    wd_den += c
+            weighted_difficulty = wd_num / wd_den if wd_den > 0 else 0
+
+        # 27: hard_course_gpa (นศ.เก่งในวิชายากไหม — สัญญาณสำคัญมาก)
+        hard_course_gpa = current_gpa
+        if course_profiles:
+            hard_grades = []
+            for course, grade in grades_dict.items():
+                if course in course_profiles and course_profiles[course]['difficulty_score'] > 1.5:
+                    if grade in self.grade_mapping and self.grade_mapping[grade] is not None:
+                        hard_grades.append(self.grade_mapping[grade])
+            if hard_grades:
+                hard_course_gpa = np.mean(hard_grades)
+
+        # 28: grade_variance_exposure (เรียนวิชาผันผวนมากแค่ไหน — เสี่ยง)
+        grade_variance_exposure = 0
+        if course_profiles:
+            stds = [course_profiles[c].get('grade_std', 0) for c in grades_dict if c in course_profiles]
+            grade_variance_exposure = np.mean(stds) if stds else 0
+
         features = np.array([
-            current_gpa, gpa_std, min_grade, max_grade, grade_range,  # 1-5
-            high_grades, medium_grades, low_grades,                   # 6-8
-            avg_course_difficulty, avg_course_fail_rate,             # 9-10
-            num_killer_courses, num_easy_courses,                    # 11-12
-            num_failed_courses, killer_course_ratio, gpa_gap,       # 13-15
-            recent_trend, progress_ratio, consistency_score,        # 16-18
-            academic_momentum, risk_score                            # 19-20
+            current_gpa, gpa_std, min_grade, max_grade, grade_range,          # 1-5
+            high_grades, medium_grades, low_grades,                            # 6-8
+            avg_course_difficulty, avg_course_fail_rate,                       # 9-10
+            num_killer_courses, num_easy_courses,                              # 11-12
+            num_failed_courses, killer_course_ratio, gpa_gap,                 # 13-15
+            recent_trend, progress_ratio, consistency_score,                   # 16-18
+            academic_momentum, risk_score,                                     # 19-20
+            credits_earned, graduation_progress, credits_per_semester,        # 21-23
+            on_track_ratio, semester_progress,                                 # 24-25
+            weighted_difficulty, hard_course_gpa, grade_variance_exposure     # 26-28
         ])
-        
+
         # จัดการ NaN values
         return self._handle_nan_features(features)
     
@@ -473,14 +709,31 @@ class AdvancedModelTrainer:
         
         return results
     
-    def save_model(self, model_path):
-        """บันทึกโมเดลและ scaler"""
+    def save_model(self, model_path, course_profiles=None, training_results=None):
+        """บันทึกโมเดลและ scaler ในรูปแบบเดียวกับ advanced path"""
         if self.best_model is not None:
             model_data = {
-                'model': self.best_model,
+                'models': {'rf': self.best_model},  # Wrap in dict like ensemble format
                 'scaler': self.scaler,
+                'feature_columns': [
+                    'current_gpa', 'gpa_std', 'min_grade', 'max_grade', 'grade_range',
+                    'high_grades', 'medium_grades', 'low_grades',
+                    'avg_course_difficulty', 'avg_course_fail_rate',
+                    'num_killer_courses', 'num_easy_courses',
+                    'num_failed_courses', 'killer_course_ratio', 'gpa_gap',
+                    'recent_trend', 'progress_ratio', 'consistency_score',
+                    'academic_momentum', 'risk_score',
+                    'credits_earned', 'graduation_progress', 'credits_per_semester',
+                    'on_track_ratio', 'semester_progress',
+                    'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure'
+                ],
+                'course_profiles': course_profiles or getattr(self, 'course_profiles', {}),
                 'course_credit_map': self.course_credit_map,
-                'grade_mapping': self.grade_mapping
+                'grade_mapping': self.grade_mapping,
+                'data_format': 'subject_based',
+                'training_type': 'tan1_advanced',
+                'created_at': datetime.now().isoformat(),
+                'performance_metrics': training_results or {},
             }
             joblib.dump(model_data, model_path)
             return True
@@ -490,38 +743,33 @@ class AdvancedModelTrainer:
         """โหลดโมเดลและ scaler"""
         try:
             model_data = joblib.load(model_path)
-            self.best_model = model_data['model']
+            # Support both old format ('model') and new unified format ('models')
+            if 'models' in model_data:
+                # New unified format — pick the first available model
+                models = model_data['models']
+                self.best_model = next(iter(models.values()))
+            else:
+                self.best_model = model_data['model']
             self.scaler = model_data['scaler']
             self.course_credit_map = model_data.get('course_credit_map', {})
             self.grade_mapping = model_data.get('grade_mapping', self.grade_mapping)
+            if 'course_profiles' in model_data:
+                self.course_profiles = model_data['course_profiles']
             return True
         except Exception as e:
             print(f"⚠️ Error loading model: {str(e)}")
-            # หากโหลดโมเดลไม่ได้ ให้สร้างโมเดลใหม่
-            self._create_fallback_model()
-            return True
+            return False  # Don't create fake fallback
     
-    def _create_fallback_model(self):
-        """สร้างโมเดลสำรองเมื่อโหลดโมเดลหลักไม่ได้"""
-        from sklearn.ensemble import RandomForestClassifier
-        from sklearn.preprocessing import StandardScaler
-        
-        # สร้างโมเดลใหม่
-        self.best_model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=10,
-            random_state=42
-        )
-        self.scaler = StandardScaler()
-        self.course_credit_map = {}
-        print("✅ Created fallback model successfully")
+    # _create_fallback_model removed — an untrained model would crash with NotFittedError.
+    # If load_model() fails it now returns False so callers fall back to basic prediction.
 
 # ต่อไปเป็นส่วนของ EnhancedPredictionSystem
 class EnhancedPredictionSystem:
     def __init__(self):
         self.grade_mapping = {
             'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
-            'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': None
+            'D+': 1.5, 'D': 1.0, 'F': 0.0,
+            'W': None, 'S': None, 'S*': None, 'AU': None, 'I': None, 'U': None
         }
         self.advanced_trainer = AdvancedModelTrainer()
         self.advanced_model = None
@@ -537,6 +785,9 @@ class EnhancedPredictionSystem:
                     self.advanced_model = self.advanced_trainer.best_model
                     self.scaler = self.advanced_trainer.scaler
                     self.course_credit_map = self.advanced_trainer.course_credit_map
+                    # Load course_profiles for consistent feature engineering
+                    self.course_profiles = getattr(self.advanced_trainer, 'course_profiles', {})
+                    self.advanced_trainer.course_profiles = self.course_profiles
                     print(f"✅ โหลดโมเดลขั้นสูงสำเร็จ: {model_path}")
                     return True
             else:
@@ -587,34 +838,16 @@ class EnhancedPredictionSystem:
                 print("⚠️ โมเดลยังไม่ได้เทรน ใช้การทำนายแบบพื้นฐาน")
                 return self.predict_graduation_basic(grades_dict)
             
-            # สร้างฟีเจอร์สำหรับการทำนาย
+            # Use the SAME feature engineering as training
             total_courses_taken = len(grades_dict)
-            
-            # สร้างฟีเจอร์พื้นฐาน
             current_gpa = self.calculate_gpa(grades_dict)
-            failed_courses = sum(1 for grade in grades_dict.values() if grade == 'F')
-            passed_courses = sum(1 for grade in grades_dict.values() if grade in ['A', 'B+', 'B', 'C+', 'C', 'D+', 'D'])
-            
-            # สร้างฟีเจอร์เวกเตอร์พื้นฐาน
-            features = [
-                current_gpa,
-                total_courses_taken,
-                failed_courses,
-                passed_courses,
-                failed_courses / max(total_courses_taken, 1),  # อัตราส่วนวิชาตก
-                current_gpa * total_courses_taken  # GPA weighted by courses
-            ]
-            
-            # เพิ่มฟีเจอร์ให้ครบตามที่โมเดลต้องการ (สมมติว่าต้องการ 10 ฟีเจอร์)
-            while len(features) < 10:
-                features.append(0.0)
-            
+            course_profiles = self.course_profiles or {}
+            features = self.advanced_trainer.create_dynamic_features(
+                grades_dict, course_profiles, total_courses_taken
+            )
+
             # ปรับขนาดฟีเจอร์ด้วย scaler
-            try:
-                features_scaled = self.scaler.transform([features])
-            except:
-                # หาก scaler ไม่ทำงาน ใช้ฟีเจอร์ดิบ
-                features_scaled = [features]
+            features_scaled = self.scaler.transform([features])
             
             # ทำนายด้วยโมเดล
             prediction = self.advanced_model.predict(features_scaled)[0]
@@ -782,7 +1015,7 @@ class EnhancedPredictionSystem:
         if self.advanced_model and self.course_profiles:
             try:
                 # ใช้โมเดลขั้นสูงที่เทรนแล้ว
-                features = self.advanced_trainer.create_dynamic_features(current_grades, self.course_profiles)
+                features = self.advanced_trainer.create_dynamic_features(current_grades, self.course_profiles, len(current_grades))
                 
                 # ทำนายด้วยโมเดลขั้นสูง
                 prediction_result = self.advanced_model.predict([features])[0]
@@ -826,8 +1059,10 @@ class EnhancedPredictionSystem:
         # ถ้าไม่มีโมเดลขั้นสูง หรือโมเดลขั้นสูงล้มเหลว ใช้โมเดลปกติ
         if model and current_grades:
             try:
-                # เตรียมฟีเจอร์สำหรับโมเดลปกติ
-                features = self._prepare_advanced_features(current_grades)
+                # Use the same feature engineering as training
+                features = self.advanced_trainer.create_dynamic_features(
+                    current_grades, self.course_profiles or {}, len(current_grades)
+                )
                 
                 # ทำนายด้วยโมเดลปกติ
                 prediction_result = model.predict([features])[0]
@@ -912,22 +1147,21 @@ class EnhancedPredictionSystem:
     
     def _generate_grade_distribution_from_model(self, prediction_result, confidence, current_gpa):
         """สร้างการกระจายเกรดจากผลลัพธ์โมเดล"""
-        # ปรับการกระจายเกรดตามผลลัพธ์โมเดลและ confidence
-        if prediction_result == "จบ" and confidence > 0.7:
-            # โมเดลมั่นใจว่าจะจบ - เกรดน่าจะดี
+        # Model outputs 1 (graduated) or 0 (not graduated)
+        will_graduate = (prediction_result == 1 or prediction_result is True)
+
+        if will_graduate and confidence > 0.7:
             if current_gpa >= 3.5:
                 return {"A": 0.4, "B+": 0.35, "B": 0.20, "C+": 0.05}
             elif current_gpa >= 3.0:
                 return {"A": 0.25, "B+": 0.40, "B": 0.25, "C+": 0.10}
             else:
                 return {"B+": 0.20, "B": 0.35, "C+": 0.30, "C": 0.15}
-        
-        elif prediction_result == "จบ" and confidence <= 0.7:
-            # โมเดลไม่แน่ใจ - เกรดปานกลาง
+
+        elif will_graduate and confidence <= 0.7:
             return {"B": 0.25, "C+": 0.35, "C": 0.30, "D+": 0.10}
-        
+
         else:
-            # โมเดลคิดว่าไม่จบ - เกรดอาจแย่
             return {"C": 0.20, "D+": 0.30, "D": 0.35, "F": 0.15}
     
     def _calculate_predicted_gpa(self, predicted_grades, current_gpa):
@@ -1972,7 +2206,8 @@ class S3Storage:
             'course_credit_map': {},
             'grade_mapping': {
                 'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
-                'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': None
+                'D+': 1.5, 'D': 1.0, 'F': 0.0,
+                'W': None, 'WF': None, 'WU': None, 'S': None, 'S*': None, 'AU': None, 'I': None, 'U': None
             }
         }
     
@@ -2740,13 +2975,16 @@ def train_ensemble_model(X, y):
             recall = recall_score(y_test, ensemble_pred, zero_division=0)
             f1 = f1_score(y_test, ensemble_pred, zero_division=0)
         else:
-            accuracy = 0.85
-            precision = 0.85
-            recall = 0.85
-            f1 = 0.85
-            logger.warning("No test data for model evaluation, using estimated metrics.")
+            accuracy = None
+            precision = None
+            recall = None
+            f1 = None
+            logger.warning("No test data for model evaluation. Metrics not available.")
 
-        logger.info(f"Model training results - Accuracy: {accuracy:.3f}, Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1:.3f}")
+        if accuracy is not None:
+            logger.info(f"Model training results - Accuracy: {accuracy:.3f}, Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1:.3f}")
+        else:
+            logger.info("Model training results - Metrics not available (no test data)")
 
         return {
             'models': trained_models,
@@ -2842,9 +3080,14 @@ def train_model():
         if use_advanced and data_format == 'subject_based':
             logger.info("🧬 Using ADVANCED Context-Aware Training Strategy")
             
-            # ตรวจสอบว่าเป็นข้อมูล TAN1 format หรือไม่
-            required_columns = ['STUDENT_ID', 'COURSE_ID', 'GRADE', 'CREDIT']
-            is_tan1_format = all(col in df.columns for col in required_columns)
+            # ตรวจสอบว่าเป็นข้อมูล TAN1 format หรือไม่ (รองรับหลายชื่อคอลัมน์)
+            tan1_column_sets = [
+                ['STUDENT_ID', 'COURSE_ID', 'GRADE', 'CREDIT'],
+                ['Dummy StudentNO', 'COURSE_CODE', 'GRADE', 'CREDIT'],
+                ['Dummy StudentNO', 'COURSE_ID', 'GRADE', 'CREDIT'],
+                ['STUDENT_ID', 'COURSE_CODE', 'GRADE', 'CREDIT'],
+            ]
+            is_tan1_format = any(all(col in df.columns for col in cols) for cols in tan1_column_sets)
             
             if is_tan1_format:
                 logger.info("📋 Detected TAN1 format - preprocessing data...")
@@ -2859,9 +3102,9 @@ def train_model():
                 # เทรนโมเดล
                 results = trainer.train_models(X, y)
                 
-                # บันทึกโมเดล
+                # บันทึกโมเดล (unified format with course_profiles and results)
                 model_path = os.path.join(app.config['MODEL_FOLDER'], f"advanced_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}.joblib")
-                trainer.save_model(model_path)
+                trainer.save_model(model_path, course_profiles=course_profiles, training_results=results)
                 
                 logger.info(f"💾 Model saved to: {model_path}")
 
@@ -2879,7 +3122,7 @@ def train_model():
                             'columns_in_file': len(df.columns),
                             'prepared_samples': len(X),
                             'feature_count': X.shape[1] if hasattr(X, 'shape') else 0,
-                            'label_distribution': y.value_counts().to_dict() if hasattr(y, 'value_counts') else {},
+                            'label_distribution': dict(zip(*np.unique(y, return_counts=True))) if len(y) > 0 else {},
                             'course_profiles_count': len(course_profiles) if course_profiles else 0,
                             'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
                             'model_metrics': {
@@ -2897,14 +3140,64 @@ def train_model():
                 elif enable_gemini_analysis and not is_gemini_available():
                     logger.info("Gemini analysis requested but API key is missing (TAN1 flow)")
                 
+                # หาโมเดลที่ดีที่สุดจากผลลัพธ์
+                best_name = max(results, key=lambda k: results[k].get('accuracy', 0))
+                best = results[best_name]
+                model_fname = os.path.basename(model_path)
+
+                # สร้าง feature importance จาก best model (ถ้าเป็น tree-based)
+                tan1_feature_importances = {}
+                best_model_obj = best.get('model')
+                if best_model_obj and hasattr(best_model_obj, 'feature_importances_'):
+                    feature_names = [
+                        'current_gpa', 'gpa_std', 'min_grade', 'max_grade', 'grade_range',
+                        'high_grades', 'medium_grades', 'low_grades',
+                        'avg_course_difficulty', 'avg_course_fail_rate',
+                        'num_killer_courses', 'num_easy_courses',
+                        'num_failed_courses', 'killer_course_ratio', 'gpa_gap',
+                        'recent_trend', 'progress_ratio', 'consistency_score',
+                        'academic_momentum', 'risk_score',
+                        'credits_earned', 'graduation_progress', 'credits_per_semester',
+                        'on_track_ratio', 'semester_progress',
+                        'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure'
+                    ]
+                    importances = best_model_obj.feature_importances_
+                    pairs = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+                    tan1_feature_importances = {name: float(imp) for name, imp in pairs[:15]}
+
+                # สรุปผลลัพธ์ทุกโมเดล (ภาษาไทย)
+                all_model_results = {}
+                for name, res in results.items():
+                    all_model_results[name] = {
+                        'accuracy': res.get('accuracy', 0),
+                        'f1_score': res.get('f1_score', 0),
+                        'precision': res.get('precision', 0),
+                        'recall': res.get('recall', 0),
+                    }
+
+                # จำนวน label
+                unique_labels, label_counts = np.unique(y, return_counts=True)
+                label_dist = dict(zip([int(l) for l in unique_labels], [int(c) for c in label_counts]))
+
                 return jsonify({
                     'success': True,
-                    'message': 'Advanced model training completed successfully',
+                    'message': 'เทรนโมเดล AI สำเร็จแล้ว',
+                    'model_filename': model_fname,
                     'model_path': model_path,
-                    'results': {name: {'accuracy': result['accuracy'], 'f1_score': result['f1_score']} 
-                              for name, result in results.items()},
+                    'best_model_name': best_name,
+                    'accuracy': best.get('accuracy', 0),
+                    'precision': best.get('precision', 0),
+                    'recall': best.get('recall', 0),
+                    'f1_score': best.get('f1_score', 0),
+                    'all_model_results': all_model_results,
                     'training_samples': len(X),
-                    'features': X.shape[1] if len(X) > 0 else 0,
+                    'features_count': X.shape[1] if len(X) > 0 else 0,
+                    'course_profiles_count': len(course_profiles) if course_profiles else 0,
+                    'feature_importances': tan1_feature_importances,
+                    'label_distribution': label_dist,
+                    'students_count': len(df_wide_format),
+                    'courses_count': len(course_credit_map),
+                    'training_type': 'tan1_advanced',
                     'gemini_analysis': tan1_gemini_analysis
                 })
             else:
@@ -2939,6 +3232,7 @@ def train_model():
 
         course_profiles_count = len(course_profiles) if course_profiles else 0
         gemini_training_analysis = None
+        training_type = 'advanced' if use_advanced else 'standard'
 
         min_students_for_training = app.config['DATA_CONFIG']['min_students_for_training']
         if len(X) < min_students_for_training:
@@ -2996,7 +3290,7 @@ def train_model():
                     'columns_in_file': len(df.columns),
                     'prepared_samples': len(X),
                     'feature_count': int(X.shape[1]) if hasattr(X, 'shape') else len(model_result.get('feature_columns', [])),
-                    'label_distribution': y.value_counts().to_dict(),
+                    'label_distribution': y.value_counts().to_dict() if hasattr(y, 'value_counts') else (dict(zip(*np.unique(y, return_counts=True))) if len(y) > 0 else {}),
                     'course_profiles_count': course_profiles_count,
                     'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
                     'model_metrics': {
@@ -3023,7 +3317,6 @@ def train_model():
 
         # สร้างชื่อไฟล์โมเดล
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        training_type = 'advanced' if use_advanced else 'standard'
         model_filename = f'{data_format}_model_{training_type}_{timestamp}.joblib'
 
         # สร้างข้อมูลโมเดลสำหรับบันทึก
@@ -3251,11 +3544,10 @@ def _calculate_gpa_history(df: pd.DataFrame, engineer: AdvancedFeatureEngineer):
 
 # Helper function to predict next semester's GPA
 def _predict_next_semester_gpa(current_gpa: float) -> float:
-    """Predicts next semester's GPA based on current trend (simple model for illustration)."""
-    # This is a very simple linear model. You can replace it with a more complex one if needed.
-    # It assumes the student will maintain their current GPA with a slight random fluctuation.
-    random_change = np.random.uniform(-0.1, 0.1) # Simulate minor changes
-    predicted_gpa = current_gpa + random_change
+    """Predicts next semester's GPA using deterministic regression toward the mean."""
+    mean_gpa = 2.5
+    regression_factor = 0.1
+    predicted_gpa = current_gpa + regression_factor * (mean_gpa - current_gpa)
     return round(np.clip(predicted_gpa, 0.0, 4.0), 2)
     
 @app.route('/api/models', methods=['GET'])
@@ -3874,8 +4166,9 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
     try:
         # ข้อมูลพื้นฐาน
         grade_mapping = app.config.get('DATA_CONFIG', {}).get('grade_mapping', {
-            'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0, 
-            'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'I': 0.0
+            'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
+            'D+': 1.5, 'D': 1.0, 'F': 0.0,
+            'W': None, 'I': None, 'S': None, 'AU': None, 'U': None
         })
         courses_data = app.config.get('COURSES_DATA', [])
         all_terms_data = app.config.get('ALL_TERMS_DATA', [])
@@ -4821,10 +5114,11 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
     credits_for_gpa = 0.0
     failed_courses = []
     
-    # Grade mapping สำหรับคำนวณ GPA
+    # Grade mapping สำหรับคำนวณ GPA (W/WF/WU/S = None → ไม่นับใน GPA)
     grade_mapping = {
         'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
-        'D+': 1.5, 'D': 1.0, 'F': 0.0, 'W': 0.0, 'WF': 0.0, 'WU': 0.0, 'S': None
+        'D+': 1.5, 'D': 1.0, 'F': 0.0,
+        'W': None, 'WF': None, 'WU': None, 'S': None, 'S*': None, 'AU': None, 'I': None, 'U': None
     }
     
     for course_id, grade in course_grades.items():
@@ -4875,74 +5169,107 @@ def summarize_grades_for_gemini(course_grades: Dict[str, str], loaded_terms_coun
 def summarize_course_dna(course_profiles: Optional[Dict[str, Dict[str, Any]]]) -> Dict[str, Any]:
     """
     สรุป Course DNA จาก course_profiles เพื่อใช้ใน Gemini Prompt
-    ค้นหาวิชาปราบเซียน (Killer Courses), วิชาง่าย (Easy Courses), และวิชาเฟ้อ (High Inflation)
+    ค้นหาวิชาปราบเซียน (Killer), วิชาง่าย (Easy), วิชาผันผวน (Volatile), วิชาเฟ้อ (Inflation)
+    ใช้ enriched profiles: fail_rate (F only), w_rate, grade_std, low_grade_rate
     """
     if not course_profiles:
         return {
             "killer_courses": [],
             "easy_courses": [],
+            "volatile_courses": [],
             "high_inflation_courses": [],
             "total_courses": 0
         }
-    
+
     killer_courses = []
     easy_courses = []
+    volatile_courses = []
     high_inflation_courses = []
-    
-    # กำหนด threshold
-    KILLER_FAIL_RATE_THRESHOLD = 0.3  # ตกมากกว่า 30% ถือว่าเป็น Killer
-    EASY_AVG_GRADE_THRESHOLD = 3.5  # เกรดเฉลี่ยมากกว่า 3.5 ถือว่าง่าย
-    EASY_FAIL_RATE_THRESHOLD = 0.1  # ตกน้อยกว่า 10% ถือว่าง่าย
-    HIGH_INFLATION_AVG_THRESHOLD = 3.7  # เกรดเฉลี่ยสูงมาก (เฟ้อ)
-    
+
+    # Thresholds
+    MIN_STUDENTS = 10
+    KILLER_F_RATE = 0.15         # F rate >= 15% (เข้มกว่าเดิมเพราะนับ F จริงๆ)
+    KILLER_LOW_RATE = 0.30       # หรือ low_grade_rate >= 30%
+    KILLER_W_RATE = 0.20         # หรือ W rate >= 20% (คนถอนเยอะ = ยาก)
+    EASY_AVG_GRADE = 3.5
+    EASY_FAIL_RATE = 0.05        # F rate < 5%
+    VOLATILE_STD = 1.2           # grade_std > 1.2 (เกรดกระจายมาก)
+    INFLATION_AVG = 3.7
+
     for course_id, profile in course_profiles.items():
         fail_rate = profile.get('fail_rate', 0)
+        low_grade_rate = profile.get('low_grade_rate', fail_rate)  # fallback สำหรับ old profiles
+        w_rate = profile.get('w_rate', 0)
         avg_grade = profile.get('avg_grade', 0)
+        grade_std = profile.get('grade_std', 0)
         difficulty_score = profile.get('difficulty_score', 0)
         total_students = profile.get('total_students', 0)
-        
-        # ตรวจสอบว่าเป็น Killer Course (วิชาปราบเซียน)
-        if fail_rate >= KILLER_FAIL_RATE_THRESHOLD and total_students >= 10:  # ต้องมีข้อมูลพอ
+
+        if total_students < MIN_STUDENTS:
+            continue
+
+        # Killer Course: F rate สูง OR low_grade_rate สูง OR W rate สูง
+        is_killer = (fail_rate >= KILLER_F_RATE or low_grade_rate >= KILLER_LOW_RATE or w_rate >= KILLER_W_RATE)
+        if is_killer:
             killer_courses.append({
                 'course_id': course_id,
                 'fail_rate': fail_rate,
+                'low_grade_rate': low_grade_rate,
+                'w_rate': w_rate,
                 'avg_grade': avg_grade,
+                'grade_std': grade_std,
                 'difficulty_score': difficulty_score,
                 'total_students': total_students,
-                'fail_rate_percent': f"{fail_rate*100:.1f}%"
+                'fail_rate_percent': f"{fail_rate*100:.1f}%",
+                'w_rate_percent': f"{w_rate*100:.1f}%",
+                'reason': ('F สูง' if fail_rate >= KILLER_F_RATE else '') +
+                          (' เกรดต่ำเยอะ' if low_grade_rate >= KILLER_LOW_RATE else '') +
+                          (' คนถอนเยอะ' if w_rate >= KILLER_W_RATE else '')
             })
-        
-        # ตรวจสอบว่าเป็น Easy Course (วิชาง่าย)
-        if avg_grade >= EASY_AVG_GRADE_THRESHOLD and fail_rate <= EASY_FAIL_RATE_THRESHOLD and total_students >= 10:
+
+        # Easy Course: เกรดเฉลี่ยสูง + แทบไม่มีคนตก
+        if avg_grade >= EASY_AVG_GRADE and fail_rate <= EASY_FAIL_RATE:
             easy_courses.append({
                 'course_id': course_id,
                 'avg_grade': avg_grade,
                 'fail_rate': fail_rate,
+                'grade_std': grade_std,
                 'total_students': total_students
             })
-        
-        # ตรวจสอบว่าเป็น High Inflation Course (วิชาเฟ้อ)
-        if avg_grade >= HIGH_INFLATION_AVG_THRESHOLD and total_students >= 10:
+
+        # Volatile Course: เกรดผันผวนมาก (bimodal: มีทั้ง A และ F)
+        if grade_std >= VOLATILE_STD:
+            volatile_courses.append({
+                'course_id': course_id,
+                'grade_std': grade_std,
+                'avg_grade': avg_grade,
+                'fail_rate': fail_rate,
+                'total_students': total_students
+            })
+
+        # High Inflation Course: เกรดเฉลี่ยสูงมาก
+        if avg_grade >= INFLATION_AVG:
             high_inflation_courses.append({
                 'course_id': course_id,
                 'avg_grade': avg_grade,
                 'fail_rate': fail_rate,
                 'total_students': total_students
             })
-    
-    # เรียงลำดับ Killer Courses ตาม fail_rate (สูงสุดก่อน)
-    killer_courses.sort(key=lambda x: x['fail_rate'], reverse=True)
-    
-    # เรียงลำดับ Easy Courses ตาม avg_grade (สูงสุดก่อน)
+
+    # เรียงลำดับ
+    killer_courses.sort(key=lambda x: x['fail_rate'] + x['w_rate'], reverse=True)
     easy_courses.sort(key=lambda x: x['avg_grade'], reverse=True)
-    
+    volatile_courses.sort(key=lambda x: x['grade_std'], reverse=True)
+
     return {
-        "killer_courses": killer_courses[:20],  # เอาแค่ 20 อันแรก
+        "killer_courses": killer_courses[:20],
         "easy_courses": easy_courses[:20],
+        "volatile_courses": volatile_courses[:20],
         "high_inflation_courses": high_inflation_courses[:20],
         "total_courses": len(course_profiles),
         "killer_count": len(killer_courses),
         "easy_count": len(easy_courses),
+        "volatile_count": len(volatile_courses),
         "inflation_count": len(high_inflation_courses)
     }
 

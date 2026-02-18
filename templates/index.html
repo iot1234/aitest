@@ -685,32 +685,41 @@
             </div>
 
             <div class="metrics-grid">
-                <div class="metric-card">
+                <div class="metric-card" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="ความแม่นยำโดยรวม — โมเดลทำนายถูกกี่เปอร์เซ็นต์จากทั้งหมด">
                     <div class="metric-value text-success" id="accuracyDisplay">0%</div>
-                    <div class="metric-label">Accuracy</div>
+                    <div class="metric-label">ความแม่นยำ</div>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Accuracy — ทำนายถูกต้องทั้งหมด</small>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="ความแม่นเจาะจง — เมื่อโมเดลทำนายว่า 'จบ' มีกี่เปอร์เซ็นต์ที่จบจริง">
                     <div class="metric-value text-primary" id="precisionDisplay">0%</div>
-                    <div class="metric-label">Precision</div>
+                    <div class="metric-label">ความแม่นเจาะจง</div>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Precision — ทำนาย "จบ" แล้วจบจริง</small>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="ความครอบคลุม — จากคนที่จบจริงทั้งหมด โมเดลจับได้กี่เปอร์เซ็นต์">
                     <div class="metric-value text-warning" id="recallDisplay">0%</div>
-                    <div class="metric-label">Recall</div>
+                    <div class="metric-label">ความครอบคลุม</div>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">Recall — จับคนจบได้ครบแค่ไหน</small>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="คะแนนสมดุล — ค่าเฉลี่ยของ Precision และ Recall (ยิ่งสูงยิ่งสมดุล)">
                     <div class="metric-value text-info" id="f1Display">0%</div>
-                    <div class="metric-label">F1-Score</div>
+                    <div class="metric-label">คะแนนสมดุล</div>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.7rem;">F1-Score — สมดุลระหว่างแม่น+ครอบคลุม</small>
                 </div>
             </div>
 
-            <div class="alert alert-light border mb-4 shadow-sm" id="trainingDetails"></div>
+            <div id="trainingDetails" class="mb-4"></div>
 
             <div class="row">
                 <div class="col-lg-6 mb-4">
                     <div id="featureImportance" class="feature-importance h-100">
                         <h6 class="fw-bold mb-4 pb-2 border-bottom">
-                            <i class="bi bi-list-ol me-2 text-primary"></i>Features ที่สำคัญที่สุด
+                            <i class="bi bi-list-ol me-2 text-primary"></i>ปัจจัยที่มีผลมากที่สุด
                         </h6>
+                        <p class="text-muted small mb-3">ปัจจัยที่โมเดลให้ความสำคัญสูงสุดในการทำนาย (ยิ่งสูงยิ่งสำคัญ)</p>
                         <div id="featureList"></div>
                     </div>
                 </div>
@@ -718,7 +727,7 @@
                     <div id="geminiTrainingResult" class="gemini-section d-none h-100">
                         <div class="gemini-header">
                             <i class="bi bi-stars"></i>
-                            <h6 class="mb-0">Gemini Insights</h6>
+                            <h6 class="mb-0">การวิเคราะห์โดย Gemini AI</h6>
                             <span class="badge bg-primary ms-auto" id="geminiTrainingGoalBadge"></span>
                         </div>
                         <div class="gemini-content custom-scrollbar" id="geminiTrainingResultBody"
@@ -1071,7 +1080,9 @@
                 document.getElementById('progressBar').style.width = '100%';
                 document.getElementById('progressBar').textContent = '100%';
 
-                showAlert('ฝึกโมเดล AI สำเร็จ: ' + result.model_filename, 'success');
+                const mName = result.model_filename || 'โมเดลใหม่';
+                const mAcc = result.accuracy != null ? ` (ความแม่นยำ ${(result.accuracy*100).toFixed(1)}%)` : '';
+                showAlert(`ฝึกโมเดล AI สำเร็จแล้ว: ${mName}${mAcc}`, 'success');
                 displayTrainingResults(result);
 
                 setTimeout(() => checkSystemStatus(), 1000);
@@ -1097,12 +1108,14 @@
         const progressText = document.getElementById('progressText');
 
         const stages = [
-            { at: 10, text: 'กำลังวิเคราะห์ข้อมูล (Analyzing Data)...' },
-            { at: 25, text: 'กำลังสร้าง Course DNA Profiles...' },
-            { at: 40, text: 'กำลังสร้าง Dynamic Snapshots...' },
-            { at: 60, text: 'กำลังสร้าง Contextual Features...' },
-            { at: 80, text: 'กำลังฝึก Ensemble Models...' },
-            { at: 95, text: 'กำลังประเมินผลและบันทึก (Finalizing)...' }
+            { at: 10, text: 'กำลังวิเคราะห์ข้อมูลและลบข้อมูลซ้ำ...' },
+            { at: 20, text: 'กำลังสร้างโปรไฟล์รายวิชา (Course DNA)...' },
+            { at: 35, text: 'กำลังสร้าง Snapshots เรียงตามเทอม...' },
+            { at: 50, text: 'กำลังคำนวณปัจจัย 28 ตัว...' },
+            { at: 65, text: 'กำลังฝึกโมเดล AI 4 ตัวพร้อมกัน...' },
+            { at: 80, text: 'กำลังเปรียบเทียบและเลือกโมเดลที่ดีที่สุด...' },
+            { at: 90, text: 'กำลังวิเคราะห์ด้วย Gemini AI...' },
+            { at: 95, text: 'กำลังบันทึกโมเดลและสรุปผลลัพธ์...' }
         ];
 
         trainingInterval = setInterval(() => {
@@ -1123,6 +1136,42 @@
         }, 400);
     }
 
+    // แปลชื่อ feature เป็นภาษาไทย
+    const featureNamesTH = {
+        'current_gpa': 'เกรดเฉลี่ยสะสม (GPA)',
+        'gpa_std': 'ความผันผวนของเกรด',
+        'min_grade': 'เกรดต่ำสุด',
+        'max_grade': 'เกรดสูงสุด',
+        'grade_range': 'ช่วงเกรด (สูงสุด-ต่ำสุด)',
+        'high_grades': 'สัดส่วนเกรดสูง (A, B+)',
+        'medium_grades': 'สัดส่วนเกรดกลาง (B, C+)',
+        'low_grades': 'สัดส่วนเกรดต่ำ (C, D+, D, F)',
+        'avg_course_difficulty': 'ความยากเฉลี่ยของวิชาที่เรียน',
+        'avg_course_fail_rate': 'อัตราตกเฉลี่ยของวิชาที่เรียน',
+        'num_killer_courses': 'จำนวนวิชาปราบเซียนที่เรียน',
+        'num_easy_courses': 'จำนวนวิชาง่ายที่เรียน',
+        'num_failed_courses': 'จำนวนวิชาที่สอบตก',
+        'killer_course_ratio': 'สัดส่วนวิชาปราบเซียน',
+        'gpa_gap': 'ผลต่าง GPA จริง vs คาดหวัง',
+        'recent_trend': 'แนวโน้มเกรดล่าสุด',
+        'progress_ratio': 'อัตราความก้าวหน้า',
+        'consistency_score': 'ความสม่ำเสมอของเกรด',
+        'academic_momentum': 'แรงผลักดันทางการเรียน',
+        'risk_score': 'คะแนนความเสี่ยง',
+        'credits_earned': 'หน่วยกิตสะสมที่ผ่าน',
+        'graduation_progress': 'ความก้าวหน้าสู่การจบ',
+        'credits_per_semester': 'หน่วยกิตต่อเทอม (pace)',
+        'on_track_ratio': 'อยู่ในเกณฑ์หรือไม่ (vs 17 หน่วยกิต/เทอม)',
+        'semester_progress': 'ความก้าวหน้าของเวลา (เทอม/8)',
+        'weighted_difficulty': 'ความยากถ่วงน้ำหนักหน่วยกิต',
+        'hard_course_gpa': 'GPA ในวิชายาก (สัญญาณสำคัญ)',
+        'grade_variance_exposure': 'ความผันผวนของวิชาที่เรียน'
+    };
+
+    function getThaiFeatureName(engName) {
+        return featureNamesTH[engName] || engName;
+    }
+
     // Display training results
     function displayTrainingResults(result) {
         document.getElementById('resultsCard').classList.remove('d-none');
@@ -1130,33 +1179,96 @@
         document.getElementById('predictionResults').classList.add('d-none');
         document.getElementById('analysisResults').classList.add('d-none');
 
-        document.getElementById('accuracyDisplay').textContent = (result.accuracy * 100).toFixed(1) + '%';
-        document.getElementById('precisionDisplay').textContent = (result.precision * 100).toFixed(1) + '%';
-        document.getElementById('recallDisplay').textContent = (result.recall * 100).toFixed(1) + '%';
-        document.getElementById('f1Display').textContent = (result.f1_score * 100).toFixed(1) + '%';
+        const acc = result.accuracy != null ? (result.accuracy * 100).toFixed(1) : '—';
+        const prec = result.precision != null ? (result.precision * 100).toFixed(1) : '—';
+        const rec = result.recall != null ? (result.recall * 100).toFixed(1) : '—';
+        const f1 = result.f1_score != null ? (result.f1_score * 100).toFixed(1) : '—';
+
+        document.getElementById('accuracyDisplay').textContent = acc + '%';
+        document.getElementById('precisionDisplay').textContent = prec + '%';
+        document.getElementById('recallDisplay').textContent = rec + '%';
+        document.getElementById('f1Display').textContent = f1 + '%';
+
+        // สร้างรายละเอียดการเทรน
+        const modelName = result.model_filename || '—';
+        const samples = result.training_samples || 0;
+        const featCount = result.features_count || result.features || 0;
+        const cpCount = result.course_profiles_count || 0;
+        const bestModel = result.best_model_name || '';
+        const labelDist = result.label_distribution || {};
+        const studentsCount = result.students_count || '';
+        const coursesCount = result.courses_count || '';
+        const trainingType = result.training_type || '';
+
+        // แสดง label distribution
+        let labelHtml = '';
+        if (labelDist && Object.keys(labelDist).length > 0) {
+            const grad = labelDist[1] || labelDist['1'] || 0;
+            const notGrad = labelDist[0] || labelDist['0'] || 0;
+            const total = grad + notGrad;
+            const gradPct = total > 0 ? ((grad / total) * 100).toFixed(1) : 0;
+            labelHtml = `
+                <div class="d-flex justify-content-center gap-3 mb-2">
+                    <span class="badge bg-success px-3 py-2"><i class="bi bi-mortarboard-fill me-1"></i> จบการศึกษา ${grad} คน (${gradPct}%)</span>
+                    <span class="badge bg-danger px-3 py-2"><i class="bi bi-exclamation-triangle-fill me-1"></i> ไม่จบ ${notGrad} คน (${(100 - gradPct).toFixed(1)}%)</span>
+                </div>`;
+        }
+
+        // แสดงผลโมเดลทั้งหมด (ถ้ามี)
+        let allModelsHtml = '';
+        if (result.all_model_results) {
+            allModelsHtml = '<h6 class="fw-bold mt-3 mb-2"><i class="bi bi-bar-chart-line me-1"></i> ผลเปรียบเทียบทุกโมเดล</h6><div class="table-responsive"><table class="table table-sm table-bordered text-center mb-0"><thead class="table-light"><tr><th>โมเดล</th><th>ความแม่นยำ</th><th>ความแม่นเจาะจง</th><th>ความครอบคลุม</th><th>คะแนนสมดุล</th></tr></thead><tbody>';
+            for (const [name, metrics] of Object.entries(result.all_model_results)) {
+                const isBest = name === bestModel;
+                const rowClass = isBest ? 'table-success fw-bold' : '';
+                const badge = isBest ? ' <span class="badge bg-warning text-dark ms-1">ดีที่สุด</span>' : '';
+                allModelsHtml += `<tr class="${rowClass}"><td class="text-start">${name}${badge}</td><td>${(metrics.accuracy*100).toFixed(1)}%</td><td>${(metrics.precision*100).toFixed(1)}%</td><td>${(metrics.recall*100).toFixed(1)}%</td><td>${(metrics.f1_score*100).toFixed(1)}%</td></tr>`;
+            }
+            allModelsHtml += '</tbody></table></div>';
+        }
 
         document.getElementById('trainingDetails').innerHTML = `
-        <div class="row text-center p-3">
-            <div class="col-md-3 border-end">
-                <small class="text-muted d-block">ชื่อโมเดล</small>
-                <span class="fw-bold text-truncate d-block" title="${result.model_filename}">${result.model_filename}</span>
-            </div>
-            <div class="col-md-3 border-end">
-                <small class="text-muted d-block">จำนวนตัวอย่าง</small>
-                <span class="fw-bold">${result.training_samples} samples</span>
-            </div>
-            <div class="col-md-3 border-end">
-                <small class="text-muted d-block">Features</small>
-                <span class="fw-bold">${result.features_count}</span>
-            </div>
-            <div class="col-md-3">
-                <small class="text-muted d-block">Course Profiles</small>
-                <span class="fw-bold">${result.course_profiles_count || 'N/A'} วิชา</span>
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body">
+                ${labelHtml}
+                <div class="row text-center g-3 mt-2">
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 bg-light rounded-3">
+                            <i class="bi bi-file-earmark-code text-primary d-block mb-1" style="font-size:1.3rem;"></i>
+                            <small class="text-muted d-block">ชื่อโมเดล</small>
+                            <span class="fw-bold small text-truncate d-block" title="${modelName}">${modelName}</span>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 bg-light rounded-3">
+                            <i class="bi bi-database text-success d-block mb-1" style="font-size:1.3rem;"></i>
+                            <small class="text-muted d-block">ตัวอย่างเทรน</small>
+                            <span class="fw-bold">${samples.toLocaleString()} <small class="text-muted">snapshots</small></span>
+                            ${studentsCount ? `<br><small class="text-muted">จาก ${studentsCount} นักศึกษา</small>` : ''}
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 bg-light rounded-3">
+                            <i class="bi bi-sliders text-warning d-block mb-1" style="font-size:1.3rem;"></i>
+                            <small class="text-muted d-block">จำนวนปัจจัย</small>
+                            <span class="fw-bold">${featCount} <small class="text-muted">ปัจจัย</small></span>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-2 bg-light rounded-3">
+                            <i class="bi bi-book text-info d-block mb-1" style="font-size:1.3rem;"></i>
+                            <small class="text-muted d-block">โปรไฟล์รายวิชา</small>
+                            <span class="fw-bold">${cpCount || '—'} <small class="text-muted">วิชา</small></span>
+                            ${coursesCount ? `<br><small class="text-muted">(Course DNA)</small>` : ''}
+                        </div>
+                    </div>
+                </div>
+                ${allModelsHtml}
             </div>
         </div>
     `;
 
-        if (result.feature_importances) {
+        if (result.feature_importances && Object.keys(result.feature_importances).length > 0) {
             const featureList = document.getElementById('featureList');
             let featureHtml = '';
 
@@ -1164,14 +1276,18 @@
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 10);
 
+            const maxImp = features.length > 0 ? features[0][1] : 1;
+
             features.forEach(([feature, importance], index) => {
                 const percentage = (importance * 100).toFixed(2);
+                const barWidth = ((importance / maxImp) * 100).toFixed(1);
+                const thaiName = getThaiFeatureName(feature);
                 featureHtml += `
-                <div class="feature-bar">
+                <div class="feature-bar" title="${feature}: ${thaiName}">
                     <span class="feature-rank">${index + 1}</span>
-                    <span class="feature-name text-truncate" title="${feature}">${feature}</span>
+                    <span class="feature-name text-truncate" title="${feature}">${thaiName}</span>
                     <div class="feature-progress">
-                        <div class="progress-bar bg-primary" style="width: ${percentage}%"></div>
+                        <div class="progress-bar bg-primary" style="width: ${barWidth}%"></div>
                     </div>
                     <span class="feature-value">${percentage}%</span>
                 </div>
@@ -1179,9 +1295,17 @@
             });
 
             featureList.innerHTML = featureHtml;
+            document.getElementById('featureImportance').classList.remove('d-none');
+        } else {
+            document.getElementById('featureImportance').classList.add('d-none');
         }
 
         displayGeminiTrainingResult(result.gemini_analysis);
+
+        // เปิด tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
+
         setTimeout(() => {
             document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth' });
         }, 200);
