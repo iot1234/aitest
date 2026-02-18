@@ -81,9 +81,9 @@
         <div class="login-body">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        {{ message }}
+                    <div class="alert alert-{{ category }} alert-inline alert-dismissible fade show">
+                        <span class="alert-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                        <span>{{ message }}</span>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 {% endfor %}

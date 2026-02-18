@@ -438,53 +438,176 @@
             color: var(--gray-500);
         }
 
-        /* Alerts */
+        /* ===== Toast Notification System ===== */
+        #alertContainer {
+            position: fixed;
+            top: 80px;
+            right: 1rem;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            max-width: 420px;
+            width: calc(100% - 2rem);
+            pointer-events: none;
+        }
+
         .alert {
+            position: relative;
             border: none;
-            border-radius: var(--radius-lg);
-            padding: 1rem 1.5rem;
+            border-radius: 14px;
+            padding: 0.9rem 1.1rem;
+            padding-right: 2.8rem;
             font-weight: 500;
+            font-size: 0.92rem;
+            line-height: 1.45;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            overflow: hidden;
+            word-break: break-word;
+            pointer-events: auto;
+            animation: toastSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .alert.hiding {
+            animation: toastSlideOut 0.35s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+        }
+
+        @keyframes toastSlideIn {
+            from { transform: translateY(-16px) scale(0.96); opacity: 0; }
+            to   { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes toastSlideOut {
+            from { transform: translateY(0) scale(1); opacity: 1; }
+            to   { transform: translateY(-12px) scale(0.94); opacity: 0; }
+        }
+
+        /* Progress bar auto-dismiss */
+        .alert .alert-timer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            border-radius: 0 0 14px 14px;
+            animation: timerShrink var(--alert-duration, 5s) linear forwards;
+        }
+        @keyframes timerShrink {
+            from { width: 100%; }
+            to   { width: 0; }
+        }
+
+        /* Icon circle */
+        .alert .alert-icon {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
-            gap: 1rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            animation: slideInRight 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            justify-content: center;
+            font-size: 1rem;
         }
 
-        @keyframes slideInRight {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+        /* Close button */
+        .alert .btn-close {
+            position: absolute;
+            top: 0.7rem;
+            right: 0.7rem;
+            padding: 0.35rem;
+            font-size: 0.65rem;
+            opacity: 0.5;
+            transition: opacity 0.2s, transform 0.2s;
+            border-radius: 50%;
+            background-size: 0.65rem;
+        }
+        .alert .btn-close:hover {
+            opacity: 1;
+            transform: scale(1.15);
         }
 
+        /* Color themes */
         .alert-success {
-            background: #d1fae5;
+            background: rgba(209,250,229,0.92);
             color: #065f46;
-            border-left: 5px solid var(--success);
         }
+        .alert-success .alert-icon { background: #10b981; color: #fff; }
+        .alert-success .alert-timer { background: #10b981; }
 
         .alert-danger {
-            background: #fee2e2;
+            background: rgba(254,226,226,0.92);
             color: #991b1b;
-            border-left: 5px solid var(--danger);
         }
+        .alert-danger .alert-icon { background: #ef4444; color: #fff; }
+        .alert-danger .alert-timer { background: #ef4444; }
 
         .alert-warning {
-            background: #fef3c7;
+            background: rgba(254,243,199,0.92);
             color: #92400e;
-            border-left: 5px solid var(--warning);
         }
+        .alert-warning .alert-icon { background: #f59e0b; color: #fff; }
+        .alert-warning .alert-timer { background: #f59e0b; }
 
         .alert-info {
-            background: #dbeafe;
+            background: rgba(219,234,254,0.92);
             color: #1e40af;
-            border-left: 5px solid var(--primary);
+        }
+        .alert-info .alert-icon { background: #6366f1; color: #fff; }
+        .alert-info .alert-timer { background: #6366f1; }
+
+        /* Dark mode alerts */
+        body.dark-mode .alert-success { background: rgba(6,95,70,0.85); color: #d1fae5; }
+        body.dark-mode .alert-danger  { background: rgba(153,27,27,0.85); color: #fee2e2; }
+        body.dark-mode .alert-warning { background: rgba(146,64,14,0.85); color: #fef3c7; }
+        body.dark-mode .alert-info    { background: rgba(30,64,175,0.85); color: #dbeafe; }
+        body.dark-mode .alert .btn-close { filter: invert(1); }
+
+        /* Mobile responsive */
+        @media (max-width: 576px) {
+            #alertContainer {
+                top: 70px;
+                right: 0.5rem;
+                left: 0.5rem;
+                max-width: none;
+                width: auto;
+            }
+            .alert {
+                padding: 0.75rem 0.9rem;
+                padding-right: 2.4rem;
+                font-size: 0.85rem;
+                border-radius: 12px;
+                gap: 0.6rem;
+            }
+            .alert .alert-icon {
+                width: 28px;
+                height: 28px;
+                font-size: 0.85rem;
+            }
+        }
+
+        /* Inline alerts (inside page content, not toast) */
+        .alert-inline {
+            position: static;
+            max-width: 100%;
+            width: 100%;
+            pointer-events: auto;
+            animation: fadeInAlert 0.4s ease forwards;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            border-left: 4px solid;
+            margin-bottom: 1rem;
+        }
+        .alert-inline.alert-success { border-left-color: #10b981; }
+        .alert-inline.alert-danger  { border-left-color: #ef4444; }
+        .alert-inline.alert-warning { border-left-color: #f59e0b; }
+        .alert-inline.alert-info    { border-left-color: #6366f1; }
+        .alert-inline .alert-timer  { display: none; }
+
+        @keyframes fadeInAlert {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         /* Footer */
@@ -947,8 +1070,8 @@
             }
         }
 
-        // Alert functions
-        function showAlert(message, type = 'info', containerId = 'alertContainer') {
+        // Alert / Toast notification system
+        function showAlert(message, type = 'info', containerId = 'alertContainer', duration = 5000) {
             const container = document.getElementById(containerId);
             if (!container) return;
 
@@ -959,22 +1082,42 @@
                 info: 'info-circle-fill'
             };
 
+            // จำกัดจำนวน toast ไม่เกิน 4 ตัว
+            const existing = container.querySelectorAll('.alert');
+            if (existing.length >= 4) {
+                const oldest = existing[existing.length - 1];
+                oldest.classList.add('hiding');
+                setTimeout(() => oldest.remove(), 350);
+            }
+
+            const isInline = containerId !== 'alertContainer';
             const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show${isInline ? ' alert-inline' : ''}`;
+            alertDiv.style.setProperty('--alert-duration', duration + 'ms');
             alertDiv.innerHTML = `
-                <i class="bi bi-${icons[type] || 'info-circle-fill'} fs-4"></i>
-                <span>${message}</span>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <span class="alert-icon"><i class="bi bi-${icons[type] || 'info-circle-fill'}"></i></span>
+                <span class="alert-msg">${message}</span>
+                <button type="button" class="btn-close" aria-label="ปิด"></button>
+                ${!isInline ? '<span class="alert-timer"></span>' : ''}
             `;
+
+            // Close button handler
+            alertDiv.querySelector('.btn-close').addEventListener('click', () => {
+                alertDiv.classList.add('hiding');
+                setTimeout(() => alertDiv.remove(), 350);
+            });
 
             container.insertBefore(alertDiv, container.firstChild);
 
-            setTimeout(() => {
-                if (alertDiv.parentNode) {
-                    alertDiv.classList.remove('show');
-                    setTimeout(() => alertDiv.remove(), 500);
-                }
-            }, 5000);
+            // Auto-dismiss
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (alertDiv.parentNode) {
+                        alertDiv.classList.add('hiding');
+                        setTimeout(() => alertDiv.remove(), 350);
+                    }
+                }, duration);
+            }
         }
 
         // Active nav link

@@ -99,16 +99,19 @@
     </div>
 
     {% if is_fallback %}
-    <div class="alert alert-warning mb-4">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-        <strong>โหมด Fallback:</strong> MongoDB ไม่พร้อม — ค่าที่บันทึกจะใช้ได้เฉพาะ runtime นี้เท่านั้น (รีสตาร์ทแล้วหายไป)
-        <br><small>ตั้งค่า <code>MONGODB_URI</code> ใน Environment Variables เพื่อบันทึกถาวร</small>
+    <div class="alert alert-warning alert-inline mb-4">
+        <span class="alert-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+        <div>
+            <strong>โหมด Fallback:</strong> MongoDB ไม่พร้อม — ค่าที่บันทึกจะใช้ได้เฉพาะ runtime นี้เท่านั้น (รีสตาร์ทแล้วหายไป)
+            <br><small>ตั้งค่า <code>MONGODB_URI</code> ใน Environment Variables เพื่อบันทึกถาวร</small>
+        </div>
     </div>
     {% endif %}
 
     {% if success %}
-    <div class="alert alert-success mb-4">
-        <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+    <div class="alert alert-success alert-inline mb-4">
+        <span class="alert-icon"><i class="bi bi-check-circle-fill"></i></span>
+        <span>{{ success }}</span>
     </div>
     {% endif %}
 
@@ -282,9 +285,9 @@ function togglePassword(fieldId) {
 // Test connections
 document.getElementById('btnTestConnections')?.addEventListener('click', async () => {
     const resultBox = document.getElementById('connectionTestResult');
-    resultBox.className = 'alert alert-info mt-3';
+    resultBox.className = 'alert alert-info alert-inline mt-3';
     resultBox.classList.remove('d-none');
-    resultBox.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>กำลังทดสอบการเชื่อมต่อ... (อาจใช้เวลาสักครู่)';
+    resultBox.innerHTML = '<span class="alert-icon"><i class="bi bi-hourglass-split"></i></span><span>กำลังทดสอบการเชื่อมต่อ... (อาจใช้เวลาสักครู่)</span>';
 
     try {
         const resp = await fetch('/api/admin/test-connections', {
@@ -312,11 +315,11 @@ document.getElementById('btnTestConnections')?.addEventListener('click', async (
                 <i class="bi bi-arrow-repeat me-1"></i>เปลี่ยนเป็น ${data.gemini.suggested_model}</button>`;
         }
 
-        resultBox.className = `alert ${data.success ? 'alert-success' : 'alert-warning'} mt-3`;
-        resultBox.innerHTML = `${mongo}<br>${r2}<br>${geminiHtml}`;
+        resultBox.className = `alert alert-inline ${data.success ? 'alert-success' : 'alert-warning'} mt-3`;
+        resultBox.innerHTML = `<div style="line-height:1.8">${mongo}<br>${r2}<br>${geminiHtml}</div>`;
     } catch (e) {
-        resultBox.className = 'alert alert-danger mt-3';
-        resultBox.innerHTML = `<i class="bi bi-x-circle me-2"></i>ทดสอบไม่สำเร็จ: ${e.message}`;
+        resultBox.className = 'alert alert-danger alert-inline mt-3';
+        resultBox.innerHTML = `<span class="alert-icon"><i class="bi bi-x-circle"></i></span><span>ทดสอบไม่สำเร็จ: ${e.message}</span>`;
     }
 });
 

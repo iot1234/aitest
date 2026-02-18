@@ -787,7 +787,6 @@
 
 {% block content %}
 <div class="main-container">
-    <div id="alertContainer"></div>
 
     <!-- Hero Header -->
     <div class="hero-header" data-aos="fade-down">
@@ -2630,28 +2629,7 @@
         document.getElementById('customLoadingModal').classList.remove('show');
     }
 
-    function showAlert(message, type = 'info') {
-        const container = document.getElementById('alertContainer');
-        if (!container) return;
-
-        const id = 'alert-' + Date.now();
-        const icons = { success: 'check-circle', danger: 'x-circle', warning: 'exclamation-triangle', info: 'info-circle' };
-
-        container.insertAdjacentHTML('beforeend', `
-        <div id="${id}" class="alert alert-${type} alert-dismissible fade show shadow-sm border-0 rounded-3" role="alert">
-            <i class="bi bi-${icons[type]}-fill me-2"></i>${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `);
-
-        setTimeout(() => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.classList.remove('show');
-                setTimeout(() => el.remove(), 300);
-            }
-        }, 5000);
-    }
+    // showAlert ใช้จาก base.html (toast notification system)
 
     // ===== Export Functions =====
     function exportResults(format) {
