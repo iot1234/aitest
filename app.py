@@ -1612,22 +1612,23 @@ COURSE_LOOKUP = {course['id']: course for course in getattr(ACTIVE_CONFIG, 'COUR
 GRADE_POINT_MAP = ACTIVE_CONFIG.DATA_CONFIG.get('grade_mapping', {})
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-# Use gemini-3-flash as default (latest, balanced, fast)
-# Fallback chain: gemini-3-flash → gemini-2.5-flash → gemini-2.5-flash-lite → gemini-2.5-pro
-# Reference: https://ai.google.dev/gemini-api/docs/models (updated Feb 2026)
-GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash')
+# Use gemini-3-flash-preview as default (Gemini 3 models are still in preview)
+# Fallback chain: gemini-3-flash-preview → gemini-3-pro-preview → gemini-2.5-flash → gemini-2.5-pro
+# Reference: https://ai.google.dev/gemini-api/docs/models
+GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
 GEMINI_MAX_FILE_SIZE_MB = float(os.environ.get('GEMINI_MAX_FILE_SIZE_MB', 5))
 # Default fallback models for high availability (in order of preference)
-GEMINI_DEFAULT_FALLBACKS = ['gemini-3-flash', 'gemini-3-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']
+GEMINI_DEFAULT_FALLBACKS = ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']
 
 # Deprecated model name → recommended replacement (auto-fix on startup)
 GEMINI_DEPRECATED_MODELS = {
-    'gemini-1.5-flash': 'gemini-3-flash',
-    'gemini-1.5-pro': 'gemini-3-pro',
+    'gemini-1.5-flash': 'gemini-3-flash-preview',
+    'gemini-1.5-pro': 'gemini-3-pro-preview',
     'gemini-2.5-flash-preview-05-20': 'gemini-2.5-flash',
     'gemini-2.5-pro-preview-05-06': 'gemini-2.5-pro',
-    'gemini-3-flash-preview': 'gemini-3-flash',
-    'gemini-2.0-flash': 'gemini-3-flash',
+    'gemini-3-flash': 'gemini-3-flash-preview',
+    'gemini-3-pro': 'gemini-3-pro-preview',
+    'gemini-2.0-flash': 'gemini-2.5-flash',
     'gemini-2.0-flash-lite': 'gemini-2.5-flash-lite',
 }
 
@@ -1641,8 +1642,8 @@ if GEMINI_MODEL_NAME in GEMINI_DEPRECATED_MODELS:
 # Known Gemini models for the admin dropdown (label → model id)
 # Use exact model IDs from Google AI — click 🔄 in admin to fetch live list
 GEMINI_KNOWN_MODELS = [
-    {'id': 'gemini-3-flash', 'name': 'Gemini 3 Flash', 'desc': '⭐ แนะนำ — เร็ว สมดุล รุ่นล่าสุด'},
-    {'id': 'gemini-3-pro', 'name': 'Gemini 3 Pro', 'desc': '🧠 ฉลาดสุด ทรงพลังสุด'},
+    {'id': 'gemini-3-flash-preview', 'name': 'Gemini 3 Flash', 'desc': '⭐ แนะนำ — เร็ว สมดุล รุ่นล่าสุด (Preview)'},
+    {'id': 'gemini-3-pro-preview', 'name': 'Gemini 3 Pro', 'desc': '🧠 ฉลาดสุด ทรงพลังสุด (Preview)'},
     {'id': 'gemini-2.5-flash', 'name': 'Gemini 2.5 Flash', 'desc': 'เร็ว เสถียร ฟรี'},
     {'id': 'gemini-2.5-flash-lite', 'name': 'Gemini 2.5 Flash Lite', 'desc': 'เบาที่สุด ประหยัด ฟรี'},
     {'id': 'gemini-2.5-pro', 'name': 'Gemini 2.5 Pro', 'desc': 'ฉลาดสุด ช้ากว่า'},
@@ -1696,7 +1697,7 @@ def refresh_gemini_runtime_from_settings():
         admin_manager.apply_runtime_env()
 
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash')
+    GEMINI_MODEL_NAME = os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')
     # Auto-fix deprecated model names
     if GEMINI_MODEL_NAME in GEMINI_DEPRECATED_MODELS:
         _old = GEMINI_MODEL_NAME
