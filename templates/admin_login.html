@@ -1,30 +1,56 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Login{% endblock %}
+{% block title %}เข้าสู่ระบบผู้ดูแล{% endblock %}
 
 {% block content %}
 <div class="container py-5" style="max-width: 560px;">
-    <div class="card shadow-lg border-0 rounded-4">
+    <div class="card shadow-lg border-0 rounded-4" style="min-height:auto;">
         <div class="card-body p-4 p-md-5">
-            <h2 class="mb-3">เข้าสู่ระบบผู้ดูแล</h2>
-            <p class="text-muted">สำหรับจัดการคีย์ระบบและสิทธิ์การใช้งาน</p>
+            <div class="text-center mb-4">
+                <div class="rounded-circle bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center mb-3" style="width:64px;height:64px;">
+                    <i class="bi bi-shield-lock-fill text-primary fs-2"></i>
+                </div>
+                <h2 class="mb-1">เข้าสู่ระบบผู้ดูแล</h2>
+                <p class="text-muted mb-0">สำหรับจัดการคีย์ระบบ AI, R2 และโมเดล</p>
+            </div>
 
             {% if error %}
-            <div class="alert alert-danger">{{ error }}</div>
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+            </div>
             {% endif %}
 
-            <form method="post" action="{{ url_for('admin_login') }}">
+            <form method="post" action="{{ url_for('admin_login') }}" id="loginForm">
                 <div class="mb-3">
-                    <label class="form-label">Username</label>
-                    <input type="text" name="username" class="form-control" required>
+                    <label class="form-label"><i class="bi bi-person me-1"></i>Username</label>
+                    <input type="text" name="username" class="form-control" required autofocus placeholder="ชื่อผู้ใช้">
                 </div>
                 <div class="mb-4">
-                    <label class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" required>
+                    <label class="form-label"><i class="bi bi-key me-1"></i>Password</label>
+                    <input type="password" name="password" class="form-control" required placeholder="รหัสผ่าน">
                 </div>
-                <button class="btn btn-primary w-100" type="submit">เข้าสู่ระบบ</button>
+                <button class="btn btn-primary w-100" type="submit" id="btnLogin">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>เข้าสู่ระบบ
+                </button>
             </form>
+
+            <div class="text-center mt-3">
+                <a href="{{ url_for('main_page') }}" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>กลับหน้าหลัก</a>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block custom_js %}
+{{ super() }}
+<script>
+document.getElementById('loginForm')?.addEventListener('submit', function() {
+    const btn = document.getElementById('btnLogin');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> กำลังเข้าสู่ระบบ...';
+    }
+});
+</script>
 {% endblock %}

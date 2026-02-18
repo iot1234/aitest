@@ -5371,6 +5371,9 @@ def refresh_r2_storage_from_settings():
     """Reinitialize storage object with current environment settings."""
     global storage
     try:
+        # Ensure latest settings are in os.environ before creating new S3Storage
+        if admin_manager.enabled:
+            admin_manager.apply_runtime_env()
         storage = S3Storage()
         return True
     except Exception as e:
@@ -5380,11 +5383,7 @@ def refresh_r2_storage_from_settings():
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
-    fallback_auth = has_fallback_admin_auth()
-    if not admin_manager.enabled and not fallback_auth:
-        reason = admin_manager.init_error or 'MongoDB admin backend is not available'
-        return f"MongoDB admin backend is not available: {reason}", 503
-
+    # Always allow login — if MongoDB is down, use fallback credentials
     if request.method == 'GET':
         if session.get('user_id'):
             return redirect(url_for('admin_settings'))
@@ -5397,7 +5396,9 @@ def admin_login():
     user = None
     if admin_manager.enabled:
         user = admin_manager.authenticate(username, password)
-    else:
+
+    # Fallback: if MongoDB auth failed or disabled, try env-based auth
+    if not user and not admin_manager.enabled:
         fallback_username = os.environ.get('ADMIN_USERNAME', 'admin')
         fallback_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
         if username == fallback_username and password == fallback_password:
@@ -5493,18 +5494,23 @@ def admin_settings():
         'r2_bucket_name': 'CLOUDFLARE_R2_BUCKET_NAME',
     }
 
+    success_msg = None
+
     if request.method == 'POST':
         form = request.get_json(silent=True) or request.form
 
         for form_key, setting_key in setting_map.items():
-            if form_key in form and form.get(form_key) is not None:
-                value = str(form.get(form_key)).strip()
+            if form_key in form:
+                raw = form.get(form_key)
+                value = str(raw).strip() if raw is not None else ''
+                # Save value (including empty to allow clearing keys)
+                if admin_manager.enabled:
+                    admin_manager.set_setting(setting_key, value, actor_user_id=session.get('user_id'))
+                # Always update os.environ so runtime picks it up
                 if value:
-                    if admin_manager.enabled:
-                        admin_manager.set_setting(setting_key, value, actor_user_id=session.get('user_id'))
-                    else:
-                        # Fallback mode: runtime only (not persisted in DB)
-                        os.environ[setting_key] = value
+                    os.environ[setting_key] = value
+                elif setting_key in os.environ:
+                    del os.environ[setting_key]
 
         if admin_manager.enabled:
             admin_manager.apply_runtime_env()
@@ -5512,21 +5518,40 @@ def admin_settings():
         refresh_r2_storage_from_settings()
 
         if admin_manager.enabled:
-            return render_template('admin_settings.html', success='บันทึกค่าเรียบร้อยแล้ว')
-        return render_template('admin_settings.html', success='บันทึกค่าแบบ runtime แล้ว (โหมด fallback: ยังไม่บันทึกลง MongoDB)')
+            success_msg = 'บันทึกค่าเรียบร้อยแล้ว ✅'
+        else:
+            success_msg = 'บันทึกค่าแบบ runtime แล้ว (โหมด fallback: ยังไม่บันทึกลง MongoDB)'
+
+    # Build current values (for both GET and after POST)
+    def _get_val(key, default=''):
+        return admin_manager.get_setting(key, os.environ.get(key, default))
 
     current_values = {
-        'gemini_api_key': admin_manager.get_setting('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', '')),
-        'gemini_model_name': admin_manager.get_setting('GEMINI_MODEL_NAME', os.environ.get('GEMINI_MODEL_NAME', 'gemini-3-flash-preview')),
-        'gemini_model_fallbacks': admin_manager.get_setting('GEMINI_MODEL_FALLBACKS', os.environ.get('GEMINI_MODEL_FALLBACKS', '')),
-        'r2_access_key': admin_manager.get_setting('CLOUDFLARE_R2_ACCESS_KEY_ID', os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', '')),
-        'r2_secret_key': admin_manager.get_setting('CLOUDFLARE_R2_SECRET_ACCESS_KEY', os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY', '')),
-        'r2_endpoint': admin_manager.get_setting('CLOUDFLARE_R2_ENDPOINT', os.environ.get('CLOUDFLARE_R2_ENDPOINT', '')),
-        'r2_bucket_name': admin_manager.get_setting('CLOUDFLARE_R2_BUCKET_NAME', os.environ.get('CLOUDFLARE_R2_BUCKET_NAME', '')),
-        'gemini_api_key_masked': MongoAdminManager.mask_value(admin_manager.get_setting('GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', ''))),
-        'r2_access_key_masked': MongoAdminManager.mask_value(admin_manager.get_setting('CLOUDFLARE_R2_ACCESS_KEY_ID', os.environ.get('CLOUDFLARE_R2_ACCESS_KEY_ID', ''))),
-        'r2_secret_key_masked': MongoAdminManager.mask_value(admin_manager.get_setting('CLOUDFLARE_R2_SECRET_ACCESS_KEY', os.environ.get('CLOUDFLARE_R2_SECRET_ACCESS_KEY', ''))),
+        'gemini_api_key': _get_val('GEMINI_API_KEY'),
+        'gemini_model_name': _get_val('GEMINI_MODEL_NAME', 'gemini-3-flash-preview'),
+        'gemini_model_fallbacks': _get_val('GEMINI_MODEL_FALLBACKS'),
+        'r2_access_key': _get_val('CLOUDFLARE_R2_ACCESS_KEY_ID'),
+        'r2_secret_key': _get_val('CLOUDFLARE_R2_SECRET_ACCESS_KEY'),
+        'r2_endpoint': _get_val('CLOUDFLARE_R2_ENDPOINT'),
+        'r2_bucket_name': _get_val('CLOUDFLARE_R2_BUCKET_NAME'),
     }
+
+    # Masked versions for sensitive fields
+    current_values['gemini_api_key_masked'] = MongoAdminManager.mask_value(current_values['gemini_api_key'])
+    current_values['r2_access_key_masked'] = MongoAdminManager.mask_value(current_values['r2_access_key'])
+    current_values['r2_secret_key_masked'] = MongoAdminManager.mask_value(current_values['r2_secret_key'])
+
+    # System status for template
+    current_values['mongo_connected'] = admin_manager.enabled
+    current_values['mongo_error'] = admin_manager.init_error
+    current_values['gemini_ready'] = is_gemini_available()
+    current_values['gemini_model'] = GEMINI_MODEL_NAME
+    current_values['r2_connected'] = not getattr(storage, 'use_local', True)
+    current_values['r2_bucket'] = getattr(storage, 'bucket_name', '')
+    current_values['is_fallback'] = not admin_manager.enabled
+
+    if success_msg:
+        current_values['success'] = success_msg
 
     return render_template('admin_settings.html', **current_values)
 
