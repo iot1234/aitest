@@ -1280,7 +1280,7 @@ class MongoAdminManager:
             return
 
         username = os.environ.get('INITIAL_ADMIN_USERNAME', 'admin')
-        temp_password = secrets.token_urlsafe(10)
+        temp_password = os.environ.get('INITIAL_ADMIN_PASSWORD', 'admin123')
         self.bootstrap_password = temp_password
 
         self.users.insert_one({
