@@ -7867,9 +7867,13 @@ def api_predict_batch():
 
         logger.info(f"Parsed {len(students)} students")
 
-        # --- Setup feature engineer ---
-        engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping)
-        engineer.course_profiles = course_profiles
+        # --- Setup trainer (same as individual prediction) ---
+        trainer = AdvancedModelTrainer()
+        trainer.course_credit_map = course_credit_map
+        # Also try to get course_credit_map from model data (same as individual prediction)
+        model_credit_map = model_data.get('course_credit_map', {})
+        if model_credit_map:
+            trainer.course_credit_map = model_credit_map
 
         # --- Predict for each student ---
         results = []
@@ -7885,44 +7889,16 @@ def api_predict_batch():
                     errors.append({'student_id': student_id, 'error': 'No grade data found'})
                     continue
 
-                # Build a mini DataFrame (long format) for feature engineering
-                rows = []
-                for course_id, grade_str in grades_dict.items():
-                    credit = course_credit_map.get(course_id, 3)
-                    grade_val = grade_mapping.get(str(grade_str).upper().strip(), None)
-                    rows.append({
-                        'COURSE_CODE': course_id,
-                        'GRADE': str(grade_str).upper().strip(),
-                        'CREDIT': credit,
-                        'GRADE_POINT': grade_val if grade_val is not None else 0.0
-                    })
-
-                student_df = pd.DataFrame(rows)
-
-                # Create snapshot features using the same pipeline as training
-                snapshot = engineer._create_snapshot_features(
-                    student_id=student_id,
-                    snapshot_id=f"{student_id}_batch",
-                    courses_data=student_df,
-                    course_col='COURSE_CODE',
-                    grade_col='GRADE',
-                    credit_col='CREDIT',
-                    graduated=0  # dummy
+                # Use create_dynamic_features — exactly the same as individual prediction
+                total_courses_taken = len(grades_dict)
+                features_array = trainer.create_dynamic_features(
+                    grades_dict=grades_dict,
+                    course_profiles=course_profiles,
+                    total_courses_taken=total_courses_taken
                 )
 
-                if not snapshot:
-                    errors.append({'student_id': student_id, 'error': 'Could not create features from grades'})
-                    continue
-
-                # Build feature DataFrame
-                X_pred = pd.DataFrame([snapshot])
-                X_pred = engineer._generate_advanced_features(X_pred)
-
-                # Align features with model
-                for c in feature_columns:
-                    if c not in X_pred.columns:
-                        X_pred[c] = 0
-                X_pred = X_pred[feature_columns].fillna(0)
+                # Convert to DataFrame with correct feature column names (same as individual prediction)
+                X_pred = pd.DataFrame([features_array], columns=feature_columns)
 
                 # Scale and predict
                 X_scaled = scaler.transform(X_pred)

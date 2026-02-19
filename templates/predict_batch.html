@@ -409,13 +409,6 @@
                 </select>
             </div>
             <div class="setting-item">
-                <label><i class="bi bi-sliders me-1"></i> เกณฑ์ผ่าน (ความน่าจะเป็น)</label>
-                <div class="d-flex align-items-center gap-2">
-                    <input type="range" id="thresholdRange" min="30" max="80" value="50" class="form-range" style="flex:1;">
-                    <span id="thresholdValue" class="fw-bold" style="min-width:45px;text-align:right;">50%</span>
-                </div>
-            </div>
-            <div class="setting-item">
                 <label><i class="bi bi-sort-down me-1"></i> เรียงผลลัพธ์ตาม</label>
                 <select id="sortBy">
                     <option value="risk_desc">ความเสี่ยง สูง → ต่ำ</option>
@@ -680,7 +673,6 @@ coursesData.forEach(c => { courseLookup[c.id] = c; });
 document.addEventListener('DOMContentLoaded', function() {
     loadModels();
     setupUploadZone();
-    setupThresholdSlider();
 });
 
 // =========================================================
@@ -712,15 +704,8 @@ async function loadModels() {
 }
 
 // =========================================================
-// THRESHOLD SLIDER
+// (Threshold slider removed — use model's default 0.5)
 // =========================================================
-function setupThresholdSlider() {
-    const slider = document.getElementById('thresholdRange');
-    const label = document.getElementById('thresholdValue');
-    slider.addEventListener('input', () => {
-        label.textContent = slider.value + '%';
-    });
-}
 
 // =========================================================
 // FILE UPLOAD
@@ -819,15 +804,7 @@ async function runBatchPrediction() {
             batchResults = data;
             allResults = data.results || [];
 
-            // Apply custom threshold
-            const threshold = parseInt(document.getElementById('thresholdRange').value) / 100;
-            allResults.forEach(r => {
-                r.prediction = r.probability >= threshold ? 'ผ่าน' : 'ไม่ผ่าน';
-                if (r.probability >= 0.8) r.risk_level = 'ต่ำ';
-                else if (r.probability >= threshold) r.risk_level = 'ปานกลาง';
-                else r.risk_level = 'สูง';
-            });
-
+            // Use model's prediction and risk_level directly (same as individual prediction)
             recalcSummary();
             renderResults(batchResults);
             updateSteps(3);
