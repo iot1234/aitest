@@ -8685,13 +8685,27 @@ def _generate_long_template(courses_data, all_terms):
                 grade_idx += 1
             terms_written += 1
 
-    # Example: retake (student 3 had W in Y1T1 course 7, retakes in Y2T2)
+    # === ตัวอย่างลงเรียนซ้ำ (Retake) — สมจริง ===
     output.write('#\n')
-    output.write('# === ตัวอย่างลงซ้ำ: นศ.3 ได้ W ในปี1เทอม1 แล้วลงซ้ำปี2เทอม2 ได้ C ===\n')
+    output.write('# === ตัวอย่างลงเรียนซ้ำ ===\n')
+
+    # Student 2: ตก F 2 วิชา → ลงซ้ำในปี2เทอม1
+    output.write('# นศ.2 ตก F 2 วิชาในปี1 แล้วลงซ้ำปี2เทอม1\n')
+    failed_1 = all_terms[0]['ids'][3]  # ปี1เทอม1 วิชาที่ 4 (ได้ F)
+    failed_2 = all_terms[1]['ids'][6]  # ปี1เทอม2 วิชาที่ 7 (ได้ F)
+    c1 = course_lookup.get(failed_1, {'thaiName': failed_1, 'credit': 3})
+    c2 = course_lookup.get(failed_2, {'thaiName': failed_2, 'credit': 3})
+    output.write(f'6301002,นางสาว สมหญิง รักเรียน,{failed_1},{c1["thaiName"]},{c1["credit"]},2567,1,D+\n')
+    output.write(f'6301002,นางสาว สมหญิง รักเรียน,{failed_2},{c2["thaiName"]},{c2["credit"]},2567,1,C\n')
+    output.write('# (ระบบใช้เกรดล่าสุด: F -> D+ และ F -> C อัตโนมัติ)\n')
+    output.write('#\n')
+
+    # Student 3: ได้ W → ลงซ้ำในปี2เทอม2
+    output.write('# นศ.3 ได้ W ในปี1เทอม1 แล้วลงซ้ำปี2เทอม2\n')
     retake_course = all_terms[0]['ids'][6] if len(all_terms[0]['ids']) > 6 else all_terms[0]['ids'][0]
     c = course_lookup.get(retake_course, {'thaiName': retake_course, 'credit': 3})
     output.write(f'6301003,นาย สมศักดิ์ พยายาม,{retake_course},{c["thaiName"]},{c["credit"]},2567,2,C\n')
-    output.write('# (ระบบจะใช้เกรดล่าสุด C แทน W อัตโนมัติ)\n')
+    output.write('# (ระบบใช้เกรดล่าสุด: W -> C อัตโนมัติ)\n')
 
     csv_content = output.getvalue()
     output.close()
