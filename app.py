@@ -1890,6 +1890,7 @@ def enforce_login_for_non_prediction_pages():
         # Public pages
         'main_page',
         'curriculum_prediction_form',
+        'predict_batch_page',
         'curriculum_page',
 
         # Public prediction APIs
