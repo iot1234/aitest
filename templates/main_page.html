@@ -306,8 +306,8 @@
                 <i class="bi bi-cpu"></i> ฝึกโมเดล AI
             </a>
             {% else %}
-            <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
-                <i class="bi bi-box-arrow-in-right"></i> เข้าสู่ระบบเพื่อเมนูขั้นสูง
+            <a href="{{ url_for('predict_batch_page') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+                <i class="bi bi-file-earmark-spreadsheet"></i> ทำนายจากไฟล์
             </a>
             {% endif %}
         </div>
@@ -373,7 +373,7 @@
     
     <div class="row g-4">
         {% if is_logged_in %}
-        <!-- Feature 1: Train Model -->
+        <!-- Admin: Train Model -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="100">
             <div class="card feature-card">
                 <div class="card-body">
@@ -389,8 +389,8 @@
             </div>
         </div>
         {% endif %}
-        
-        <!-- Feature 2: Individual Prediction -->
+
+        <!-- Public: Individual Prediction -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="200">
             <div class="card feature-card">
                 <div class="card-body">
@@ -405,8 +405,8 @@
                 </div>
             </div>
         </div>
-        {% if is_logged_in %}
-        <!-- Feature 3: Batch Prediction -->
+
+        <!-- Public: Batch Prediction -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="300">
             <div class="card feature-card">
                 <div class="card-body">
@@ -422,24 +422,8 @@
             </div>
         </div>
 
-        <!-- Feature 4: Subject Analysis -->
+        <!-- Public: Curriculum Analysis -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="400">
-            <div class="card feature-card">
-                <div class="card-body">
-                    <div class="feature-icon bg-warning text-white">
-                        <i class="bi bi-bar-chart-fill"></i>
-                    </div>
-                    <h5>วิเคราะห์รายวิชา</h5>
-                    <p>เจาะลึกข้อมูลรายวิชา ความยากง่าย และแนวโน้มผลการเรียน</p>
-                    <a href="{{ url_for('predict_batch_page') }}#analyze" class="btn btn-warning w-100 rounded-pill">
-                        <i class="bi bi-clipboard-data me-1"></i> ดูการวิเคราะห์
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Feature 5: Curriculum Analysis -->
-        <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="500">
             <div class="card feature-card">
                 <div class="card-body">
                     <div class="feature-icon bg-secondary text-white">
@@ -454,8 +438,9 @@
             </div>
         </div>
 
-        <!-- Feature 6: Model Management -->
-        <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="600">
+        {% if is_logged_in %}
+        <!-- Admin: Model Management -->
+        <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="500">
             <div class="card feature-card">
                 <div class="card-body">
                     <div class="feature-icon bg-dark text-white">
@@ -470,14 +455,15 @@
             </div>
         </div>
         {% else %}
-        <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="300">
+        <!-- Anonymous: Login prompt -->
+        <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="500">
             <div class="card feature-card">
                 <div class="card-body">
                     <div class="feature-icon bg-primary text-white">
                         <i class="bi bi-box-arrow-in-right"></i>
                     </div>
                     <h5>เข้าสู่ระบบแอดมิน</h5>
-                    <p>หลังเข้าสู่ระบบจะใช้งานเมนูเทรนโมเดล จัดการโมเดล และตั้งค่าระบบได้</p>
+                    <p>เข้าสู่ระบบเพื่อใช้งานเมนูฝึกโมเดล จัดการโมเดล และตั้งค่าระบบ</p>
                     <a href="{{ url_for('admin_login') }}" class="btn btn-primary w-100 rounded-pill">
                         <i class="bi bi-box-arrow-in-right me-1"></i> เข้าสู่ระบบ
                     </a>
