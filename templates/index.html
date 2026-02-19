@@ -1367,7 +1367,11 @@
         'semester_progress': 'ความก้าวหน้าของเวลา (เทอม/8)',
         'weighted_difficulty': 'ความยากถ่วงน้ำหนักหน่วยกิต',
         'hard_course_gpa': 'GPA ในวิชายาก (สัญญาณสำคัญ)',
-        'grade_variance_exposure': 'ความผันผวนของวิชาที่เรียน'
+        'grade_variance_exposure': 'ความผันผวนของวิชาที่เรียน',
+        'num_retake_courses': 'จำนวนวิชาที่เรียนซ้ำ',
+        'retake_f_count': 'จำนวนวิชาที่เคยได้ F แล้วเรียนซ้ำ',
+        'retake_ratio': 'สัดส่วนวิชาเรียนซ้ำ',
+        'avg_retake_improvement': 'เกรดดีขึ้นเฉลี่ยจากการเรียนซ้ำ'
     };
 
     function getThaiFeatureName(engName) {
@@ -1525,7 +1529,11 @@
         'semester_progress': { meaning: 'ความก้าวหน้าของเวลา คำนวณจาก เทอมที่เรียนแล้ว / 8 เทอม', why: 'เทียบกับ graduation_progress เพื่อดูว่าก้าวหน้าทันเวลาหรือไม่', insight: 'ถ้า semester_progress > graduation_progress แสดงว่าเวลาเดินเร็วกว่าหน่วยกิต' },
         'weighted_difficulty': { meaning: 'ค่าความยากถ่วงน้ำหนักด้วยหน่วยกิต วิชาที่มีหน่วยกิตมากจะมีผลมากกว่า', why: 'วิชายาก 3 หน่วยกิต กระทบมากกว่าวิชายาก 1 หน่วยกิต', insight: 'ค่าสูง = เรียนวิชายากที่มีหน่วยกิตมาก ความกดดันสูง' },
         'hard_course_gpa': { meaning: 'เกรดเฉลี่ยเฉพาะในวิชาที่ยาก (ปราบเซียน)', why: 'เป็นสัญญาณสำคัญ ถ้าทำเกรดดีในวิชายากได้ แสดงว่ามีศักยภาพสูง', insight: 'GPA ในวิชายาก ≥ 2.5 = น่าจะรับมือได้ / < 2.0 = ต้องระวัง' },
-        'grade_variance_exposure': { meaning: 'ค่าความผันผวนของผลการเรียนในวิชาที่เรียน วัดว่าวิชาเหล่านั้นมีเกรดกระจายมากแค่ไหน', why: 'วิชาที่มีเกรดกระจายมากอาจทำให้ผลลัพธ์คาดเดาได้ยาก', insight: 'ค่าสูง = เรียนวิชาที่ผลการเรียนหลากหลาย ผลลัพธ์ไม่แน่นอน' }
+        'grade_variance_exposure': { meaning: 'ค่าความผันผวนของผลการเรียนในวิชาที่เรียน วัดว่าวิชาเหล่านั้นมีเกรดกระจายมากแค่ไหน', why: 'วิชาที่มีเกรดกระจายมากอาจทำให้ผลลัพธ์คาดเดาได้ยาก', insight: 'ค่าสูง = เรียนวิชาที่ผลการเรียนหลากหลาย ผลลัพธ์ไม่แน่นอน' },
+        'num_retake_courses': { meaning: 'จำนวนวิชาที่นักศึกษาต้องลงเรียนซ้ำ (เคยสอบตกหรือถอนแล้วลงใหม่)', why: 'เรียนซ้ำเยอะ = มีปัญหาการเรียนสะสม เป็นสัญญาณเตือนสำคัญว่าอาจจบไม่ทัน', insight: 'เรียนซ้ำ 1-2 วิชา ยังพอแก้ไขได้ แต่ 5+ วิชา ถือว่าเสี่ยงสูงมาก' },
+        'retake_f_count': { meaning: 'จำนวนวิชาที่เคยได้เกรด F แล้วต้องเรียนซ้ำ', why: 'F คือสัญญาณอันตรายที่สุด — แสดงว่าไม่ผ่านวิชาเลย ต่างจาก W ที่อาจถอนด้วยเหตุผลอื่น', insight: 'F 3+ วิชา มีโอกาสไม่จบสูงมาก เพราะต้องเสียเวลาเรียนซ้ำทำให้ล่าช้า' },
+        'retake_ratio': { meaning: 'สัดส่วนวิชาที่เรียนซ้ำเทียบกับวิชาทั้งหมดที่เรียน', why: 'Normalize จำนวน retake ตามจำนวนวิชา นศ.ที่เรียน 50 วิชาซ้ำ 5 = 10% ต่างจากเรียน 20 วิชาซ้ำ 5 = 25%', insight: 'สัดส่วน > 20% ถือว่าสูงมาก ควรได้รับการดูแลเป็นพิเศษ' },
+        'avg_retake_improvement': { meaning: 'เกรดที่ดีขึ้นเฉลี่ยจากการเรียนซ้ำ เช่น F→B+ = ดีขึ้น 3.5 แต้ม', why: 'วัดว่านักศึกษาแก้ตัวได้ดีแค่ไหน — เรียนซ้ำแล้วเกรดดีขึ้นมากแสดงว่ามีศักยภาพฟื้นตัว', insight: 'ค่าสูง (> 2.0) = แก้ตัวได้ดี มีโอกาสจบ / ค่าต่ำ (< 1.0) = เรียนซ้ำแล้วก็ยังไม่ดีขึ้น' }
     };
 
     // Show Metric Explanation Modal
@@ -1715,6 +1723,72 @@
                 </div>`;
         }
 
+        // แสดง retake analysis (ถ้ามี)
+        let retakeHtml = '';
+        const retake = result.retake_analysis;
+        if (retake && retake.students_with_retakes > 0) {
+            let topRetakersHtml = '';
+            if (retake.top_retakers && retake.top_retakers.length > 0) {
+                topRetakersHtml = `
+                    <div class="mt-3">
+                        <h6 class="fw-bold mb-2"><i class="bi bi-person-exclamation me-1"></i> นศ.ที่เรียนซ้ำมากที่สุด (5+ วิชา)</h6>
+                        <div class="table-responsive"><table class="table table-sm table-bordered text-center mb-0">
+                            <thead class="table-light"><tr><th>รหัสนศ.</th><th>วิชาซ้ำ</th><th>เคยได้ F</th><th>เคยถอน W</th><th>เกรดดีขึ้นเฉลี่ย</th></tr></thead>
+                            <tbody>`;
+                retake.top_retakers.forEach(s => {
+                    const impClass = s.avg_retake_improvement >= 2.0 ? 'text-success' : s.avg_retake_improvement >= 1.0 ? 'text-warning' : 'text-danger';
+                    topRetakersHtml += `<tr>
+                        <td class="text-start"><code>${s.student_id}</code></td>
+                        <td><span class="badge bg-primary">${s.num_retake_courses}</span></td>
+                        <td>${s.retake_f_count > 0 ? '<span class="badge bg-danger">' + s.retake_f_count + '</span>' : '<span class="text-muted">0</span>'}</td>
+                        <td>${s.retake_w_count > 0 ? '<span class="badge bg-warning text-dark">' + s.retake_w_count + '</span>' : '<span class="text-muted">0</span>'}</td>
+                        <td class="${impClass} fw-bold">${s.avg_retake_improvement > 0 ? '+' : ''}${s.avg_retake_improvement.toFixed(2)}</td>
+                    </tr>`;
+                });
+                topRetakersHtml += '</tbody></table></div>';
+            }
+
+            retakeHtml = `
+            <div class="card border-warning shadow-sm mb-4">
+                <div class="card-header bg-warning bg-opacity-10 border-warning">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-arrow-repeat me-2"></i>Retake Analysis (การเรียนซ้ำ)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center g-3 mb-3">
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 bg-light rounded-3">
+                                <div class="fs-4 fw-bold text-primary">${retake.students_with_retakes}</div>
+                                <small class="text-muted">นศ.มีเรียนซ้ำ</small>
+                                <div><span class="badge bg-primary">${retake.retake_percentage}%</span> <small class="text-muted">ของทั้งหมด</small></div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 bg-light rounded-3">
+                                <div class="fs-4 fw-bold text-danger">${retake.total_f_retakes}</div>
+                                <small class="text-muted">เคยได้ F (เรียนซ้ำ)</small>
+                                <div><span class="badge bg-danger">F</span> <small class="text-muted">+ W ${retake.total_w_retakes}</small></div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 bg-light rounded-3">
+                                <div class="fs-4 fw-bold text-warning">${retake.avg_retake_per_student}</div>
+                                <small class="text-muted">วิชาซ้ำ/คน (เฉลี่ย)</small>
+                                <div><small class="text-muted">สูงสุด ${retake.max_retake_courses} วิชา</small></div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="p-2 bg-light rounded-3">
+                                <div class="fs-4 fw-bold ${retake.avg_improvement >= 2.0 ? 'text-success' : retake.avg_improvement >= 1.0 ? 'text-warning' : 'text-danger'}">${retake.avg_improvement > 0 ? '+' : ''}${retake.avg_improvement}</div>
+                                <small class="text-muted">เกรดดีขึ้นเฉลี่ย</small>
+                                <div><small class="text-muted">จากการเรียนซ้ำ</small></div>
+                            </div>
+                        </div>
+                    </div>
+                    ${topRetakersHtml}
+                </div>
+            </div>`;
+        }
+
         // แสดงผลโมเดลทั้งหมด (ถ้ามี)
         let allModelsHtml = '';
         if (result.all_model_results) {
@@ -1729,6 +1803,7 @@
         }
 
         document.getElementById('trainingDetails').innerHTML = `
+        ${retakeHtml}
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-body">
                 ${labelHtml}

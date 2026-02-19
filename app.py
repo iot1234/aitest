@@ -152,20 +152,7 @@ def preprocess_tan1_data(file_path):
     removed_dupes = before_dedup - len(df_long)
     logger.info(f"🧹 Removed {removed_dupes} exact duplicate rows ({before_dedup} → {len(df_long)})")
 
-    # === Step 4: จัดการ retake — เก็บเฉพาะ attempt สุดท้าย ===
-    before_retake = len(df_long)
-    sort_cols = ['STUDENT_ID', 'COURSE_ID']
-    if 'ปีการศึกษา' in df_long.columns:
-        sort_cols.append('ปีการศึกษา')
-    if 'เทอม' in df_long.columns:
-        sort_cols.append('เทอม')
-    df_long = df_long.sort_values(sort_cols)
-    df_long = df_long.drop_duplicates(subset=['STUDENT_ID', 'COURSE_ID'], keep='last')
-    removed_retakes = before_retake - len(df_long)
-    if removed_retakes > 0:
-        logger.info(f"🔁 Removed {removed_retakes} retake duplicates (kept last attempt)")
-
-    # === Step 5: สร้าง grade mapping รวมเกรดพิเศษ ===
+    # === Grade mapping (ย้ายขึ้นมาก่อน Step 4a เพื่อใช้ใน retake analysis) ===
     grade_mapping = {
         'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
         'D+': 1.5, 'D': 1.0, 'F': 0.0,
@@ -175,6 +162,58 @@ def preprocess_tan1_data(file_path):
         'I': None,              # Incomplete — ไม่สมบูรณ์
         'U': None,              # Unsatisfactory — ไม่ผ่าน (ไม่นับ credit)
     }
+
+    # === Step 4a: วิเคราะห์ retake ก่อนลบ ===
+    sort_cols = ['STUDENT_ID', 'COURSE_ID']
+    if 'ปีการศึกษา' in df_long.columns:
+        sort_cols.append('ปีการศึกษา')
+    if 'เทอม' in df_long.columns:
+        sort_cols.append('เทอม')
+
+    retake_stats = {}
+    for student_id in df_long['STUDENT_ID'].unique():
+        student_data = df_long[df_long['STUDENT_ID'] == student_id]
+        course_attempts = student_data.groupby('COURSE_ID').size()
+        retake_courses = course_attempts[course_attempts > 1]
+
+        if len(retake_courses) > 0:
+            retake_first_grades = []
+            retake_improvements = []
+            for cid in retake_courses.index:
+                attempts = student_data[student_data['COURSE_ID'] == cid].sort_values(sort_cols)
+                first_grade = attempts.iloc[0]['GRADE']
+                last_grade = attempts.iloc[-1]['GRADE']
+                retake_first_grades.append(first_grade)
+                first_gp = grade_mapping.get(first_grade)
+                last_gp = grade_mapping.get(last_grade)
+                if first_gp is not None and last_gp is not None:
+                    retake_improvements.append(last_gp - first_gp)
+
+            retake_stats[student_id] = {
+                'num_retake_courses': len(retake_courses),
+                'total_retake_attempts': int(retake_courses.sum()) - len(retake_courses),
+                'retake_f_count': retake_first_grades.count('F'),
+                'retake_w_count': retake_first_grades.count('W'),
+                'avg_retake_improvement': float(np.mean(retake_improvements)) if retake_improvements else 0.0,
+            }
+        else:
+            retake_stats[student_id] = {
+                'num_retake_courses': 0, 'total_retake_attempts': 0,
+                'retake_f_count': 0, 'retake_w_count': 0,
+                'avg_retake_improvement': 0.0,
+            }
+
+    logger.info(f"🔁 Retake analysis: {sum(1 for v in retake_stats.values() if v['num_retake_courses'] > 0)} students have retakes")
+
+    # === Step 4b: จัดการ retake — เก็บเฉพาะ attempt สุดท้าย ===
+    before_retake = len(df_long)
+    df_long = df_long.sort_values(sort_cols)
+    df_long = df_long.drop_duplicates(subset=['STUDENT_ID', 'COURSE_ID'], keep='last')
+    removed_retakes = before_retake - len(df_long)
+    if removed_retakes > 0:
+        logger.info(f"🔁 Removed {removed_retakes} retake duplicates (kept last attempt)")
+
+    # === Step 5: เพิ่มคอลัมน์ GRADE_POINT_NUM ===
 
     # เพิ่มคอลัมน์ GRADE_POINT_NUM
     df_long['GRADE_POINT_NUM'] = df_long['GRADE'].map(grade_mapping)
@@ -243,8 +282,19 @@ def preprocess_tan1_data(file_path):
         passed_data = student_data[student_data['GRADE'].isin(passed_grades)]
         total_credits_earned = passed_data['CREDIT'].sum()
 
-        # กำหนดเกณฑ์จบการศึกษา: GPA >= 2.00 และหน่วยกิตที่ผ่าน >= 136
-        result = 1 if (gpa >= 2.00 and total_credits_earned >= 136) else 0
+        # กำหนดเกณฑ์จบการศึกษา: GPA >= 2.00 AND หน่วยกิต >= 136 AND เรียนไม่เกิน 4 ปี
+        years_studied = 0
+        if has_entry_year and has_academic_year:
+            entry_year_ce = student_data['ปีที่เข้า'].iloc[0]
+            entry_year_be = entry_year_ce + 543
+            last_year_be = student_data['ปีการศึกษา'].max()
+            years_studied = last_year_be - entry_year_be + 1
+
+        if years_studied > 0:
+            result = 1 if (gpa >= 2.00 and total_credits_earned >= 136 and years_studied <= 4) else 0
+        else:
+            # ไม่มีข้อมูลปี ใช้เกณฑ์เดิม
+            result = 1 if (gpa >= 2.00 and total_credits_earned >= 136) else 0
 
         student_stats.append({
             'STUDENT_ID': student_id,
@@ -265,7 +315,7 @@ def preprocess_tan1_data(file_path):
     # สร้าง course_credit_map
     course_credit_map = df_long.groupby('COURSE_ID')['CREDIT'].first().to_dict()
 
-    return df_wide, df_long, course_credit_map
+    return df_wide, df_long, course_credit_map, retake_stats
 
 # เพิ่มคลาส AdvancedModelTrainer ลงใน app.py
 class AdvancedModelTrainer:
@@ -287,12 +337,15 @@ class AdvancedModelTrainer:
         }
         self.course_credit_map = {}
         
-    def prepare_training_data(self, df_wide_format, df_long_format_original):
+    def prepare_training_data(self, df_wide_format, df_long_format_original, retake_stats=None):
         """เตรียมข้อมูลสำหรับการเทรน"""
         import logging
         logger = logging.getLogger(__name__)
 
         logger.info("🎯 เตรียมข้อมูลแบบ Semester-based Dynamic Snapshots...")
+
+        # เก็บ retake_stats
+        self.retake_stats = retake_stats or {}
 
         # เก็บ course_credit_map
         self.course_credit_map = df_long_format_original.groupby('COURSE_ID')['CREDIT'].first().to_dict()
@@ -407,12 +460,18 @@ class AdvancedModelTrainer:
 
                 # สะสมวิชาทีละเทอม
                 cumulative_grades = {}
+                cumulative_retakes = 0
+
+                # ดึง retake_stats ของนศ.คนนี้
+                student_retake = self.retake_stats.get(student_id, {})
 
                 for sem_idx, semester in enumerate(unique_semesters):
                     sem_data = student_data[student_data['_semester_key'] == semester]
 
                     # เพิ่มวิชาของเทอมนี้
                     for _, row in sem_data.iterrows():
+                        if row['COURSE_ID'] in cumulative_grades:
+                            cumulative_retakes += 1  # นับ retake สะสม
                         cumulative_grades[row['COURSE_ID']] = row['GRADE']
 
                     # สร้าง snapshot หลังเทอมนี้ (ต้องมีอย่างน้อย 2 วิชาสะสม)
@@ -430,7 +489,9 @@ class AdvancedModelTrainer:
                             cumulative_grades, course_profiles, len(cumulative_grades),
                             credits_earned=credits_earned,
                             semester_number=semester_number,
-                            total_semesters=total_semesters
+                            total_semesters=total_semesters,
+                            retake_info=student_retake,
+                            cumulative_retakes=cumulative_retakes
                         )
 
                         X.append(features)
@@ -462,8 +523,9 @@ class AdvancedModelTrainer:
         return np.array(X), np.array(y)
     
     def create_dynamic_features(self, grades_dict, course_profiles, total_courses_taken,
-                                credits_earned=None, semester_number=None, total_semesters=None):
-        """สร้างฟีเจอร์แบบ Dynamic พร้อม Context-Aware + Temporal Features (25 ตัว)
+                                credits_earned=None, semester_number=None, total_semesters=None,
+                                retake_info=None, cumulative_retakes=0):
+        """สร้างฟีเจอร์แบบ Dynamic พร้อม Context-Aware + Temporal + Retake Features (32 ตัว)
 
         Parameters:
             grades_dict: dict {COURSE_ID: GRADE} — วิชาที่เรียนมาถึงจุดนี้
@@ -472,8 +534,10 @@ class AdvancedModelTrainer:
             credits_earned: float|None — หน่วยกิตสะสมที่ผ่าน (None = คำนวณเอง)
             semester_number: int|None — เทอมที่เท่าไหร่ (None = ประมาณจากจำนวนวิชา)
             total_semesters: int|None — จำนวนเทอมทั้งหมดของนศ. (None = ประมาณ)
+            retake_info: dict|None — retake stats ของนศ.คนนี้ (None = ไม่มี retake data)
+            cumulative_retakes: int — จำนวน retake สะสมถึงจุดนี้
         """
-        NUM_FEATURES = 28
+        NUM_FEATURES = 32
 
         if not grades_dict:
             return np.zeros(NUM_FEATURES)
@@ -602,6 +666,13 @@ class AdvancedModelTrainer:
             stds = [course_profiles[c].get('grade_std', 0) for c in grades_dict if c in course_profiles]
             grade_variance_exposure = np.mean(stds) if stds else 0
 
+        # === 29-32: Retake features ===
+        ri = retake_info or {}
+        num_retake_courses = ri.get('num_retake_courses', 0)
+        retake_f_count = ri.get('retake_f_count', 0)
+        retake_ratio = num_retake_courses / len(grades_dict) if len(grades_dict) > 0 else 0
+        avg_retake_improvement = ri.get('avg_retake_improvement', 0.0)
+
         features = np.array([
             current_gpa, gpa_std, min_grade, max_grade, grade_range,          # 1-5
             high_grades, medium_grades, low_grades,                            # 6-8
@@ -612,7 +683,9 @@ class AdvancedModelTrainer:
             academic_momentum, risk_score,                                     # 19-20
             credits_earned, graduation_progress, credits_per_semester,        # 21-23
             on_track_ratio, semester_progress,                                 # 24-25
-            weighted_difficulty, hard_course_gpa, grade_variance_exposure     # 26-28
+            weighted_difficulty, hard_course_gpa, grade_variance_exposure,    # 26-28
+            num_retake_courses, retake_f_count,                               # 29-30
+            retake_ratio, avg_retake_improvement                              # 31-32
         ])
 
         # จัดการ NaN values
@@ -745,7 +818,9 @@ class AdvancedModelTrainer:
                 'academic_momentum', 'risk_score',
                 'credits_earned', 'graduation_progress', 'credits_per_semester',
                 'on_track_ratio', 'semester_progress',
-                'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure'
+                'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure',
+                'num_retake_courses', 'retake_f_count',
+                'retake_ratio', 'avg_retake_improvement'
             ],
             'course_profiles': course_profiles or getattr(self, 'course_profiles', {}),
             'course_credit_map': self.course_credit_map,
@@ -3124,12 +3199,12 @@ def train_model():
             if is_tan1_format:
                 logger.info("📋 Detected TAN1 format - preprocessing data...")
                 # ใช้ preprocess_tan1_data
-                df_wide_format, df_long_format, course_credit_map = preprocess_tan1_data(filepath)
+                df_wide_format, df_long_format, course_credit_map, retake_stats = preprocess_tan1_data(filepath)
                 logger.info(f"✅ Preprocessed {len(df_wide_format)} students, {len(df_long_format)} records")
-                
+
                 # ใช้ AdvancedModelTrainer
                 trainer = AdvancedModelTrainer()
-                X, y, course_profiles = trainer.prepare_training_data(df_wide_format, df_long_format)
+                X, y, course_profiles = trainer.prepare_training_data(df_wide_format, df_long_format, retake_stats=retake_stats)
                 
                 # เทรนโมเดล
                 results = trainer.train_models(X, y)
@@ -3153,6 +3228,18 @@ def train_model():
                         # สรุป Course DNA เพื่อส่งให้ Gemini
                         dna_summary = summarize_course_dna(course_profiles)
                         
+                        # สรุป retake สำหรับ Gemini
+                        retake_gemini_summary = {}
+                        if retake_stats:
+                            rs_with = sum(1 for v in retake_stats.values() if v['num_retake_courses'] > 0)
+                            rs_total = len(retake_stats)
+                            retake_gemini_summary = {
+                                'students_with_retakes': rs_with,
+                                'retake_percentage': round(rs_with / rs_total * 100, 1) if rs_total > 0 else 0,
+                                'total_f_retakes': sum(v['retake_f_count'] for v in retake_stats.values()),
+                                'total_w_retakes': sum(v['retake_w_count'] for v in retake_stats.values()),
+                            }
+
                         training_context = {
                             'data_format': data_format,
                             'training_type': 'advanced',
@@ -3163,7 +3250,8 @@ def train_model():
                             'feature_count': X.shape[1] if hasattr(X, 'shape') else 0,
                             'label_distribution': {int(k): int(v) for k, v in zip(*np.unique(y, return_counts=True))} if len(y) > 0 else {},
                             'course_profiles_count': len(course_profiles) if course_profiles else 0,
-                            'course_dna_insight': dna_summary,  # เพิ่ม Course DNA summary
+                            'course_dna_insight': dna_summary,
+                            'retake_analysis': retake_gemini_summary,
                             'model_metrics': {
                                 name: {
                                     'accuracy': float(res.get('accuracy', 0)),
@@ -3198,7 +3286,9 @@ def train_model():
                         'academic_momentum', 'risk_score',
                         'credits_earned', 'graduation_progress', 'credits_per_semester',
                         'on_track_ratio', 'semester_progress',
-                        'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure'
+                        'weighted_difficulty', 'hard_course_gpa', 'grade_variance_exposure',
+                        'num_retake_courses', 'retake_f_count',
+                        'retake_ratio', 'avg_retake_improvement'
                     ]
                     importances = best_model_obj.feature_importances_
                     pairs = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
@@ -3217,6 +3307,32 @@ def train_model():
                 # จำนวน label
                 unique_labels, label_counts = np.unique(y, return_counts=True)
                 label_dist = dict(zip([int(l) for l in unique_labels], [int(c) for c in label_counts]))
+
+                # สรุป retake analysis สำหรับ frontend
+                retake_summary = {}
+                if retake_stats:
+                    students_with_retakes = sum(1 for v in retake_stats.values() if v['num_retake_courses'] > 0)
+                    total_retake_students = len(retake_stats)
+                    all_retake_counts = [v['num_retake_courses'] for v in retake_stats.values() if v['num_retake_courses'] > 0]
+                    all_f_counts = [v['retake_f_count'] for v in retake_stats.values() if v['retake_f_count'] > 0]
+                    all_w_counts = [v['retake_w_count'] for v in retake_stats.values() if v['retake_w_count'] > 0]
+                    all_improvements = [v['avg_retake_improvement'] for v in retake_stats.values() if v['num_retake_courses'] > 0]
+
+                    retake_summary = {
+                        'students_with_retakes': students_with_retakes,
+                        'total_students': total_retake_students,
+                        'retake_percentage': round(students_with_retakes / total_retake_students * 100, 1) if total_retake_students > 0 else 0,
+                        'total_retake_courses': sum(v['num_retake_courses'] for v in retake_stats.values()),
+                        'total_f_retakes': sum(v['retake_f_count'] for v in retake_stats.values()),
+                        'total_w_retakes': sum(v['retake_w_count'] for v in retake_stats.values()),
+                        'avg_retake_per_student': round(float(np.mean(all_retake_counts)), 1) if all_retake_counts else 0,
+                        'max_retake_courses': int(max(all_retake_counts)) if all_retake_counts else 0,
+                        'avg_improvement': round(float(np.mean(all_improvements)), 2) if all_improvements else 0,
+                        'top_retakers': sorted(
+                            [{'student_id': str(sid), **stats} for sid, stats in retake_stats.items() if stats['num_retake_courses'] >= 5],
+                            key=lambda x: x['num_retake_courses'], reverse=True
+                        )[:10],
+                    }
 
                 return jsonify({
                     'success': True,
@@ -3237,6 +3353,7 @@ def train_model():
                     'students_count': int(len(df_wide_format)),
                     'courses_count': int(len(course_credit_map)),
                     'training_type': 'tan1_advanced',
+                    'retake_analysis': retake_summary,
                     'gemini_analysis': tan1_gemini_analysis
                 })
             else:
