@@ -558,6 +558,19 @@
         <div class="probability-bar mt-4" id="summaryProbBar"></div>
     </div>
 
+    <!-- Gemini Auto-Analysis Progress -->
+    <div id="geminiProgressSection" class="d-none mb-4">
+        <div class="glass-card p-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <span id="geminiSpinner" class="spinner-border spinner-border-sm text-info"></span>
+                <span id="geminiProgressLabel">กำลังวิเคราะห์ด้วย Gemini AI... <strong id="geminiProgressText">0/0</strong></span>
+                <div class="progress flex-grow-1" style="height: 8px; min-width: 120px;">
+                    <div class="progress-bar bg-info" id="geminiProgressBar" style="width: 0%; transition: width 0.3s;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Charts -->
     <div class="row g-4 mb-4">
         <div class="col-md-4" data-aos="fade-right">
@@ -812,6 +825,9 @@ async function runBatchPrediction() {
             setTimeout(() => {
                 document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
             }, 200);
+
+            // Auto-trigger Gemini analysis for all students
+            autoAnalyzeAllWithGemini();
         } else {
             let errMsg = data.error || 'เกิดข้อผิดพลาด';
             if (data.detected_columns) {
@@ -1131,12 +1147,12 @@ function renderResultsTable(results) {
                     <strong>เหตุผล:</strong>
                     <ul class="mb-0 mt-1">${reasonsHtml}</ul>
                 </div>
-                <div class="text-center">
-                    <button class="btn btn-outline-primary btn-sm" id="gemini-btn-${i}" onclick="analyzeWithGemini(${i})">
-                        <i class="bi bi-stars me-1"></i> วิเคราะห์ AI เชิงลึก (Gemini)
-                    </button>
+                <div id="gemini-section-${i}" class="mt-2">
+                    <div id="gemini-waiting-${i}" class="text-center text-muted small py-2">
+                        <i class="bi bi-hourglass-split me-1"></i> รอวิเคราะห์ด้วย Gemini AI...
+                    </div>
+                    <div id="gemini-result-${i}" style="display:none;"></div>
                 </div>
-                <div id="gemini-result-${i}" class="mt-3" style="display:none;"></div>
             </td>
         `;
         tbody.appendChild(detailRow);
@@ -1153,16 +1169,17 @@ function toggleDetail(index) {
 // =========================================================
 async function analyzeWithGemini(index) {
     const r = allResults[index];
-    if (!r) return;
+    if (!r) return { success: false };
 
-    const btn = document.getElementById(`gemini-btn-${index}`);
+    const waitingDiv = document.getElementById(`gemini-waiting-${index}`);
     const resultDiv = document.getElementById(`gemini-result-${index}`);
     const modelFile = document.getElementById('modelSelect').value;
 
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> กำลังวิเคราะห์ด้วย Gemini AI...';
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<div class="text-center text-muted"><span class="spinner-border spinner-border-sm me-1"></span> กำลังวิเคราะห์ กรุณารอ...</div>';
+    // Show loading state
+    if (waitingDiv) {
+        waitingDiv.innerHTML = '<span class="spinner-border spinner-border-sm me-1 text-info"></span> กำลังวิเคราะห์ด้วย Gemini AI...';
+    }
+    resultDiv.style.display = 'none';
 
     try {
         const res = await fetch('/api/batch_gemini_analyze', {
@@ -1183,6 +1200,14 @@ async function analyzeWithGemini(index) {
             })
         });
 
+        // Handle rate limit (429)
+        if (res.status === 429) {
+            const retryData = await res.json().catch(() => ({}));
+            const retryAfter = retryData.retry_after || 10;
+            if (waitingDiv) waitingDiv.innerHTML = `<i class="bi bi-clock me-1"></i> Rate limit — รอ ${retryAfter} วินาที...`;
+            return { success: false, rateLimited: true, retryAfter };
+        }
+
         const data = await res.json();
 
         if (data.success && data.gemini) {
@@ -1194,25 +1219,20 @@ async function analyzeWithGemini(index) {
             let html = `
                 <div class="card border-${gpColor}">
                     <div class="card-header bg-${gpColor} bg-opacity-10">
-                        <h6 class="mb-0">${gpIcon} ผลวิเคราะห์ AI: ${gp.prediction_text || (gp.will_graduate ? 'คาดว่าจะจบ' : 'คาดว่าจะไม่จบ')}</h6>
+                        <h6 class="mb-0">${gpIcon} ผลวิเคราะห์ Gemini AI: ${gp.prediction_text || (gp.will_graduate ? 'คาดว่าจะจบ' : 'คาดว่าจะไม่จบ')}</h6>
                         <small class="text-muted">ความมั่นใจ: ${gp.confidence_percent || 0}%</small>
                     </div>
                     <div class="card-body">`;
 
-            // Reasons
             if (gp.reason_why_graduate) {
                 html += `<div class="mb-2"><strong class="text-success">เหตุผลที่จบได้:</strong> ${gp.reason_why_graduate}</div>`;
             }
             if (gp.reason_why_not_graduate) {
                 html += `<div class="mb-2"><strong class="text-danger">เหตุผลที่ไม่จบ:</strong> ${gp.reason_why_not_graduate}</div>`;
             }
-
-            // Analysis markdown
             if (g.analysis_markdown) {
                 html += `<div class="mb-2 small" style="white-space: pre-wrap; line-height: 1.6;">${g.analysis_markdown}</div>`;
             }
-
-            // Key metrics
             if (g.key_metrics && g.key_metrics.length > 0) {
                 html += `<div class="mb-2"><strong>ตัวชี้วัดสำคัญ:</strong><div class="row g-2 mt-1">`;
                 g.key_metrics.forEach(m => {
@@ -1221,31 +1241,155 @@ async function analyzeWithGemini(index) {
                 });
                 html += `</div></div>`;
             }
-
-            // Recommendations
             if (g.recommendations && g.recommendations.length > 0) {
                 html += `<div><strong>คำแนะนำ:</strong><ul class="mb-0 mt-1">`;
-                g.recommendations.forEach(rec => {
-                    html += `<li class="small">${rec}</li>`;
-                });
+                g.recommendations.forEach(rec => { html += `<li class="small">${rec}</li>`; });
                 html += `</ul></div>`;
             }
 
             html += `</div></div>`;
+
+            // Hide waiting, show result
+            if (waitingDiv) waitingDiv.style.display = 'none';
+            resultDiv.style.display = 'block';
             resultDiv.innerHTML = html;
-            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> วิเคราะห์แล้ว';
-            btn.classList.remove('btn-outline-primary');
-            btn.classList.add('btn-success');
+
+            // Auto-expand detail row
+            const detailRow = document.getElementById(`detail-${index}`);
+            if (detailRow) detailRow.classList.add('show');
+
+            // Update main row with Gemini prediction badge
+            updateMainRowWithGemini(index, r, gp);
+
+            return { success: true, gemini: gp };
         } else {
-            resultDiv.innerHTML = `<div class="alert alert-warning mb-0 small">${data.error || 'ไม่สามารถวิเคราะห์ได้'}</div>`;
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-stars me-1"></i> ลองวิเคราะห์อีกครั้ง';
+            if (waitingDiv) waitingDiv.innerHTML = `<div class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'ไม่สามารถวิเคราะห์ได้'}</div>`;
+            return { success: false };
         }
     } catch (e) {
-        resultDiv.innerHTML = `<div class="alert alert-danger mb-0 small">เกิดข้อผิดพลาด: ${e.message}</div>`;
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-stars me-1"></i> ลองวิเคราะห์อีกครั้ง';
+        if (waitingDiv) waitingDiv.innerHTML = `<div class="text-danger small"><i class="bi bi-x-circle me-1"></i>เกิดข้อผิดพลาด: ${e.message}</div>`;
+        return { success: false };
     }
+}
+
+// Update main row to show Gemini prediction alongside Model prediction
+function updateMainRowWithGemini(index, r, gp) {
+    const rows = document.querySelectorAll('#resultsBody tr.main-row');
+    // Find the row for this index by matching data
+    for (const row of rows) {
+        if (row.dataset.studentId === r.student_id) {
+            const statusCell = row.querySelectorAll('td')[5]; // 6th cell = status
+            if (!statusCell) break;
+
+            const modelPred = r.prediction;
+            const geminiPred = gp.will_graduate ? 'จบ' : 'ไม่จบ';
+            const geminiColor = gp.will_graduate ? 'success' : 'danger';
+            const modelIsPass = modelPred === 'ผ่าน';
+            const geminiIsPass = gp.will_graduate;
+            const isDifferent = modelIsPass !== geminiIsPass;
+
+            if (isDifferent) {
+                // Show both predictions when they disagree
+                const modelColor = modelIsPass ? 'success' : 'danger';
+                const modelIcon = modelIsPass ? 'check-circle-fill' : 'x-circle-fill';
+                statusCell.innerHTML = `
+                    <div class="d-flex flex-column gap-1">
+                        <span class="badge bg-${modelColor}" style="font-size:0.72rem;">
+                            <i class="bi bi-${modelIcon} me-1"></i>Model: ${modelPred}
+                        </span>
+                        <span class="badge bg-${geminiColor}" style="font-size:0.72rem;">
+                            <i class="bi bi-stars me-1"></i>Gemini: ${geminiPred}
+                        </span>
+                    </div>`;
+            } else {
+                // Agree — show single badge with Gemini confirmation
+                const icon = modelIsPass ? 'check-circle-fill' : 'x-circle-fill';
+                const color = modelIsPass ? 'success' : 'danger';
+                statusCell.innerHTML = `
+                    <span class="badge bg-${color}">
+                        <i class="bi bi-${icon} me-1"></i>${modelPred}
+                    </span>
+                    <span class="badge bg-info bg-opacity-10 text-info" style="font-size:0.68rem;" title="Gemini ยืนยัน">
+                        <i class="bi bi-stars"></i> ยืนยัน
+                    </span>`;
+            }
+            break;
+        }
+    }
+}
+
+// =========================================================
+// AUTO GEMINI ANALYSIS FOR ALL STUDENTS
+// =========================================================
+async function autoAnalyzeAllWithGemini() {
+    // 1. Check if Gemini is available
+    try {
+        const configRes = await fetch('/api/config');
+        const configData = await configRes.json();
+        if (!configData.GEMINI_ENABLED) {
+            // Gemini not available — skip silently, hide waiting placeholders
+            allResults.forEach((_, i) => {
+                const w = document.getElementById(`gemini-waiting-${i}`);
+                if (w) w.innerHTML = '<span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Gemini AI ไม่พร้อมใช้งาน</span>';
+            });
+            return;
+        }
+    } catch (e) {
+        return; // Config fetch failed — skip
+    }
+
+    // 2. Show progress section
+    const progressSection = document.getElementById('geminiProgressSection');
+    const progressText = document.getElementById('geminiProgressText');
+    const progressBar = document.getElementById('geminiProgressBar');
+    const progressLabel = document.getElementById('geminiProgressLabel');
+    const spinner = document.getElementById('geminiSpinner');
+    const total = allResults.length;
+
+    progressSection.classList.remove('d-none');
+    progressText.textContent = `0/${total}`;
+    progressBar.style.width = '0%';
+
+    // 3. Loop through each student with rate limit handling
+    const DELAY_MS = 6000; // 6 seconds between requests (10 req/60s limit)
+    let completed = 0;
+
+    for (let i = 0; i < total; i++) {
+        progressText.textContent = `${completed}/${total}`;
+        progressBar.style.width = `${(completed / total) * 100}%`;
+
+        let result = await analyzeWithGemini(i);
+
+        // Handle rate limit with retry
+        if (result && result.rateLimited) {
+            const waitTime = (result.retryAfter || 10) * 1000;
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            result = await analyzeWithGemini(i); // Retry once
+
+            // If still rate limited, wait longer and retry one more time
+            if (result && result.rateLimited) {
+                await new Promise(resolve => setTimeout(resolve, waitTime * 2));
+                result = await analyzeWithGemini(i);
+            }
+        }
+
+        completed++;
+        progressText.textContent = `${completed}/${total}`;
+        progressBar.style.width = `${(completed / total) * 100}%`;
+
+        // Delay between requests to avoid rate limit (skip delay after last one)
+        if (i < total - 1) {
+            await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
+    }
+
+    // 4. Done — update progress to completed state
+    spinner.classList.remove('spinner-border', 'spinner-border-sm');
+    spinner.innerHTML = '✅';
+    progressLabel.innerHTML = `วิเคราะห์ด้วย Gemini AI ครบแล้ว <strong>${total}/${total}</strong>`;
+    progressBar.style.width = '100%';
+    progressBar.classList.remove('bg-info');
+    progressBar.classList.add('bg-success');
 }
 
 function renderErrors(errors) {
@@ -1298,6 +1442,7 @@ function printResults() { window.print(); }
 
 function resetForm() {
     document.getElementById('resultsSection').classList.add('d-none');
+    document.getElementById('geminiProgressSection').classList.add('d-none');
     removeFile();
     batchResults = null;
     allResults = [];
