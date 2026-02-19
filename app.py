@@ -1892,6 +1892,7 @@ def enforce_login_for_non_prediction_pages():
         'curriculum_prediction_form',
 
         # Public prediction APIs
+        'list_models',
         'get_config_for_frontend',
         'analyze_curriculum',
         'gemini_predict_route',
@@ -3716,9 +3717,6 @@ def _predict_next_semester_gpa(current_gpa: float) -> float:
 def list_models():
     """Lists all available trained models."""
     try:
-        if admin_manager.enabled and not has_any_role('admin', 'super_admin'):
-            return _json_error('เฉพาะแอดมินเท่านั้นที่ดูรายการโมเดลได้', 403)
-
         model_files = []
 
         # Get all models (R2 + local, deduplicated, safe metrics)
