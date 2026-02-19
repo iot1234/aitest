@@ -4221,9 +4221,9 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
                     course = next((c for c in courses_data if c['id'] == course_id), None)
                     credit = course['credit'] if course else 3
                     grade_point = grade_mapping[grade]
-                    
-                    # คำนวณเฉพาะวิชาที่ไม่ใช่ W, I
-                    if grade not in ['W', 'I']:
+
+                    # คำนวณเฉพาะวิชาที่มี grade_point จริง (ไม่ใช่ W, I, S, AU, U)
+                    if grade_point is not None and grade not in ['W', 'I', 'S', 'AU', 'U']:
                         term_points += grade_point * credit
                         term_credits += credit
             
@@ -4241,57 +4241,49 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
             actual_line.append(None)
         
         # === 3. คำนวณเส้นทำนาย (Prediction Line) ===
-        prediction_line = actual_line.copy()
-        
-        # ทำนาย GPA เทอมถัดไป
+        # prediction_line = actual values for completed terms, then predicted for future terms
+        prediction_line = list(actual_line)  # copy actual (length = total_terms)
+
         if len(term_gpa_list) > 0:
             current_gpa = term_gpa_list[-1]
-            
-            # ใช้โมเดล AI ทำนาย (ถ้ามี)
-            if hasattr(app, 'advanced_trainer') and app.advanced_trainer:
-                try:
-                    # ใช้โมเดล AI ทำนายจริง
-                    prediction_result = app.advanced_trainer.predict_graduation(current_grades)
-                    predicted_gpa_next_term = prediction_result.get('predicted_gpa', current_gpa)
-                    
-                    # จำกัดค่าให้สมเหตุสมผล
-                    predicted_gpa_next_term = max(0, min(4.0, predicted_gpa_next_term))
-                except Exception as e:
-                    logger.warning(f"AI prediction failed, using statistical method: {e}")
-                    # Fallback: ใช้แนวโน้มทางสถิติ
-                    if len(term_gpa_list) >= 2:
-                        # คำนวณ trend จาก 2 เทอมล่าสุด
-                        trend = term_gpa_list[-1] - term_gpa_list[-2]
-                        predicted_gpa_next_term = current_gpa + (trend * 0.5)  # ลด impact ของ trend
-                    else:
-                        predicted_gpa_next_term = current_gpa
+
+            # คำนวณ trend จากข้อมูลจริง
+            if len(term_gpa_list) >= 2:
+                trend = term_gpa_list[-1] - term_gpa_list[-2]
+                predicted_gpa_next_term = current_gpa + (trend * 0.5)
             else:
-                # ใช้วิธีทางสถิติ
-                if len(term_gpa_list) >= 2:
-                    trend = term_gpa_list[-1] - term_gpa_list[-2]
-                    predicted_gpa_next_term = current_gpa + (trend * 0.5)
-                else:
-                    predicted_gpa_next_term = current_gpa
-            
+                predicted_gpa_next_term = current_gpa
+
             # จำกัดค่าทำนายให้อยู่ในช่วงที่เป็นไปได้
-            predicted_gpa_next_term = max(1.5, min(4.0, predicted_gpa_next_term))
-            
-            # เติมข้อมูลทำนายสำหรับเทอมที่เหลือ
-            for i in range(len(prediction_line)):
-                if prediction_line[i] is None:
-                    # ทำนายว่า GPA จะค่อยๆ ดีขึ้นหรือคงที่
-                    if predicted_gpa_next_term > current_gpa:
-                        improvement_rate = (predicted_gpa_next_term - current_gpa) * 0.8
-                        prediction_line[i] = round(min(4.0, current_gpa + improvement_rate), 2)
-                    else:
-                        prediction_line[i] = round(predicted_gpa_next_term, 2)
-            
-            # เพิ่มทำนายอนาคต 2 เทอม
-            prediction_line.extend([round(predicted_gpa_next_term, 2)] * 2)
+            predicted_gpa_next_term = max(1.0, min(4.0, predicted_gpa_next_term))
+
+            # เติมข้อมูลทำนายสำหรับเทอมที่เหลือ — ค่อยๆ เคลื่อนเข้าหา target
+            prev_predicted = current_gpa
+            for i in range(loaded_terms_count, total_terms):
+                # weighted average: 70% current prediction + 30% target
+                next_val = prev_predicted * 0.7 + target_gpa * 0.3
+                next_val = max(1.0, min(4.0, next_val))
+                prediction_line[i] = round(next_val, 2)
+                prev_predicted = next_val
+
+            # ค่าทำนายสำหรับ +2 เทอมอนาคต
+            future_vals = []
+            for _ in range(2):
+                next_val = prev_predicted * 0.7 + target_gpa * 0.3
+                next_val = max(1.0, min(4.0, next_val))
+                future_vals.append(round(next_val, 2))
+                prev_predicted = next_val
         else:
-            # ไม่มีข้อมูล ใส่ค่าเริ่มต้น
-            prediction_line = [None] * total_terms
-            prediction_line.extend([None, None])
+            # ไม่มีข้อมูล
+            predicted_gpa_next_term = 0
+            future_vals = [None, None]
+
+        # === 4. ทำให้ทุก array ยาวเท่ากัน (total_terms + 2) ===
+        # actual_line: เติม None สำหรับ 2 เทอมอนาคต
+        actual_line = actual_line + [None, None]
+        # prediction_line: เติมค่าทำนาย 2 เทอมอนาคต
+        prediction_line = prediction_line + future_vals
+        # target_line: มีความยาว total_terms + 2 อยู่แล้ว
         
         # สร้างป้ายกำกับเทอม
         term_labels = []
@@ -4312,7 +4304,7 @@ def generate_three_line_chart_data(current_grades, loaded_terms_count=8):
         return {
             'terms': term_labels,
             'target_line': target_line,
-            'actual_line': actual_line + [None, None],  # เพิ่ม None สำหรับทำนาย
+            'actual_line': actual_line,
             'prediction_line': prediction_line,
             'colors': {
                 'target': '#28a745',      # สีเขียว

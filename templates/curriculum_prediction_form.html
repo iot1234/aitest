@@ -2238,7 +2238,8 @@
                         pointRadius: 6,
                         pointBackgroundColor: '#3b82f6',
                         pointBorderColor: '#fff',
-                        pointBorderWidth: 2
+                        pointBorderWidth: 2,
+                        spanGaps: true
                     },
                     {
                         label: 'ทำนาย',
@@ -2251,7 +2252,8 @@
                         tension: 0.3,
                         pointRadius: 5,
                         pointBackgroundColor: '#f59e0b',
-                        pointStyle: 'triangle'
+                        pointStyle: 'triangle',
+                        spanGaps: true
                     }
                 ]
             },
@@ -2367,8 +2369,8 @@
                 datasets: [{
                     label: 'GPA รายเทอม',
                     data: gpas,
-                    backgroundColor: gpas.map(g => g >= 3.0 ? 'rgba(16, 185, 129, 0.7)' : g >= 2.0 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
-                    borderColor: gpas.map(g => g >= 3.0 ? '#10b981' : g >= 2.0 ? '#f59e0b' : '#ef4444'),
+                    backgroundColor: gpas.map(g => (g === null || g === undefined) ? 'rgba(200, 200, 200, 0.5)' : g >= 3.0 ? 'rgba(16, 185, 129, 0.7)' : g >= 2.0 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
+                    borderColor: gpas.map(g => (g === null || g === undefined) ? '#c8c8c8' : g >= 3.0 ? '#10b981' : g >= 2.0 ? '#f59e0b' : '#ef4444'),
                     borderWidth: 2,
                     borderRadius: 8
                 }]
