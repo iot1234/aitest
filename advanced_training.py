@@ -276,26 +276,26 @@ class AdvancedFeatureEngineer:
                     below_avg += 1
                 
                 # วิเคราะห์ประเภทวิชา
-                if profile['is_killer_course']:
+                if profile.get('is_killer_course', False):
                     killer_taken += 1
                     if grade > 0:  # ผ่าน
                         killer_passed += 1
-                    if grade >= profile['excellence_threshold']:
+                    if grade >= profile.get('excellence_threshold', 3.5):
                         excellence_hard += 1
-                
-                if profile['is_easy_course']:
+
+                if profile.get('is_easy_course', False):
                     easy_taken += 1
-                    if grade < profile['struggle_threshold']:
+                    if grade < profile.get('struggle_threshold', 2.0):
                         struggle_easy += 1
                 
-                if profile['is_gpa_booster']:
+                if profile.get('is_gpa_booster', False):
                     gpa_booster_taken += 1
-                
+
                 # Competitive performance
-                competitive_performance.append(grade * profile['competitive_index'])
-                
+                competitive_performance.append(grade * profile.get('competitive_index', 1.0))
+
                 # Grade inflation benefit
-                if profile['grade_inflation'] and grade >= 3.0:
+                if profile.get('grade_inflation', False) and grade >= 3.0:
                     inflation_benefit += 1
         
         # คำนวณค่าเฉลี่ย
@@ -364,7 +364,7 @@ class AdvancedFeatureEngineer:
                 profile = course_profiles[course]
                 
                 # วิชาเสี่ยงสูง
-                if profile['risk_level'] == 'high_risk' and grade == 0:
+                if profile.get('risk_level', '') == 'high_risk' and grade == 0:
                     high_risk_failures += 1
                 
                 # วิชาพื้นฐาน (สมมติว่าเป็นวิชาที่มี course code ขึ้นต้นด้วย 0)
@@ -418,22 +418,22 @@ class AdvancedFeatureEngineer:
                 profile = course_profiles[course]
                 
                 # หา percentile ของเกรดนี้ในวิชานี้
-                if grade >= profile['percentile_90']:
+                if grade >= profile.get('percentile_90', 4.0):
                     percentile_score = 0.95
-                elif grade >= profile['percentile_75']:
+                elif grade >= profile.get('percentile_75', 3.5):
                     percentile_score = 0.80
-                elif grade >= profile['percentile_50']:
+                elif grade >= profile.get('percentile_50', 2.5):
                     percentile_score = 0.60
-                elif grade >= profile['percentile_25']:
+                elif grade >= profile.get('percentile_25', 1.5):
                     percentile_score = 0.30
                 else:
                     percentile_score = 0.10
-                
+
                 percentile_scores.append(percentile_score)
-                difficulty_weights.append(profile['difficulty_score'])
-                
+                difficulty_weights.append(profile.get('difficulty_score', 0.5))
+
                 # Competitive score
-                competitive_score = grade * (1 + profile['competitive_index'])
+                competitive_score = grade * (1 + profile.get('competitive_index', 1.0))
                 competitive_scores.append(competitive_score)
         
         if percentile_scores:
@@ -1222,10 +1222,10 @@ class AdvancedFeatureEngineer:
                         contextual_features['worse_than_avg'] += 1
                     
                     # Performance in different course types
-                    if profile['is_killer_course'] and grade_val > 0:
+                    if profile.get('is_killer_course', False) and grade_val > 0:
                         contextual_features['passed_killer'] += 1
-                    
-                    if profile['is_easy_course'] and grade_val < 2.0:
+
+                    if profile.get('is_easy_course', False) and grade_val < 2.0:
                         contextual_features['struggled_easy'] += 1
         
         if not grades:

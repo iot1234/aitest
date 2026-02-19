@@ -1883,6 +1883,7 @@ def enforce_login_for_non_prediction_pages():
         # Public pages
         'main_page',
         'curriculum_prediction_form',
+        'predict_batch_page',
 
         # Public prediction APIs
         'list_models',
@@ -1895,6 +1896,8 @@ def enforce_login_for_non_prediction_pages():
         'get_next_term_prediction',
         'get_comprehensive_analysis',
         'predict_manual_input',
+        'api_predict_batch',
+        'api_batch_template',
     }
 
     if endpoint in public_endpoints:
@@ -7765,9 +7768,670 @@ def advanced_test_page():
     """Page for advanced curriculum analysis."""
     return render_template('advanced_test.html')
 
+# =========================================================
+# BATCH PREDICTION API
+# =========================================================
+
+@app.route('/api/predict_batch', methods=['POST'])
+def api_predict_batch():
+    """API for batch prediction from uploaded CSV/Excel file."""
+    try:
+        logger.info("=== Starting batch prediction ===")
+
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded.'})
+
+        file = request.files['file']
+        model_filename = request.form.get('model_filename', '')
+
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected.'})
+
+        # --- Load model ---
+        if not model_filename:
+            models_list = storage.list_models()
+            subject_models = [m for m in models_list if _is_subject_model(m)]
+            if subject_models:
+                model_filename = subject_models[0]['filename']
+            else:
+                return jsonify({'success': False, 'error': 'No trained model found. Please train a model first.'})
+
+        model_data = storage.load_model(model_filename)
+        if not model_data:
+            return jsonify({'success': False, 'error': f'Failed to load model: {model_filename}'})
+
+        subject_model = model_data.get('models', {}).get('rf')
+        scaler = model_data.get('scaler')
+        feature_columns = model_data.get('feature_columns')
+        course_profiles = model_data.get('course_profiles', {})
+        grade_mapping = app.config['DATA_CONFIG']['grade_mapping']
+
+        if not all([subject_model, scaler, feature_columns]):
+            return jsonify({'success': False, 'error': 'Incomplete model data. Missing model, scaler, or feature columns.'})
+
+        # --- Read uploaded file ---
+        filename = file.filename
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+
+        try:
+            if ext == 'csv':
+                raw_bytes = file.read()
+                for enc in ['utf-8-sig', 'utf-8', 'cp874', 'iso-8859-1']:
+                    try:
+                        from io import StringIO
+                        df = pd.read_csv(StringIO(raw_bytes.decode(enc)))
+                        break
+                    except (UnicodeDecodeError, Exception):
+                        continue
+                else:
+                    return jsonify({'success': False, 'error': 'Cannot decode CSV file. Please use UTF-8 encoding.'})
+            elif ext in ['xlsx', 'xls']:
+                df = pd.read_excel(BytesIO(file.read()))
+            else:
+                return jsonify({'success': False, 'error': f'Unsupported file type: .{ext}. Use CSV or Excel.'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Error reading file: {str(e)}'})
+
+        if df.empty:
+            return jsonify({'success': False, 'error': 'File is empty.'})
+
+        logger.info(f"Read file: {len(df)} rows, columns: {list(df.columns)}")
+
+        # --- Detect format: Wide vs Long ---
+        cols_lower = {c: c.lower().strip() for c in df.columns}
+        detected_format = _detect_batch_format(df, cols_lower)
+        logger.info(f"Detected format: {detected_format}")
+
+        if detected_format == 'unknown':
+            return jsonify({
+                'success': False,
+                'error': 'Cannot detect file format. Please use Wide or Long format.',
+                'detected_columns': list(df.columns)[:20],
+                'hint': 'Wide format: STUDENT_ID + course codes as column headers. Long format: STUDENT_ID, COURSE_CODE, GRADE columns.'
+            })
+
+        # --- Parse students based on format ---
+        courses_data = app.config.get('COURSES_DATA', [])
+        course_credit_map = {c['id']: c['credit'] for c in courses_data}
+        course_name_map = {c['id']: c['thaiName'] for c in courses_data}
+        all_terms = app.config.get('ALL_TERMS_DATA', [])
+
+        if detected_format == 'wide':
+            students = _parse_wide_format(df, cols_lower, grade_mapping, course_credit_map)
+        else:
+            students = _parse_long_format(df, cols_lower, grade_mapping, course_credit_map)
+
+        if not students:
+            return jsonify({'success': False, 'error': 'No valid student data found in the file.'})
+
+        logger.info(f"Parsed {len(students)} students")
+
+        # --- Setup feature engineer ---
+        engineer = AdvancedFeatureEngineer(grade_mapping=grade_mapping)
+        engineer.course_profiles = course_profiles
+
+        # --- Predict for each student ---
+        results = []
+        errors = []
+
+        for student in students:
+            try:
+                student_id = student['student_id']
+                student_name = student.get('student_name', '')
+                grades_dict = student['grades']  # {course_id: grade_str}
+
+                if not grades_dict:
+                    errors.append({'student_id': student_id, 'error': 'No grade data found'})
+                    continue
+
+                # Build a mini DataFrame (long format) for feature engineering
+                rows = []
+                for course_id, grade_str in grades_dict.items():
+                    credit = course_credit_map.get(course_id, 3)
+                    grade_val = grade_mapping.get(str(grade_str).upper().strip(), None)
+                    rows.append({
+                        'COURSE_CODE': course_id,
+                        'GRADE': str(grade_str).upper().strip(),
+                        'CREDIT': credit,
+                        'GRADE_POINT': grade_val if grade_val is not None else 0.0
+                    })
+
+                student_df = pd.DataFrame(rows)
+
+                # Create snapshot features using the same pipeline as training
+                snapshot = engineer._create_snapshot_features(
+                    student_id=student_id,
+                    snapshot_id=f"{student_id}_batch",
+                    courses_data=student_df,
+                    course_col='COURSE_CODE',
+                    grade_col='GRADE',
+                    credit_col='CREDIT',
+                    graduated=0  # dummy
+                )
+
+                if not snapshot:
+                    errors.append({'student_id': student_id, 'error': 'Could not create features from grades'})
+                    continue
+
+                # Build feature DataFrame
+                X_pred = pd.DataFrame([snapshot])
+                X_pred = engineer._generate_advanced_features(X_pred)
+
+                # Align features with model
+                for c in feature_columns:
+                    if c not in X_pred.columns:
+                        X_pred[c] = 0
+                X_pred = X_pred[feature_columns].fillna(0)
+
+                # Scale and predict
+                X_scaled = scaler.transform(X_pred)
+                pred_proba = subject_model.predict_proba(X_scaled)[0]
+                prob_graduate = float(pred_proba[1]) if len(pred_proba) > 1 else float(pred_proba[0])
+                prediction = prob_graduate >= 0.5
+
+                # --- Calculate stats ---
+                valid_grades = [grade_mapping.get(str(g).upper().strip(), None) for g in grades_dict.values()]
+                valid_grades = [g for g in valid_grades if g is not None]
+
+                total_credits = sum(course_credit_map.get(cid, 3) for cid in grades_dict.keys())
+                weighted_sum = sum(
+                    grade_mapping.get(str(g).upper().strip(), 0) * course_credit_map.get(cid, 3)
+                    for cid, g in grades_dict.items()
+                    if grade_mapping.get(str(g).upper().strip()) is not None
+                        and str(g).upper().strip() not in ['W', 'I', 'S', 'U', 'AU', 'P', 'NP']
+                )
+                gpa_credits = sum(
+                    course_credit_map.get(cid, 3)
+                    for cid, g in grades_dict.items()
+                    if str(g).upper().strip() not in ['W', 'I', 'S', 'U', 'AU', 'P', 'NP']
+                )
+                gpa = weighted_sum / gpa_credits if gpa_credits > 0 else 0.0
+
+                failed_grades = ['F', 'WF', 'U', 'NP']
+                failed_count = sum(1 for g in grades_dict.values() if str(g).upper().strip() in failed_grades)
+                total_courses = len(grades_dict)
+
+                # --- Build recommendation & reason ---
+                confidence = max(prob_graduate, 1 - prob_graduate)
+                risk_level, recommendation, reasons = _build_batch_recommendation(
+                    prediction, prob_graduate, gpa, failed_count, total_courses,
+                    total_credits, grades_dict, grade_mapping, course_name_map,
+                    course_credit_map, all_terms
+                )
+
+                results.append({
+                    'student_id': student_id,
+                    'student_name': student_name,
+                    'gpa': round(gpa, 2),
+                    'total_credits': total_credits,
+                    'total_courses': total_courses,
+                    'failed_count': failed_count,
+                    'probability': round(prob_graduate, 4),
+                    'prediction': 'ผ่าน' if prediction else 'ไม่ผ่าน',
+                    'confidence': round(confidence, 4),
+                    'risk_level': risk_level,
+                    'recommendation': recommendation,
+                    'reasons': reasons
+                })
+
+            except Exception as e:
+                logger.warning(f"Error predicting for student {student.get('student_id', '?')}: {e}")
+                errors.append({'student_id': student.get('student_id', '?'), 'error': str(e)})
+
+        if not results:
+            return jsonify({'success': False, 'error': 'Could not predict for any student.', 'errors': errors})
+
+        # --- Build summary ---
+        pass_count = sum(1 for r in results if r['prediction'] == 'ผ่าน')
+        fail_count_total = len(results) - pass_count
+        gpas = [r['gpa'] for r in results]
+        probs = [r['probability'] for r in results]
+
+        summary = {
+            'total_students': len(results),
+            'pass_count': pass_count,
+            'pass_percentage': round(pass_count / len(results) * 100, 1),
+            'fail_count': fail_count_total,
+            'fail_percentage': round(fail_count_total / len(results) * 100, 1),
+            'avg_gpa': round(sum(gpas) / len(gpas), 2),
+            'min_gpa': round(min(gpas), 2),
+            'max_gpa': round(max(gpas), 2),
+            'avg_probability': round(sum(probs) / len(probs), 4),
+            'risk_distribution': {
+                'high': sum(1 for r in results if r['risk_level'] == 'สูง'),
+                'medium': sum(1 for r in results if r['risk_level'] == 'ปานกลาง'),
+                'low': sum(1 for r in results if r['risk_level'] == 'ต่ำ')
+            },
+            'probability_distribution': _calc_prob_distribution([r['probability'] for r in results])
+        }
+
+        logger.info(f"=== Batch prediction complete: {len(results)} students, {pass_count} pass, {fail_count_total} fail ===")
+
+        return jsonify({
+            'success': True,
+            'detected_format': 'Wide Format' if detected_format == 'wide' else 'Long Format',
+            'results': results,
+            'summary': summary,
+            'errors': errors
+        })
+
+    except Exception as e:
+        logger.error(f"Batch prediction error: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Batch prediction error: {str(e)}'})
+
+
+def _detect_batch_format(df, cols_lower):
+    """Detect if uploaded file is Wide or Long format."""
+    col_names_lower = set(cols_lower.values())
+
+    # Long format: has STUDENT_ID + COURSE_CODE + GRADE columns
+    has_student_id = any(c in col_names_lower for c in ['student_id', 'studentid', 'id', 'รหัสนักศึกษา', 'รหัส', 'student_no'])
+    has_course_code = any(c in col_names_lower for c in ['course_code', 'coursecode', 'course_id', 'รหัสวิชา', 'subject_code'])
+    has_grade = any(c in col_names_lower for c in ['grade', 'เกรด', 'letter_grade'])
+
+    if has_student_id and has_course_code and has_grade:
+        return 'long'
+
+    # Wide format: has STUDENT_ID and columns that look like course codes (XX-XXX-XXX-XXX)
+    course_code_pattern = re.compile(r'^\d{2}-\d{3}-\d{3}-\d{3}$')
+    course_cols = [c for c in df.columns if course_code_pattern.match(str(c).strip())]
+
+    if has_student_id and len(course_cols) >= 3:
+        return 'wide'
+
+    # Fallback: check if any column headers match known course IDs
+    courses_data = app.config.get('COURSES_DATA', [])
+    known_ids = {c['id'] for c in courses_data}
+    matching_cols = [c for c in df.columns if str(c).strip() in known_ids]
+    if has_student_id and len(matching_cols) >= 3:
+        return 'wide'
+
+    return 'unknown'
+
+
+def _find_col(cols_lower, candidates):
+    """Find the original column name that matches any of the candidate lower-case names."""
+    for orig, lower in cols_lower.items():
+        if lower in candidates:
+            return orig
+    return None
+
+
+def _parse_wide_format(df, cols_lower, grade_mapping, course_credit_map):
+    """Parse Wide format: STUDENT_ID, STUDENT_NAME, GPA, [course_code_1], [course_code_2], ..."""
+    students = []
+
+    id_col = _find_col(cols_lower, ['student_id', 'studentid', 'id', 'รหัสนักศึกษา', 'รหัส', 'student_no'])
+    name_col = _find_col(cols_lower, ['student_name', 'studentname', 'name', 'ชื่อ', 'ชื่อนักศึกษา', 'ชื่อ-สกุล'])
+
+    if not id_col:
+        return []
+
+    # Course columns = any column that looks like a course code or is a known course
+    course_code_pattern = re.compile(r'^\d{2}-\d{3}-\d{3}-\d{3}$')
+    courses_data = app.config.get('COURSES_DATA', [])
+    known_ids = {c['id'] for c in courses_data}
+
+    course_cols = []
+    for c in df.columns:
+        c_stripped = str(c).strip()
+        if course_code_pattern.match(c_stripped) or c_stripped in known_ids:
+            course_cols.append(c)
+
+    valid_grades = set(grade_mapping.keys())
+
+    for _, row in df.iterrows():
+        student_id = str(row.get(id_col, '')).strip()
+        if not student_id or student_id == 'nan':
+            continue
+
+        student_name = str(row.get(name_col, '')).strip() if name_col else ''
+        if student_name == 'nan':
+            student_name = ''
+
+        grades = {}
+        for col in course_cols:
+            val = str(row.get(col, '')).strip().upper()
+            if val and val != 'NAN' and val != '' and val != '-':
+                if val in valid_grades:
+                    grades[str(col).strip()] = val
+
+        if grades:
+            students.append({
+                'student_id': student_id,
+                'student_name': student_name,
+                'grades': grades
+            })
+
+    return students
+
+
+def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
+    """Parse Long format: STUDENT_ID, COURSE_CODE, GRADE, [CREDIT], [STUDENT_NAME]"""
+    id_col = _find_col(cols_lower, ['student_id', 'studentid', 'id', 'รหัสนักศึกษา', 'รหัส', 'student_no'])
+    course_col = _find_col(cols_lower, ['course_code', 'coursecode', 'course_id', 'รหัสวิชา', 'subject_code'])
+    grade_col = _find_col(cols_lower, ['grade', 'เกรด', 'letter_grade'])
+    name_col = _find_col(cols_lower, ['student_name', 'studentname', 'name', 'ชื่อ', 'ชื่อนักศึกษา'])
+
+    if not id_col or not course_col or not grade_col:
+        return []
+
+    valid_grades = set(grade_mapping.keys())
+    students_dict = {}
+
+    for _, row in df.iterrows():
+        sid = str(row.get(id_col, '')).strip()
+        cid = str(row.get(course_col, '')).strip()
+        grade = str(row.get(grade_col, '')).strip().upper()
+
+        if not sid or sid == 'nan' or not cid or not grade:
+            continue
+        if grade not in valid_grades:
+            continue
+
+        if sid not in students_dict:
+            sname = str(row.get(name_col, '')).strip() if name_col else ''
+            if sname == 'nan':
+                sname = ''
+            students_dict[sid] = {'student_id': sid, 'student_name': sname, 'grades': {}}
+
+        # If same course appears multiple times, keep the latest (last row)
+        students_dict[sid]['grades'][cid] = grade
+
+    return list(students_dict.values())
+
+
+def _build_batch_recommendation(prediction, prob_graduate, gpa, failed_count, total_courses,
+                                 total_credits, grades_dict, grade_mapping, course_name_map,
+                                 course_credit_map, all_terms):
+    """Build risk level, recommendation text, and reasons list for a student."""
+    reasons = []
+    recommendations = []
+
+    # --- Risk level ---
+    if prob_graduate >= 0.8:
+        risk_level = 'ต่ำ'
+    elif prob_graduate >= 0.5:
+        risk_level = 'ปานกลาง'
+    else:
+        risk_level = 'สูง'
+
+    # --- GPA analysis ---
+    if gpa < 1.5:
+        reasons.append(f'GPA ต่ำมาก ({gpa:.2f}) ต่ำกว่าเกณฑ์จบ 2.00 มาก')
+        recommendations.append('ต้องปรับปรุงผลการเรียนอย่างเร่งด่วน')
+    elif gpa < 2.0:
+        reasons.append(f'GPA ({gpa:.2f}) ต่ำกว่าเกณฑ์จบการศึกษา (2.00)')
+        recommendations.append('ควรเพิ่ม GPA ให้ถึง 2.00 โดยเร็ว')
+    elif gpa < 2.5:
+        reasons.append(f'GPA ({gpa:.2f}) ผ่านเกณฑ์แต่ยังอยู่ในเกณฑ์เฝ้าระวัง')
+        recommendations.append('ควรรักษาระดับผลการเรียนให้คงที่หรือดีขึ้น')
+    elif gpa >= 3.0:
+        reasons.append(f'GPA ({gpa:.2f}) อยู่ในเกณฑ์ดี')
+    else:
+        reasons.append(f'GPA ({gpa:.2f}) อยู่ในเกณฑ์ปานกลาง')
+
+    # --- Failed courses ---
+    if failed_count > 0:
+        failed_courses = []
+        for cid, g in grades_dict.items():
+            if str(g).upper().strip() in ['F', 'WF', 'U', 'NP']:
+                cname = course_name_map.get(cid, cid)
+                failed_courses.append(cname)
+
+        reasons.append(f'สอบตก {failed_count} วิชา: {", ".join(failed_courses[:5])}')
+        if failed_count >= 3:
+            recommendations.append(f'ต้องลงเรียนซ้ำ {failed_count} วิชาที่ตก')
+        else:
+            recommendations.append(f'ควรลงเรียนซ้ำวิชาที่ตก')
+
+    # --- Credit progress ---
+    required_credits = 136
+    progress_pct = (total_credits / required_credits) * 100
+    if total_credits < required_credits:
+        reasons.append(f'หน่วยกิตสะสม {total_credits}/{required_credits} ({progress_pct:.0f}%)')
+        remaining = required_credits - total_credits
+        if remaining > 60:
+            recommendations.append(f'ยังเหลือหน่วยกิตอีก {remaining} หน่วยกิต ต้องวางแผนการลงทะเบียนให้ดี')
+    else:
+        reasons.append(f'หน่วยกิตสะสมครบ {total_credits}/{required_credits}')
+
+    # --- W (Withdraw) courses ---
+    w_count = sum(1 for g in grades_dict.values() if str(g).upper().strip() in ['W', 'I'])
+    if w_count >= 3:
+        reasons.append(f'ถอนวิชา (W/I) {w_count} วิชา ซึ่งอาจทำให้เรียนไม่ทันจบ')
+        recommendations.append('ควรลดการถอนวิชาและวางแผนการเรียนล่วงหน้า')
+
+    # --- Low grade in core courses ---
+    core_ids = app.config.get('CORE_SUBJECTS_IDS', [])
+    weak_core = []
+    for cid in core_ids:
+        if cid in grades_dict:
+            g = str(grades_dict[cid]).upper().strip()
+            gv = grade_mapping.get(g, None)
+            if gv is not None and gv < 2.0:
+                cname = course_name_map.get(cid, cid)
+                weak_core.append(f'{cname}({g})')
+    if weak_core:
+        reasons.append(f'เกรดต่ำในวิชาแกนสำคัญ: {", ".join(weak_core[:3])}')
+        recommendations.append('ควรเน้นปรับปรุงวิชาแกนที่เกรดต่ำ')
+
+    # --- Final recommendation text ---
+    if prediction:
+        main_rec = 'มีแนวโน้มจบการศึกษาได้'
+        if recommendations:
+            main_rec += ' แต่' + recommendations[0]
+    else:
+        if recommendations:
+            main_rec = recommendations[0]
+        else:
+            main_rec = 'ควรปรึกษาอาจารย์ที่ปรึกษาเพื่อวางแผนการเรียน'
+
+    return risk_level, main_rec, reasons
+
+
+def _calc_prob_distribution(probs):
+    """Calculate probability distribution for batch summary."""
+    bins = [
+        {'range': '0-20%', 'min': 0, 'max': 0.2, 'count': 0},
+        {'range': '21-40%', 'min': 0.2, 'max': 0.4, 'count': 0},
+        {'range': '41-60%', 'min': 0.4, 'max': 0.6, 'count': 0},
+        {'range': '61-80%', 'min': 0.6, 'max': 0.8, 'count': 0},
+        {'range': '81-100%', 'min': 0.8, 'max': 1.01, 'count': 0},
+    ]
+    for p in probs:
+        for b in bins:
+            if b['min'] <= p < b['max']:
+                b['count'] += 1
+                break
+    return [{'range': b['range'], 'count': b['count']} for b in bins]
+
+
+# =========================================================
+# BATCH TEMPLATE DOWNLOAD API
+# =========================================================
+
+@app.route('/api/batch_template/<fmt>')
+def api_batch_template(fmt):
+    """Download CSV template for batch prediction (wide or long format)."""
+    try:
+        courses_data = app.config.get('COURSES_DATA', [])
+        all_terms = app.config.get('ALL_TERMS_DATA', [])
+
+        if fmt == 'wide':
+            return _generate_wide_template(courses_data, all_terms)
+        elif fmt == 'long':
+            return _generate_long_template(courses_data, all_terms)
+        else:
+            return jsonify({'success': False, 'error': 'Invalid format. Use "wide" or "long".'}), 400
+    except Exception as e:
+        logger.error(f"Error generating template: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _generate_wide_template(courses_data, all_terms):
+    """Generate Wide format CSV template with course codes as column headers."""
+    from io import StringIO
+
+    output = StringIO()
+
+    # Collect all course IDs in curriculum order
+    ordered_ids = []
+    for term_info in all_terms:
+        for cid in term_info['ids']:
+            if cid not in ordered_ids:
+                ordered_ids.append(cid)
+
+    # Build course lookup
+    course_lookup = {c['id']: c for c in courses_data}
+
+    # --- Header row: STUDENT_ID, STUDENT_NAME, then course IDs ---
+    headers = ['STUDENT_ID', 'STUDENT_NAME'] + ordered_ids
+    output.write(','.join(headers) + '\n')
+
+    # --- Comment row: course names (Thai) ---
+    comment_row = ['# รหัสนักศึกษา', '# ชื่อนักศึกษา']
+    for cid in ordered_ids:
+        c = course_lookup.get(cid)
+        if c:
+            term_label = ''
+            for t in all_terms:
+                if cid in t['ids']:
+                    term_label = f"ปี{t['year']}เทอม{t['term']}"
+                    break
+            comment_row.append(f'# {c["thaiName"]} ({c["credit"]}หน่วยกิต) [{term_label}]')
+        else:
+            comment_row.append(f'# {cid}')
+    output.write(','.join(comment_row) + '\n')
+
+    # --- Guide row ---
+    guide_row = ['# เกรดที่ใส่ได้: A / B+ / B / C+ / C / D+ / D / F / W / I', '# เว้นว่างถ้ายังไม่ได้ลงเรียน']
+    guide_row += [''] * len(ordered_ids)
+    output.write(','.join(guide_row) + '\n')
+
+    # --- Retake guide row ---
+    retake_row = ['# ถ้าลงเรียนซ้ำ ให้ใส่เกรดล่าสุดที่ได้', '# ลบเกรดเดิมแล้วใส่เกรดใหม่']
+    retake_row += [''] * len(ordered_ids)
+    output.write(','.join(retake_row) + '\n')
+
+    # --- Example student 1 ---
+    ex1 = ['6301001', 'ตัวอย่าง นศ.1']
+    for cid in ordered_ids:
+        # First 16 courses get sample grades
+        idx = ordered_ids.index(cid)
+        if idx < 8:
+            sample_grades = ['B+', 'A', 'B', 'C+', 'B+', 'A', 'B', 'C+']
+            ex1.append(sample_grades[idx % len(sample_grades)])
+        elif idx < 16:
+            sample_grades2 = ['B', 'C+', 'B+', 'A', 'C', 'B', 'B+', 'C+']
+            ex1.append(sample_grades2[idx % len(sample_grades2)])
+        else:
+            ex1.append('')
+    output.write(','.join(ex1) + '\n')
+
+    # --- Example student 2 ---
+    ex2 = ['6301002', 'ตัวอย่าง นศ.2']
+    for cid in ordered_ids:
+        idx = ordered_ids.index(cid)
+        if idx < 8:
+            sample_grades = ['C+', 'B', 'C', 'D+', 'C+', 'B', 'D', 'F']
+            ex2.append(sample_grades[idx % len(sample_grades)])
+        elif idx < 16:
+            sample_grades2 = ['C', 'D+', 'C+', 'F', 'D+', 'C', 'C+', 'D']
+            ex2.append(sample_grades2[idx % len(sample_grades2)])
+        else:
+            ex2.append('')
+    output.write(','.join(ex2) + '\n')
+
+    # Build response
+    csv_content = output.getvalue()
+    output.close()
+
+    response = app.response_class(
+        response='\ufeff' + csv_content,
+        status=200,
+        mimetype='text/csv; charset=utf-8'
+    )
+    response.headers['Content-Disposition'] = 'attachment; filename=batch_template_wide.csv'
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'
+    return response
+
+
+def _generate_long_template(courses_data, all_terms):
+    """Generate Long format CSV template."""
+    from io import StringIO
+
+    output = StringIO()
+    course_lookup = {c['id']: c for c in courses_data}
+
+    # Header
+    output.write('STUDENT_ID,STUDENT_NAME,COURSE_CODE,COURSE_NAME,CREDIT,YEAR,TERM,GRADE\n')
+
+    # Guide comments
+    output.write('# รหัสนักศึกษา,ชื่อนักศึกษา,รหัสวิชา,ชื่อวิชา(ไม่ต้องกรอกก็ได้),หน่วยกิต,ปีการศึกษา(พ.ศ.),เทอม(1/2/3),เกรด\n')
+    output.write('# เกรดที่ใส่ได้: A / B+ / B / C+ / C / D+ / D / F / W / I\n')
+    output.write('# แต่ละแถว = 1 วิชาของ 1 นักศึกษา | ถ้าลงเรียนซ้ำ ให้ใส่แถวใหม่ (ระบบจะใช้เกรดล่าสุด)\n')
+
+    # Example student 1 - year 1
+    sample_grades_1 = ['B+', 'A', 'B', 'C+', 'B+', 'A', 'B', 'C+', 'B', 'C+', 'B+', 'A', 'C', 'B', 'B+', 'C+']
+    row_idx = 0
+    for term_info in all_terms:
+        year_label = 2566 + (term_info['year'] - 1)  # Example BE year
+        for cid in term_info['ids']:
+            c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
+            grade = sample_grades_1[row_idx % len(sample_grades_1)] if row_idx < 16 else ''
+            if grade:
+                output.write(f'6301001,ตัวอย่าง นศ.1,{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
+            row_idx += 1
+
+    # Example student 2 - fewer courses, lower grades
+    sample_grades_2 = ['C+', 'B', 'C', 'D+', 'C+', 'B', 'F', 'D', 'C', 'D+', 'F', 'C+']
+    row_idx = 0
+    for term_info in all_terms:
+        if term_info['year'] > 2:
+            break
+        year_label = 2566 + (term_info['year'] - 1)
+        for cid in term_info['ids']:
+            c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
+            grade = sample_grades_2[row_idx % len(sample_grades_2)]
+            output.write(f'6301002,ตัวอย่าง นศ.2,{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
+            row_idx += 1
+
+    # Example: retake (student 2 retakes a failed course)
+    output.write('# ตัวอย่างการลงเรียนซ้ำ: นศ.2 ลงเรียนซ้ำวิชาที่ตก F ได้เกรด C\n')
+    output.write(f'6301002,ตัวอย่าง นศ.2,03-407-100-101,การเขียนโปรแกรมคอมพิวเตอร์,3,2568,1,C\n')
+
+    csv_content = output.getvalue()
+    output.close()
+
+    response = app.response_class(
+        response='\ufeff' + csv_content,
+        status=200,
+        mimetype='text/csv; charset=utf-8'
+    )
+    response.headers['Content-Disposition'] = 'attachment; filename=batch_template_long.csv'
+    response.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'
+    return response
+
+
 @app.route('/predict-batch')
 def predict_batch_page():
-    return render_template('index.html')
+    """Page for batch prediction from uploaded file."""
+    try:
+        courses_json = json.dumps(app.config.get('COURSES_DATA', []))
+        terms_json = json.dumps(app.config.get('ALL_TERMS_DATA', []))
+        return render_template(
+            'predict_batch.html',
+            coursesData=courses_json,
+            allTermsData=terms_json
+        )
+    except Exception as e:
+        logger.error(f"Error rendering batch prediction page: {str(e)}")
+        return render_template(
+            'predict_batch.html',
+            coursesData='[]',
+            allTermsData='[]'
+        )
 
 @app.route('/models')
 def models_page():
