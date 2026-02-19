@@ -1899,6 +1899,7 @@ def enforce_login_for_non_prediction_pages():
         'predict_manual_input',
         'api_predict_batch',
         'api_batch_template',
+        'api_batch_gemini_analyze',
     }
 
     if endpoint in public_endpoints:
@@ -7891,10 +7892,14 @@ def api_predict_batch():
 
                 # Use create_dynamic_features — exactly the same as individual prediction
                 total_courses_taken = len(grades_dict)
+                loaded_terms_count = student.get('loaded_terms_count')
+                semester_number = max(1, loaded_terms_count) if loaded_terms_count else None
+
                 features_array = trainer.create_dynamic_features(
                     grades_dict=grades_dict,
                     course_profiles=course_profiles,
-                    total_courses_taken=total_courses_taken
+                    total_courses_taken=total_courses_taken,
+                    semester_number=semester_number
                 )
 
                 # Convert to DataFrame with correct feature column names (same as individual prediction)
@@ -7948,7 +7953,9 @@ def api_predict_batch():
                     'confidence': round(confidence, 4),
                     'risk_level': risk_level,
                     'recommendation': recommendation,
-                    'reasons': reasons
+                    'reasons': reasons,
+                    'loaded_terms_count': loaded_terms_count or 0,
+                    'grades': grades_dict  # ส่ง grades กลับเพื่อใช้กับ Gemini AI
                 })
 
             except Exception as e:
@@ -7995,6 +8002,202 @@ def api_predict_batch():
     except Exception as e:
         logger.error(f"Batch prediction error: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': f'Batch prediction error: {str(e)}'})
+
+
+# =========================================================
+# BATCH GEMINI AI ANALYSIS (per-student, same as individual)
+# =========================================================
+
+@app.route('/api/batch_gemini_analyze', methods=['POST'])
+def api_batch_gemini_analyze():
+    """วิเคราะห์นักศึกษารายคนด้วย Gemini AI — ใช้ prompt เดียวกับทำนายเดี่ยว"""
+    if not is_gemini_available():
+        return jsonify({'success': False, 'error': 'ยังไม่ได้ตั้งค่า Gemini API Key'}), 503
+
+    can_proceed, wait_time = gemini_rate_limiter.can_proceed()
+    if not can_proceed:
+        return jsonify({
+            'success': False,
+            'error': f'กรุณารอ {wait_time} วินาทีก่อนวิเคราะห์คนต่อไป',
+            'retry_after': wait_time
+        }), 429
+
+    try:
+        payload = request.get_json(silent=True) or {}
+        grades_dict = payload.get('grades', {})
+        student_id = payload.get('student_id', '')
+        student_name = payload.get('student_name', 'นักศึกษา')
+        loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
+        model_filename = payload.get('model_filename', '')
+        prob_graduate = payload.get('probability', 0)
+        prediction_label = payload.get('prediction', '')
+        confidence_val = payload.get('confidence', 0)
+        risk_level_val = payload.get('risk_level', '')
+
+        if not grades_dict:
+            return jsonify({'success': False, 'error': 'ไม่พบข้อมูลเกรด'}), 400
+
+        # Load course profiles from model (same as individual prediction)
+        course_profiles = {}
+        training_analysis = None
+        if model_filename:
+            try:
+                stored_model = storage.load_model(model_filename)
+                if stored_model:
+                    course_profiles = stored_model.get('course_profiles', {})
+                    training_analysis = stored_model.get('gemini_training_analysis')
+            except Exception:
+                pass
+
+        # Build Course DNA context (same as individual prediction)
+        course_context_str = ""
+        if course_profiles:
+            student_risk_factors = []
+            student_easy_courses_failed = []
+
+            for course_id, grade in grades_dict.items():
+                if course_id in course_profiles:
+                    prof = course_profiles[course_id]
+                    fail_rate = prof.get('fail_rate', 0)
+                    avg_grade = prof.get('avg_grade', 0)
+                    difficulty_score = prof.get('difficulty_score', 0)
+
+                    is_killer = fail_rate >= 0.3
+                    is_failed = str(grade).upper() in ['F', 'W', 'WF', 'WU', 'D']
+
+                    if is_killer and is_failed:
+                        student_risk_factors.append(
+                            f"- ตกวิชาปราบเซียน {course_id} (ปกติคนตก {fail_rate*100:.0f}%, เกรดเฉลี่ย: {avg_grade:.2f})"
+                        )
+                    elif is_killer and not is_failed:
+                        student_risk_factors.append(
+                            f"- ผ่านวิชาปราบเซียน {course_id} แล้ว (ปกติคนตก {fail_rate*100:.0f}%) ✓"
+                        )
+
+                    is_easy = avg_grade >= 3.5 and fail_rate <= 0.1
+                    is_poor_grade = str(grade).upper() in ['C', 'D', 'F', 'W', 'WF', 'WU']
+
+                    if is_easy and is_poor_grade:
+                        student_easy_courses_failed.append(
+                            f"- ได้เกรดน้อยในวิชาช่วย {course_id} (เกรดเฉลี่ยปกติ: {avg_grade:.2f}, ได้: {grade})"
+                        )
+
+            if student_risk_factors or student_easy_courses_failed:
+                course_context_str = "\n**การวิเคราะห์ตาม Course DNA (Backend System):**\n"
+                if student_risk_factors:
+                    course_context_str += "\n".join(student_risk_factors)
+                if student_easy_courses_failed:
+                    course_context_str += "\n" + "\n".join(student_easy_courses_failed)
+                course_context_str += "\n"
+
+        # Summarize grades (same function as individual prediction)
+        grade_summary = summarize_grades_for_gemini(grades_dict, loaded_terms_count)
+        grade_summary['student_name'] = student_name
+
+        # Build model prediction context
+        model_context_str = f"""
+**ผลจาก AI Model ที่เทรนมาแล้ว:**
+- ผลทำนาย: {prediction_label}
+- โอกาสจบ: {prob_graduate * 100:.1f}%
+- ความมั่นใจ: {confidence_val * 100:.1f}%
+- ระดับความเสี่ยง: {risk_level_val}
+- วิธีที่ใช้: Random Forest
+"""
+
+        # Build detailed prompt (SAME as individual prediction)
+        detailed_prompt = f"""
+คุณคือที่ปรึกษาทางวิชาการ ทำหน้าที่**ทำนายและอธิบาย**ผลการจบการศึกษาของนักศึกษา
+
+**ข้อมูลนักศึกษา:**
+- รหัส: {student_id}
+- ชื่อ: {student_name}
+- จำนวนวิชาที่เรียนแล้ว: {grade_summary.get('total_courses', 0)} วิชา
+- จำนวนเทอมที่เรียน: {loaded_terms_count} เทอม
+- เกรดเฉลี่ย (โดยประมาณ): {grade_summary.get('estimated_gpa', 0):.2f}
+- หน่วยกิตที่เรียนแล้ว: {grade_summary.get('total_credits_recorded', 0)} หน่วยกิต
+- จำนวนวิชาที่สอบตก: {grade_summary.get('failed_count', 0)} วิชา
+
+**การกระจายเกรด:**
+{json.dumps(grade_summary.get('grade_distribution', {}), ensure_ascii=False, indent=2)}
+
+**รายละเอียดวิชา:**
+{json.dumps(grade_summary.get('course_details', [])[:20], ensure_ascii=False, indent=2)}
+
+**วิชาที่สอบตก (ถ้ามี):**
+{json.dumps(grade_summary.get('failed_courses', []), ensure_ascii=False, indent=2)}
+
+{course_context_str}
+(ข้อมูลข้างบนคือข้อมูลเปรียบเทียบกับสถิติรุ่นพี่ที่เทรนมาแล้ว)
+
+{model_context_str}
+
+**งานของคุณ (ตอบเป็นภาษาไทยทั้งหมด):**
+
+**1. ทำนายผลการจบการศึกษา (ต้องฟันธงชัดเจน):**
+   - ทำนายว่านักศึกษาคนนี้ "จะจบตามเกณฑ์" หรือ "จะไม่จบ/จบช้า"
+   - เกณฑ์การจบ: GPA >= 2.00 และหน่วยกิต >= 136 และผ่านวิชาบังคับ/วิชาปราบเซียน
+   - ระบุความมั่นใจในการทำนายเป็นเปอร์เซ็นต์ (0-100%)
+
+**2. อธิบายเหตุผลว่าทำไมถึงจบ/ไม่จบ:**
+   - อธิบายเป็นภาษาไทย
+   - ระบุปัจจัยสำคัญที่ทำให้จบ/ไม่จบ
+
+**3. วิเคราะห์เชิงลึก:**
+   - วิเคราะห์ปัจจัยที่ส่งผลต่อการจบการศึกษามากที่สุด
+   - ให้ความสำคัญกับ "วิชาปราบเซียน" (Killer Courses) ที่นักศึกษาตกเป็นอันดับแรก
+   - ถ้าได้เกรดแย่ในวิชาง่าย (Easy Courses) ให้ระบุเป็นสัญญาณเตือน
+
+**4. คำแนะนำ:**
+   - สิ่งที่ต้องทำทันทีในเทอมหน้าเพื่อให้รอด
+   - ถ้าตกวิชา Killer ให้แนะนำวิธีแก้ที่เข้มข้นและเป็นรูปธรรม
+   - ทำนายโอกาสจบโดยดูว่าผ่านด่านวิชายากๆ ไปหรือยัง
+
+**คำสั่งสำคัญ:**
+- **ต้องทำนายผลการจบ/ไม่จบให้ชัดเจน**
+- **ต้องอธิบายเหตุผลเป็นภาษาไทย**
+- ถ้ามีผลจาก AI Model ให้ใช้เป็นข้อมูลประกอบ
+- ตอบในรูปแบบ JSON ตาม Schema ที่กำหนด
+
+กรุณาทำนายและให้คำตอบตามโครงสร้างที่กำหนด โดยให้:
+- graduation_prediction:
+  * will_graduate: true/false
+  * prediction_text: ข้อความทำนายเป็นภาษาไทย
+  * reason_why_graduate: อธิบายเหตุผลว่าทำไมถึงจบ (ถ้าทำนายว่าจบ)
+  * reason_why_not_graduate: อธิบายเหตุผลว่าทำไมถึงไม่จบ (ถ้าทำนายว่าไม่จบ)
+  * confidence_percent: ระดับความมั่นใจ (0-100)
+- analysis_markdown: สรุปการวิเคราะห์เป็นภาษาไทย โดยเน้นที่การทำนายและเหตุผล
+- risk_level: ระดับความเสี่ยง (very_low, low, moderate, high, very_high)
+- outcome_summary: สรุปผลการทำนาย (status, confidence, description)
+- key_metrics: ตัวชี้วัดสำคัญ (อย่างน้อย 3 ตัว)
+- recommendations: คำแนะนำ (อย่างน้อย 3 ข้อ)
+"""
+
+        prompt_payload = {
+            'student_name': student_name,
+            'analysis_goal': 'ทำนายโอกาสจบการศึกษาและอธิบายเหตุผลตามเกณฑ์อย่างละเอียด',
+            'grade_summary': grade_summary,
+            'detailed_prompt': detailed_prompt
+        }
+
+        logger.info(f"🔮 Batch Gemini analysis for student {student_id}")
+        gemini_output = call_gemini_with_retry(prompt_payload, 'live_grade_prediction')
+
+        return jsonify({
+            'success': True,
+            'student_id': student_id,
+            'gemini': gemini_output
+        })
+
+    except Exception as exc:
+        error_msg = str(exc)
+        if '429' in error_msg or 'quota' in error_msg.lower():
+            return jsonify({
+                'success': False,
+                'error': 'โควต้า Gemini API หมดชั่วคราว กรุณารอ 1-2 นาที',
+                'retry_after': 60
+            }), 429
+        logger.error(f"Batch Gemini analysis error: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': f'เกิดข้อผิดพลาด: {error_msg}'}), 500
 
 
 def _detect_batch_format(df, cols_lower):
@@ -8074,21 +8277,34 @@ def _parse_wide_format(df, cols_lower, grade_mapping, course_credit_map):
                     grades[str(col).strip()] = val
 
         if grades:
+            # Determine loaded_terms_count from which terms' courses have grades
+            all_terms = app.config.get('ALL_TERMS_DATA', [])
+            terms_with_grades = set()
+            for term_idx, term_info in enumerate(all_terms):
+                for cid_in_term in term_info['ids']:
+                    if cid_in_term in grades:
+                        terms_with_grades.add(term_idx)
+                        break
+            loaded_terms_count = len(terms_with_grades) if terms_with_grades else None
+
             students.append({
                 'student_id': student_id,
                 'student_name': student_name,
-                'grades': grades
+                'grades': grades,
+                'loaded_terms_count': loaded_terms_count
             })
 
     return students
 
 
 def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
-    """Parse Long format: STUDENT_ID, COURSE_CODE, GRADE, [CREDIT], [STUDENT_NAME]"""
+    """Parse Long format: STUDENT_ID, COURSE_CODE, GRADE, [CREDIT], [STUDENT_NAME], [YEAR], [TERM]"""
     id_col = _find_col(cols_lower, ['student_id', 'studentid', 'id', 'รหัสนักศึกษา', 'รหัส', 'student_no'])
     course_col = _find_col(cols_lower, ['course_code', 'coursecode', 'course_id', 'รหัสวิชา', 'subject_code'])
     grade_col = _find_col(cols_lower, ['grade', 'เกรด', 'letter_grade'])
     name_col = _find_col(cols_lower, ['student_name', 'studentname', 'name', 'ชื่อ', 'ชื่อนักศึกษา'])
+    year_col = _find_col(cols_lower, ['year', 'ปี', 'ปีการศึกษา', 'academic_year'])
+    term_col = _find_col(cols_lower, ['term', 'เทอม', 'semester', 'ภาคเรียน'])
 
     if not id_col or not course_col or not grade_col:
         return []
@@ -8110,12 +8326,30 @@ def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
             sname = str(row.get(name_col, '')).strip() if name_col else ''
             if sname == 'nan':
                 sname = ''
-            students_dict[sid] = {'student_id': sid, 'student_name': sname, 'grades': {}}
+            students_dict[sid] = {'student_id': sid, 'student_name': sname, 'grades': {}, 'terms_set': set()}
 
         # If same course appears multiple times, keep the latest (last row)
         students_dict[sid]['grades'][cid] = grade
 
-    return list(students_dict.values())
+        # Track unique (year, term) pairs to calculate loaded_terms_count
+        if year_col and term_col:
+            yr = str(row.get(year_col, '')).strip()
+            tm = str(row.get(term_col, '')).strip()
+            if yr and yr != 'nan' and tm and tm != 'nan':
+                students_dict[sid]['terms_set'].add((yr, tm))
+
+    # Convert terms_set to loaded_terms_count
+    result = []
+    for sid, data in students_dict.items():
+        loaded_terms_count = len(data.get('terms_set', set()))
+        result.append({
+            'student_id': data['student_id'],
+            'student_name': data['student_name'],
+            'grades': data['grades'],
+            'loaded_terms_count': loaded_terms_count if loaded_terms_count > 0 else None
+        })
+
+    return result
 
 
 def _build_batch_recommendation(prediction, prob_graduate, gpa, failed_count, total_courses,
