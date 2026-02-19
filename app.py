@@ -228,15 +228,15 @@ def preprocess_tan1_data(file_path):
 
     if has_entry_year and has_academic_year:
         current_year_be = 2568  # พ.ศ. 2568 = ค.ศ. 2025
+        current_year_ce = current_year_be - 543  # ค.ศ. 2025
+        # กรองนศ.ที่เข้าเรียนไม่ถึง 4 ปีก่อนปีปัจจุบัน → ข้อมูลยังไม่ครบ
+        cutoff_entry_year = current_year_ce - 5  # รุ่นที่เข้า >= 5 ปีก่อนถึงจะมีข้อมูลครบ
         for student_id in df_long['STUDENT_ID'].unique():
             student_data = df_long[df_long['STUDENT_ID'] == student_id]
             entry_year_ce = student_data['ปีที่เข้า'].iloc[0]  # ค.ศ.
-            entry_year_be = entry_year_ce + 543                  # แปลงเป็น พ.ศ.
-            last_academic_year = student_data['ปีการศึกษา'].max()  # พ.ศ.
-            years_studied = last_academic_year - entry_year_be + 1
 
-            # ถ้าเรียนไม่ถึง 4 ปี AND ปีล่าสุดคือปีปัจจุบัน/ปีก่อน → ยังเรียนอยู่
-            if years_studied < 4 and last_academic_year >= current_year_be - 1:
+            # ถ้าเข้าเรียนหลังปี cutoff → ยังเรียนไม่ครบ 4 ปี → ไม่เอาเข้าเทรน
+            if entry_year_ce > cutoff_entry_year:
                 excluded_students.add(student_id)
 
         if excluded_students:
