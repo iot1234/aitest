@@ -1109,7 +1109,10 @@ function renderResultsTable(results) {
             ? r.reasons.map(reason => `<li class="small">${reason}</li>`).join('')
             : '<li class="small text-muted">ไม่มีข้อมูลเพิ่มเติม</li>';
 
-        const termsText = r.loaded_terms_count ? `${r.loaded_terms_count} เทอม` : 'ไม่ระบุ';
+        const termsDetail = (r.terms_detail && r.terms_detail.length > 0) ? r.terms_detail.join(', ') : '';
+        const termsText = r.loaded_terms_count
+            ? `${r.loaded_terms_count} เทอม${termsDetail ? ' (' + termsDetail + ')' : ''}`
+            : 'ไม่ระบุ';
 
         const detailRow = document.createElement('tr');
         detailRow.className = 'student-detail';
@@ -1169,6 +1172,7 @@ async function analyzeWithGemini(index) {
                 student_name: r.student_name || '',
                 grades: r.grades || {},
                 loaded_terms_count: r.loaded_terms_count || 0,
+                terms_detail: r.terms_detail || [],
                 model_filename: modelFile,
                 probability: r.probability,
                 prediction: r.prediction,

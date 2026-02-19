@@ -7955,6 +7955,7 @@ def api_predict_batch():
                     'recommendation': recommendation,
                     'reasons': reasons,
                     'loaded_terms_count': loaded_terms_count or 0,
+                    'terms_detail': student.get('terms_detail', []),
                     'grades': grades_dict  # ส่ง grades กลับเพื่อใช้กับ Gemini AI
                 })
 
@@ -8028,6 +8029,7 @@ def api_batch_gemini_analyze():
         student_id = payload.get('student_id', '')
         student_name = payload.get('student_name', 'นักศึกษา')
         loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
+        terms_detail = payload.get('terms_detail', [])
         model_filename = payload.get('model_filename', '')
         prob_graduate = payload.get('probability', 0)
         prediction_label = payload.get('prediction', '')
@@ -8113,6 +8115,7 @@ def api_batch_gemini_analyze():
 - ชื่อ: {student_name}
 - จำนวนวิชาที่เรียนแล้ว: {grade_summary.get('total_courses', 0)} วิชา
 - จำนวนเทอมที่เรียน: {loaded_terms_count} เทอม
+- เทอมที่มีข้อมูล: {', '.join(terms_detail) if terms_detail else 'ไม่ระบุ'}
 - เกรดเฉลี่ย (โดยประมาณ): {grade_summary.get('estimated_gpa', 0):.2f}
 - หน่วยกิตที่เรียนแล้ว: {grade_summary.get('total_credits_recorded', 0)} หน่วยกิต
 - จำนวนวิชาที่สอบตก: {grade_summary.get('failed_count', 0)} วิชา
@@ -8277,21 +8280,23 @@ def _parse_wide_format(df, cols_lower, grade_mapping, course_credit_map):
                     grades[str(col).strip()] = val
 
         if grades:
-            # Determine loaded_terms_count from which terms' courses have grades
+            # Determine loaded_terms_count and term details from which courses have grades
             all_terms = app.config.get('ALL_TERMS_DATA', [])
             terms_with_grades = set()
+            terms_detail = []
             for term_idx, term_info in enumerate(all_terms):
-                for cid_in_term in term_info['ids']:
-                    if cid_in_term in grades:
-                        terms_with_grades.add(term_idx)
-                        break
+                term_courses_with_grade = [cid for cid in term_info['ids'] if cid in grades]
+                if term_courses_with_grade:
+                    terms_with_grades.add(term_idx)
+                    terms_detail.append(f"ปี{term_info['year']}เทอม{term_info['term']}({len(term_courses_with_grade)}วิชา)")
             loaded_terms_count = len(terms_with_grades) if terms_with_grades else None
 
             students.append({
                 'student_id': student_id,
                 'student_name': student_name,
                 'grades': grades,
-                'loaded_terms_count': loaded_terms_count
+                'loaded_terms_count': loaded_terms_count,
+                'terms_detail': terms_detail
             })
 
     return students
@@ -8341,12 +8346,20 @@ def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
     # Convert terms_set to loaded_terms_count
     result = []
     for sid, data in students_dict.items():
-        loaded_terms_count = len(data.get('terms_set', set()))
+        terms_set = data.get('terms_set', set())
+        loaded_terms_count = len(terms_set)
+        # Build readable term details from YEAR/TERM pairs
+        terms_detail = []
+        if terms_set:
+            sorted_terms = sorted(terms_set, key=lambda x: (x[0], x[1]))
+            for yr, tm in sorted_terms:
+                terms_detail.append(f"พ.ศ.{yr}เทอม{tm}")
         result.append({
             'student_id': data['student_id'],
             'student_name': data['student_name'],
             'grades': data['grades'],
-            'loaded_terms_count': loaded_terms_count if loaded_terms_count > 0 else None
+            'loaded_terms_count': loaded_terms_count if loaded_terms_count > 0 else None,
+            'terms_detail': terms_detail
         })
 
     return result
@@ -8496,32 +8509,39 @@ def _generate_wide_template(courses_data, all_terms):
     # Build course lookup
     course_lookup = {c['id']: c for c in courses_data}
 
+    # --- Build course-to-term mapping ---
+    course_term_map = {}
+    for t in all_terms:
+        for cid in t['ids']:
+            course_term_map[cid] = f"ปี{t['year']}เทอม{t['term']}"
+
     # --- Header row: STUDENT_ID, STUDENT_NAME, then course IDs ---
     headers = ['STUDENT_ID', 'STUDENT_NAME'] + ordered_ids
     output.write(','.join(headers) + '\n')
 
-    # --- Comment row: course names (Thai) ---
+    # --- Row 2: TERM label row (clearly shows year/term for each column) ---
+    term_row = ['# ปี/เทอม', '#']
+    for cid in ordered_ids:
+        term_row.append(course_term_map.get(cid, ''))
+    output.write(','.join(term_row) + '\n')
+
+    # --- Row 3: Course names (Thai) with credits ---
     comment_row = ['# รหัสนักศึกษา', '# ชื่อนักศึกษา']
     for cid in ordered_ids:
         c = course_lookup.get(cid)
         if c:
-            term_label = ''
-            for t in all_terms:
-                if cid in t['ids']:
-                    term_label = f"ปี{t['year']}เทอม{t['term']}"
-                    break
-            comment_row.append(f'# {c["thaiName"]} ({c["credit"]}หน่วยกิต) [{term_label}]')
+            comment_row.append(f'# {c["thaiName"]} ({c["credit"]}หน่วย)')
         else:
             comment_row.append(f'# {cid}')
     output.write(','.join(comment_row) + '\n')
 
-    # --- Guide row ---
+    # --- Row 4: Guide row ---
     guide_row = ['# เกรดที่ใส่ได้: A / B+ / B / C+ / C / D+ / D / F / W / I', '# เว้นว่างถ้ายังไม่ได้ลงเรียน']
     guide_row += [''] * len(ordered_ids)
     output.write(','.join(guide_row) + '\n')
 
-    # --- Retake guide row ---
-    retake_row = ['# ถ้าลงเรียนซ้ำ ให้ใส่เกรดล่าสุดที่ได้', '# ลบเกรดเดิมแล้วใส่เกรดใหม่']
+    # --- Row 5: Retake + term guide ---
+    retake_row = ['# ถ้าลงซ้ำใส่เกรดล่าสุด | ระบบรู้เทอมจากวิชาที่กรอก', '# กรอกเฉพาะเทอมที่เรียนแล้ว']
     retake_row += [''] * len(ordered_ids)
     output.write(','.join(retake_row) + '\n')
 
@@ -8582,12 +8602,30 @@ def _generate_long_template(courses_data, all_terms):
     output.write('# รหัสนักศึกษา,ชื่อนักศึกษา,รหัสวิชา,ชื่อวิชา(ไม่ต้องกรอกก็ได้),หน่วยกิต,ปีการศึกษา(พ.ศ.),เทอม(1/2/3),เกรด\n')
     output.write('# เกรดที่ใส่ได้: A / B+ / B / C+ / C / D+ / D / F / W / I\n')
     output.write('# แต่ละแถว = 1 วิชาของ 1 นักศึกษา | ถ้าลงเรียนซ้ำ ให้ใส่แถวใหม่ (ระบบจะใช้เกรดล่าสุด)\n')
+    output.write('# สำคัญ: ต้องระบุ YEAR(ปีพ.ศ.) และ TERM(เทอม) ทุกแถว เพื่อให้ AI วิเคราะห์ปี/เทอมได้ถูกต้อง\n')
+    output.write('#\n')
 
-    # Example student 1 - year 1
+    # Show term mapping guide
+    output.write('# === ตารางปี/เทอมกับวิชาในหลักสูตร ===\n')
+    for term_info in all_terms:
+        year_label = 2566 + (term_info['year'] - 1)
+        course_count = len(term_info['ids'])
+        course_names = []
+        for cid in term_info['ids'][:3]:
+            c = course_lookup.get(cid, {'thaiName': cid})
+            course_names.append(c['thaiName'][:20])
+        etc = '...' if course_count > 3 else ''
+        output.write(f'# ปี{term_info["year"]}เทอม{term_info["term"]} (พ.ศ.{year_label} เทอม{term_info["term"]}): {course_count} วิชา เช่น {" / ".join(course_names)}{etc}\n')
+    output.write('#\n')
+
+    # Example student 1 - 4 terms
     sample_grades_1 = ['B+', 'A', 'B', 'C+', 'B+', 'A', 'B', 'C+', 'B', 'C+', 'B+', 'A', 'C', 'B', 'B+', 'C+']
     row_idx = 0
+    output.write('# --- ตัวอย่าง นศ.1: เรียนถึง ปี2 เทอม2 (4 เทอม) ---\n')
     for term_info in all_terms:
-        year_label = 2566 + (term_info['year'] - 1)  # Example BE year
+        if row_idx >= 16:
+            break
+        year_label = 2566 + (term_info['year'] - 1)
         for cid in term_info['ids']:
             c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
             grade = sample_grades_1[row_idx % len(sample_grades_1)] if row_idx < 16 else ''
@@ -8595,11 +8633,12 @@ def _generate_long_template(courses_data, all_terms):
                 output.write(f'6301001,ตัวอย่าง นศ.1,{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
             row_idx += 1
 
-    # Example student 2 - fewer courses, lower grades
+    # Example student 2 - 2 terms only, low grades
     sample_grades_2 = ['C+', 'B', 'C', 'D+', 'C+', 'B', 'F', 'D', 'C', 'D+', 'F', 'C+']
     row_idx = 0
+    output.write('# --- ตัวอย่าง นศ.2: เรียนถึง ปี1 เทอม2 (2 เทอม) มีวิชาตก ---\n')
     for term_info in all_terms:
-        if term_info['year'] > 2:
+        if term_info['year'] > 1:
             break
         year_label = 2566 + (term_info['year'] - 1)
         for cid in term_info['ids']:
@@ -8608,9 +8647,11 @@ def _generate_long_template(courses_data, all_terms):
             output.write(f'6301002,ตัวอย่าง นศ.2,{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
             row_idx += 1
 
-    # Example: retake (student 2 retakes a failed course)
-    output.write('# ตัวอย่างการลงเรียนซ้ำ: นศ.2 ลงเรียนซ้ำวิชาที่ตก F ได้เกรด C\n')
-    output.write(f'6301002,ตัวอย่าง นศ.2,03-407-100-101,การเขียนโปรแกรมคอมพิวเตอร์,3,2568,1,C\n')
+    # Example: retake
+    output.write('# --- ตัวอย่างลงซ้ำ: นศ.2 ตก F เทอม1 แล้วลงซ้ำปี2เทอม1 ได้ C ---\n')
+    first_course = all_terms[0]['ids'][6] if len(all_terms[0]['ids']) > 6 else all_terms[0]['ids'][0]
+    c = course_lookup.get(first_course, {'thaiName': first_course, 'credit': 3})
+    output.write(f'6301002,ตัวอย่าง นศ.2,{first_course},{c["thaiName"]},{c["credit"]},2567,1,C\n')
 
     csv_content = output.getvalue()
     output.close()
