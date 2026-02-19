@@ -301,13 +301,12 @@
             <a href="{{ url_for('curriculum_prediction_form') }}" class="btn btn-light btn-lg px-5 py-3 rounded-pill shadow-lg">
                 <i class="bi bi-person-check-fill text-primary"></i> ทดสอบการทำนาย
             </a>
+            <a href="{{ url_for('batch_prediction_page') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+                <i class="bi bi-people-fill"></i> ทำนายกลุ่ม
+            </a>
             {% if is_logged_in %}
             <a href="{{ url_for('predict_batch_page') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
                 <i class="bi bi-cpu"></i> ฝึกโมเดล AI
-            </a>
-            {% else %}
-            <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
-                <i class="bi bi-box-arrow-in-right"></i> เข้าสู่ระบบเพื่อเมนูขั้นสูง
             </a>
             {% endif %}
         </div>
@@ -405,23 +404,22 @@
                 </div>
             </div>
         </div>
-        {% if is_logged_in %}
-        <!-- Feature 3: Batch Prediction -->
+        <!-- Feature 3: Batch Prediction (public - no login required) -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="300">
             <div class="card feature-card">
                 <div class="card-body">
                     <div class="feature-icon bg-info text-white">
-                        <i class="bi bi-file-earmark-spreadsheet-fill"></i>
+                        <i class="bi bi-people-fill"></i>
                     </div>
-                    <h5>ทำนายจากไฟล์</h5>
-                    <p>รองรับการทำนายแบบกลุ่มใหญ่ผ่านไฟล์ CSV/Excel สะดวกรวดเร็ว</p>
-                    <a href="{{ url_for('predict_batch_page') }}" class="btn btn-info w-100 rounded-pill">
-                        <i class="bi bi-upload me-1"></i> อัปโหลดไฟล์
+                    <h5>ทำนายกลุ่ม</h5>
+                    <p>อัปโหลดไฟล์ CSV/Excel เพื่อทำนายนักศึกษาหลายคนพร้อมกัน พร้อมบอกเหตุผลจบ/ไม่จบ</p>
+                    <a href="{{ url_for('batch_prediction_page') }}" class="btn btn-info w-100 rounded-pill">
+                        <i class="bi bi-upload me-1"></i> ทำนายกลุ่ม
                     </a>
                 </div>
             </div>
         </div>
-
+        {% if is_logged_in %}
         <!-- Feature 4: Subject Analysis -->
         <div class="col-lg-4 col-md-6" data-aos="fade-up" data-aos-delay="400">
             <div class="card feature-card">
