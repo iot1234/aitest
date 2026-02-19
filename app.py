@@ -8545,34 +8545,50 @@ def _generate_wide_template(courses_data, all_terms):
     retake_row += [''] * len(ordered_ids)
     output.write(','.join(retake_row) + '\n')
 
-    # --- Example student 1 ---
-    ex1 = ['6301001', 'ตัวอย่าง นศ.1']
-    for cid in ordered_ids:
-        # First 16 courses get sample grades
-        idx = ordered_ids.index(cid)
-        if idx < 8:
-            sample_grades = ['B+', 'A', 'B', 'C+', 'B+', 'A', 'B', 'C+']
-            ex1.append(sample_grades[idx % len(sample_grades)])
-        elif idx < 16:
-            sample_grades2 = ['B', 'C+', 'B+', 'A', 'C', 'B', 'B+', 'C+']
-            ex1.append(sample_grades2[idx % len(sample_grades2)])
-        else:
-            ex1.append('')
+    # --- Build cumulative course index ranges per term ---
+    term_ranges = []  # [(start_idx, end_idx, year, term), ...]
+    idx_offset = 0
+    for t in all_terms:
+        n = len(t['ids'])
+        term_ranges.append((idx_offset, idx_offset + n, t['year'], t['term']))
+        idx_offset += n
+
+    # === Student 1: เรียนถึง ปี3เทอม1 (5 เทอม) — เกรดดี ===
+    # Terms 0-4: Y1T1(8) + Y1T2(8) + Y2T1(5) + Y2T2(7) + Y3T1(6) = 34 วิชา
+    grades_s1 = [
+        'B+','A','B','C+','A','B+','B','A',         # ปี1เทอม1 (8 วิชา)
+        'A','B+','B','B+','A','B','C+','B+',         # ปี1เทอม2 (8 วิชา)
+        'B+','A','B','C+','B',                        # ปี2เทอม1 (5 วิชา)
+        'B','A','B+','C+','B','B+','A',              # ปี2เทอม2 (7 วิชา)
+        'B+','B','A','C+','B','B+',                   # ปี3เทอม1 (6 วิชา)
+    ]
+    ex1 = ['6301001', 'นาย สมชาย ใจดี']
+    for i, cid in enumerate(ordered_ids):
+        ex1.append(grades_s1[i] if i < len(grades_s1) else '')
     output.write(','.join(ex1) + '\n')
 
-    # --- Example student 2 ---
-    ex2 = ['6301002', 'ตัวอย่าง นศ.2']
-    for cid in ordered_ids:
-        idx = ordered_ids.index(cid)
-        if idx < 8:
-            sample_grades = ['C+', 'B', 'C', 'D+', 'C+', 'B', 'D', 'F']
-            ex2.append(sample_grades[idx % len(sample_grades)])
-        elif idx < 16:
-            sample_grades2 = ['C', 'D+', 'C+', 'F', 'D+', 'C', 'C+', 'D']
-            ex2.append(sample_grades2[idx % len(sample_grades2)])
-        else:
-            ex2.append('')
+    # === Student 2: เรียนถึง ปี1เทอม2 (2 เทอม) — เกรดปานกลาง มีตก ===
+    # Terms 0-1: Y1T1(8) + Y1T2(8) = 16 วิชา
+    grades_s2 = [
+        'C+','B','D+','F','C','B','D','C+',          # ปี1เทอม1 (มีตก F 1 วิชา)
+        'C','D+','C+','D','B','C','F','D+',           # ปี1เทอม2 (มีตก F 1 วิชา)
+    ]
+    ex2 = ['6301002', 'นางสาว สมหญิง รักเรียน']
+    for i, cid in enumerate(ordered_ids):
+        ex2.append(grades_s2[i] if i < len(grades_s2) else '')
     output.write(','.join(ex2) + '\n')
+
+    # === Student 3: เรียนถึง ปี2เทอม1 (3 เทอม) — มี W, ลงซ้ำ ===
+    # Terms 0-2: Y1T1(8) + Y1T2(8) + Y2T1(5) = 21 วิชา
+    grades_s3 = [
+        'B','C+','C','B+','C','D+','W','B',          # ปี1เทอม1 (มี W 1 วิชา, ลงซ้ำแล้วใส่เกรดใหม่)
+        'C+','B','D+','C','B+','C+','C','B',          # ปี1เทอม2
+        'C+','B','C','D+','C+',                        # ปี2เทอม1
+    ]
+    ex3 = ['6301003', 'นาย สมศักดิ์ พยายาม']
+    for i, cid in enumerate(ordered_ids):
+        ex3.append(grades_s3[i] if i < len(grades_s3) else '')
+    output.write(','.join(ex3) + '\n')
 
     # Build response
     csv_content = output.getvalue()
@@ -8618,40 +8634,64 @@ def _generate_long_template(courses_data, all_terms):
         output.write(f'# ปี{term_info["year"]}เทอม{term_info["term"]} (พ.ศ.{year_label} เทอม{term_info["term"]}): {course_count} วิชา เช่น {" / ".join(course_names)}{etc}\n')
     output.write('#\n')
 
-    # Example student 1 - 4 terms
-    sample_grades_1 = ['B+', 'A', 'B', 'C+', 'B+', 'A', 'B', 'C+', 'B', 'C+', 'B+', 'A', 'C', 'B', 'B+', 'C+']
-    row_idx = 0
-    output.write('# --- ตัวอย่าง นศ.1: เรียนถึง ปี2 เทอม2 (4 เทอม) ---\n')
-    for term_info in all_terms:
-        if row_idx >= 16:
-            break
-        year_label = 2566 + (term_info['year'] - 1)
-        for cid in term_info['ids']:
-            c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
-            grade = sample_grades_1[row_idx % len(sample_grades_1)] if row_idx < 16 else ''
-            if grade:
-                output.write(f'6301001,ตัวอย่าง นศ.1,{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
-            row_idx += 1
+    # === Define 3 example students with different term counts ===
+    students_examples = [
+        {
+            'id': '6301001', 'name': 'นาย สมชาย ใจดี',
+            'max_terms': 5,  # ปี1เทอม1 ถึง ปี3เทอม1
+            'label': 'เรียนถึง ปี3 เทอม1 (5 เทอม, เกรดดี)',
+            'grades': [
+                'B+','A','B','C+','A','B+','B','A',         # ปี1เทอม1
+                'A','B+','B','B+','A','B','C+','B+',         # ปี1เทอม2
+                'B+','A','B','C+','B',                        # ปี2เทอม1
+                'B','A','B+','C+','B','B+','A',              # ปี2เทอม2
+                'B+','B','A','C+','B','B+',                   # ปี3เทอม1
+            ]
+        },
+        {
+            'id': '6301002', 'name': 'นางสาว สมหญิง รักเรียน',
+            'max_terms': 2,  # ปี1เทอม1 ถึง ปี1เทอม2
+            'label': 'เรียนถึง ปี1 เทอม2 (2 เทอม, มีตก F)',
+            'grades': [
+                'C+','B','D+','F','C','B','D','C+',          # ปี1เทอม1 (มีตก)
+                'C','D+','C+','D','B','C','F','D+',           # ปี1เทอม2 (มีตก)
+            ]
+        },
+        {
+            'id': '6301003', 'name': 'นาย สมศักดิ์ พยายาม',
+            'max_terms': 3,  # ปี1เทอม1 ถึง ปี2เทอม1
+            'label': 'เรียนถึง ปี2 เทอม1 (3 เทอม, มี W + ลงซ้ำ)',
+            'grades': [
+                'B','C+','C','B+','C','D+','W','B',          # ปี1เทอม1 (มี W)
+                'C+','B','D+','C','B+','C+','C','B',          # ปี1เทอม2
+                'C+','B','C','D+','C+',                        # ปี2เทอม1
+            ]
+        },
+    ]
 
-    # Example student 2 - 2 terms only, low grades
-    sample_grades_2 = ['C+', 'B', 'C', 'D+', 'C+', 'B', 'F', 'D', 'C', 'D+', 'F', 'C+']
-    row_idx = 0
-    output.write('# --- ตัวอย่าง นศ.2: เรียนถึง ปี1 เทอม2 (2 เทอม) มีวิชาตก ---\n')
-    for term_info in all_terms:
-        if term_info['year'] > 1:
-            break
-        year_label = 2566 + (term_info['year'] - 1)
-        for cid in term_info['ids']:
-            c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
-            grade = sample_grades_2[row_idx % len(sample_grades_2)]
-            output.write(f'6301002,ตัวอย่าง นศ.2,{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
-            row_idx += 1
+    for student in students_examples:
+        output.write(f'# --- {student["name"]}: {student["label"]} ---\n')
+        grade_idx = 0
+        terms_written = 0
+        for term_info in all_terms:
+            if terms_written >= student['max_terms']:
+                break
+            year_label = 2566 + (term_info['year'] - 1)
+            for cid in term_info['ids']:
+                c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
+                grade = student['grades'][grade_idx] if grade_idx < len(student['grades']) else ''
+                if grade:
+                    output.write(f'{student["id"]},{student["name"]},{cid},{c["thaiName"]},{c["credit"]},{year_label},{term_info["term"]},{grade}\n')
+                grade_idx += 1
+            terms_written += 1
 
-    # Example: retake
-    output.write('# --- ตัวอย่างลงซ้ำ: นศ.2 ตก F เทอม1 แล้วลงซ้ำปี2เทอม1 ได้ C ---\n')
-    first_course = all_terms[0]['ids'][6] if len(all_terms[0]['ids']) > 6 else all_terms[0]['ids'][0]
-    c = course_lookup.get(first_course, {'thaiName': first_course, 'credit': 3})
-    output.write(f'6301002,ตัวอย่าง นศ.2,{first_course},{c["thaiName"]},{c["credit"]},2567,1,C\n')
+    # Example: retake (student 3 had W in Y1T1 course 7, retakes in Y2T2)
+    output.write('#\n')
+    output.write('# === ตัวอย่างลงซ้ำ: นศ.3 ได้ W ในปี1เทอม1 แล้วลงซ้ำปี2เทอม2 ได้ C ===\n')
+    retake_course = all_terms[0]['ids'][6] if len(all_terms[0]['ids']) > 6 else all_terms[0]['ids'][0]
+    c = course_lookup.get(retake_course, {'thaiName': retake_course, 'credit': 3})
+    output.write(f'6301003,นาย สมศักดิ์ พยายาม,{retake_course},{c["thaiName"]},{c["credit"]},2567,2,C\n')
+    output.write('# (ระบบจะใช้เกรดล่าสุด C แทน W อัตโนมัติ)\n')
 
     csv_content = output.getvalue()
     output.close()
