@@ -1125,6 +1125,7 @@ function renderResultsTable(results) {
                     <div class="col-md-2"><strong>วิชาตก (F):</strong> <span class="text-danger fw-bold">${r.failed_count}</span></div>
                     <div class="col-md-2"><strong>ความมั่นใจ:</strong> ${(r.confidence * 100).toFixed(1)}%</div>
                     <div class="col-md-2"><strong>เทอมที่เรียน:</strong> ${termsText}</div>
+                    <div class="col-md-3"><strong>วิธีทำนาย:</strong> <span class="badge bg-info bg-opacity-10 text-info">${r.models_used || r.method || 'N/A'}</span></div>
                 </div>
                 <div class="mb-3">
                     <strong>เหตุผล:</strong>
@@ -1264,7 +1265,7 @@ function renderErrors(errors) {
 function downloadCSV() {
     if (!batchResults || !allResults.length) return;
     const headers = ['STUDENT_ID', 'STUDENT_NAME', 'GPA', 'TOTAL_CREDITS', 'TOTAL_COURSES', 'FAILED_COUNT',
-                     'PROBABILITY', 'PREDICTION', 'CONFIDENCE', 'RISK_LEVEL', 'RECOMMENDATION'];
+                     'PROBABILITY', 'PREDICTION', 'CONFIDENCE', 'RISK_LEVEL', 'METHOD', 'RECOMMENDATION'];
     let csv = '\uFEFF' + headers.join(',') + '\n';
     allResults.forEach(r => {
         csv += [
@@ -1275,6 +1276,7 @@ function downloadCSV() {
             r.prediction,
             (r.confidence * 100).toFixed(2) + '%',
             r.risk_level,
+            r.models_used || r.method || '',
             '"' + r.recommendation.replace(/"/g, '""') + '"'
         ].join(',') + '\n';
     });

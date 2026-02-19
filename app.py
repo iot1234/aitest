@@ -7150,49 +7150,8 @@ def analyze_curriculum():
             }
         }
         
-        # ตรวจสอบความสมบูรณ์ของหลักสูตรก่อนทำนาย
-        def check_curriculum_completion(current_grades, courses_data, min_credits=136, min_gpa=2.0):
-            """ตรวจสอบว่านักศึกษาจบหลักสูตรแล้วหรือยัง"""
-            total_credits = 0
-            total_grade_points = 0
-            total_credits_for_gpa = 0
-            passed_courses = 0
-            
-            for course_id, grade in current_grades.items():
-                if grade:  # มีเกรด
-                    course = next((c for c in courses_data if c['id'] == course_id), None)
-                    if course:
-                        credit = course.get('credit', 3)
-                        grade_point = grade_mapping.get(grade, 0)
-                        
-                        # นับหน่วยกิตที่ผ่าน (ไม่ใช่ F, W, I)
-                        if grade not in ['F', 'W', 'I']:
-                            total_credits += credit
-                            passed_courses += 1
-                        
-                        # คำนวณ GPA (รวม F แต่ไม่รวม W, I)
-                        if grade not in ['W', 'I']:
-                            total_grade_points += grade_point * credit
-                            total_credits_for_gpa += credit
-            
-            gpa = total_grade_points / total_credits_for_gpa if total_credits_for_gpa > 0 else 0
-            
-            # ตรวจสอบเงื่อนไขการจบ
-            is_completed = total_credits >= min_credits and gpa >= min_gpa
-            
-            return {
-                'is_completed': is_completed,
-                'total_credits': total_credits,
-                'gpa': gpa,
-                'passed_courses': passed_courses,
-                'min_credits_met': total_credits >= min_credits,
-                'min_gpa_met': gpa >= min_gpa,
-                'min_credits': min_credits,
-                'min_gpa': min_gpa
-            }
-        
-        # ตรวจสอบความสมบูรณ์ของหลักสูตร
-        completion_status = check_curriculum_completion(current_grades, courses_data)
+        # ตรวจสอบความสมบูรณ์ของหลักสูตร (ใช้ module-level function)
+        completion_status = check_curriculum_completion(current_grades, courses_data, grade_mapping)
         
         # เพิ่มข้อมูลความสมบูรณ์ในผลลัพธ์
         response_data['completion_status'] = {
@@ -7843,6 +7802,51 @@ def advanced_test_page():
     return render_template('advanced_test.html')
 
 # =========================================================
+# SHARED: check_curriculum_completion (used by both individual & batch)
+# =========================================================
+
+def check_curriculum_completion(current_grades, courses_data, grade_mapping, min_credits=136, min_gpa=2.0):
+    """ตรวจสอบว่านักศึกษาจบหลักสูตรแล้วหรือยัง (module-level, shared by individual & batch)"""
+    total_credits = 0
+    total_grade_points = 0
+    total_credits_for_gpa = 0
+    passed_courses = 0
+
+    for course_id, grade in current_grades.items():
+        if grade:  # มีเกรด
+            course = next((c for c in courses_data if c['id'] == course_id), None)
+            if course:
+                credit = course.get('credit', 3)
+                grade_point = grade_mapping.get(grade, 0)
+
+                # นับหน่วยกิตที่ผ่าน (ไม่ใช่ F, W, I)
+                if grade not in ['F', 'W', 'I']:
+                    total_credits += credit
+                    passed_courses += 1
+
+                # คำนวณ GPA (รวม F แต่ไม่รวม W, I)
+                if grade not in ['W', 'I']:
+                    total_grade_points += grade_point * credit
+                    total_credits_for_gpa += credit
+
+    gpa = total_grade_points / total_credits_for_gpa if total_credits_for_gpa > 0 else 0
+
+    # ตรวจสอบเงื่อนไขการจบ
+    is_completed = total_credits >= min_credits and gpa >= min_gpa
+
+    return {
+        'is_completed': is_completed,
+        'total_credits': total_credits,
+        'gpa': gpa,
+        'passed_courses': passed_courses,
+        'min_credits_met': total_credits >= min_credits,
+        'min_gpa_met': gpa >= min_gpa,
+        'min_credits': min_credits,
+        'min_gpa': min_gpa
+    }
+
+
+# =========================================================
 # BATCH PREDICTION API
 # =========================================================
 
@@ -7874,13 +7878,14 @@ def api_predict_batch():
         if not model_data:
             return jsonify({'success': False, 'error': f'Failed to load model: {model_filename}'})
 
-        subject_model = model_data.get('models', {}).get('rf')
+        all_models = model_data.get('models', {})
         scaler = model_data.get('scaler')
         feature_columns = model_data.get('feature_columns')
         course_profiles = model_data.get('course_profiles', {})
         grade_mapping = app.config['DATA_CONFIG']['grade_mapping']
 
-        if not all([subject_model, scaler, feature_columns]):
+        # Backward compatible: ถ้าไม่มีโมเดลเลย → error
+        if not all_models or not scaler or not feature_columns:
             return jsonify({'success': False, 'error': 'Incomplete model data. Missing model, scaler, or feature columns.'})
 
         # ตรวจสอบ feature_version ของโมเดล
@@ -7967,35 +7972,8 @@ def api_predict_batch():
                     errors.append({'student_id': student_id, 'error': 'No grade data found'})
                     continue
 
-                # Use create_dynamic_features — exactly the same as training
-                total_courses_taken = len(grades_dict)
-                loaded_terms_count = student.get('loaded_terms_count')
-                semester_number = max(1, loaded_terms_count) if loaded_terms_count else None
-                retake_info = student.get('retake_info')  # from long format parser
-                cumulative_retakes = retake_info.get('num_retake_courses', 0) if retake_info else 0
-
-                features_array = trainer.create_dynamic_features(
-                    grades_dict=grades_dict,
-                    course_profiles=course_profiles,
-                    total_courses_taken=total_courses_taken,
-                    semester_number=semester_number,
-                    retake_info=retake_info,
-                    cumulative_retakes=cumulative_retakes
-                )
-
-                # Convert to DataFrame with correct feature column names (same as individual prediction)
-                X_pred = pd.DataFrame([features_array], columns=feature_columns)
-
-                # Scale and predict
-                X_scaled = scaler.transform(X_pred)
-                pred_proba = subject_model.predict_proba(X_scaled)[0]
-                prob_graduate = float(pred_proba[1]) if len(pred_proba) > 1 else float(pred_proba[0])
-                prediction = prob_graduate >= 0.5
-
-                # --- Calculate stats ---
-                valid_grades = [grade_mapping.get(str(g).upper().strip(), None) for g in grades_dict.values()]
-                valid_grades = [g for g in valid_grades if g is not None]
-
+                # --- Calculate stats first (needed for completion check) ---
+                # total_credits = all credits registered (for display)
                 total_credits = sum(course_credit_map.get(cid, 3) for cid in grades_dict.keys())
                 weighted_sum = sum(
                     grade_mapping.get(str(g).upper().strip(), 0) * course_credit_map.get(cid, 3)
@@ -8014,13 +7992,95 @@ def api_predict_batch():
                 failed_count = sum(1 for g in grades_dict.values() if str(g).upper().strip() in failed_grades)
                 total_courses = len(grades_dict)
 
+                loaded_terms_count = student.get('loaded_terms_count')
+                retake_info = student.get('retake_info')
+
+                # --- Step 3: Check curriculum completion BEFORE prediction ---
+                completion = check_curriculum_completion(grades_dict, courses_data, grade_mapping)
+                prediction_method = 'model'
+                predictions_list = []
+                models_used_list = []
+
+                if completion['min_credits_met']:
+                    # ครบหน่วยกิตแล้ว → ไม่ต้องเข้าโมเดล
+                    if completion['min_gpa_met']:
+                        prob_graduate = 1.0
+                        prediction_method = 'curriculum_completed'
+                        logger.info(f"✅ {student_id}: จบแล้ว (GPA={completion['gpa']:.2f}, credits={completion['total_credits']})")
+                    else:
+                        prob_graduate = 0.0
+                        prediction_method = 'curriculum_gpa_insufficient'
+                        logger.info(f"❌ {student_id}: ครบหน่วยกิตแต่ GPA ไม่ถึง ({completion['gpa']:.2f} < 2.0)")
+                else:
+                    # --- Step 2: Ensemble prediction (same as individual) ---
+                    total_courses_taken = len(grades_dict)
+                    semester_number = max(1, loaded_terms_count) if loaded_terms_count else None
+                    cumulative_retakes = retake_info.get('num_retake_courses', 0) if retake_info else 0
+
+                    features_array = trainer.create_dynamic_features(
+                        grades_dict=grades_dict,
+                        course_profiles=course_profiles,
+                        total_courses_taken=total_courses_taken,
+                        semester_number=semester_number,
+                        retake_info=retake_info,
+                        cumulative_retakes=cumulative_retakes
+                    )
+
+                    X_pred = pd.DataFrame([features_array], columns=feature_columns)
+                    X_scaled = scaler.transform(X_pred)
+
+                    # Ensemble: วน loop ทุกโมเดล เหมือน individual
+                    predictions_list = []
+                    models_used_list = []
+                    model_icons = {'rf': '🌲', 'gb': '🚀', 'lr': '📊', 'svm': '🎯'}
+
+                    for model_name, model_obj in all_models.items():
+                        try:
+                            pred = model_obj.predict_proba(X_scaled)[0][1]
+                            predictions_list.append(pred)
+                            models_used_list.append(model_name)
+                        except Exception as me:
+                            logger.warning(f"⚠️ {model_name} prediction failed for {student_id}: {me}")
+
+                    if predictions_list:
+                        prob_graduate = float(np.mean(predictions_list))
+                        if len(predictions_list) > 1:
+                            prediction_method = f'ensemble({len(predictions_list)} models)'
+                        else:
+                            prediction_method = f'single({models_used_list[0]})'
+                    else:
+                        errors.append({'student_id': student_id, 'error': 'All models failed'})
+                        continue
+
+                prediction = prob_graduate >= 0.5
+
+                # --- Step 4: Confidence calculation (same as individual) ---
+                if prediction_method.startswith('curriculum'):
+                    confidence = 0.95  # ข้อมูลจริง ไม่ต้อง predict
+                elif prediction_method.startswith('ensemble') and len(predictions_list) > 1:
+                    prediction_std = float(np.std(predictions_list))
+                    confidence = max(0.5, min(0.95, 1.0 - prediction_std))
+                else:
+                    distance = abs(prob_graduate - 0.5)
+                    confidence = max(0.5, min(0.95, 0.5 + distance))
+
+                # --- Step 5: Risk level (same logic as individual) ---
+                pred_label = 'จบ' if prediction else 'ไม่จบ'
+                risk_level = 'สูง'
+                if confidence > 0.8:
+                    risk_level = 'ต่ำ' if pred_label == 'จบ' else 'สูง'
+                elif confidence > 0.6:
+                    risk_level = 'ปานกลาง'
+
                 # --- Build recommendation & reason ---
-                confidence = max(prob_graduate, 1 - prob_graduate)
-                risk_level, recommendation, reasons = _build_batch_recommendation(
+                _, recommendation, reasons = _build_batch_recommendation(
                     prediction, prob_graduate, gpa, failed_count, total_courses,
                     total_credits, grades_dict, grade_mapping, course_name_map,
                     course_credit_map, all_terms
                 )
+
+                # --- Step 6: Response fields เหมือน individual ---
+                models_used_str = ', '.join(models_used_list) if prediction_method.startswith(('ensemble', 'single')) else prediction_method
 
                 results.append({
                     'student_id': student_id,
@@ -8038,7 +8098,10 @@ def api_predict_batch():
                     'loaded_terms_count': loaded_terms_count or 0,
                     'terms_detail': student.get('terms_detail', []),
                     'retake_info': retake_info or {},
-                    'grades': grades_dict  # ส่ง grades กลับเพื่อใช้กับ Gemini AI
+                    'grades': grades_dict,
+                    'models_used': models_used_str,
+                    'method': prediction_method,
+                    'status': 'completed' if prediction_method.startswith('curriculum') else 'predicted',
                 })
 
             except Exception as e:
@@ -8192,7 +8255,7 @@ def api_batch_gemini_analyze():
 - โอกาสจบ: {prob_graduate * 100:.1f}%
 - ความมั่นใจ: {confidence_val * 100:.1f}%
 - ระดับความเสี่ยง: {risk_level_val}
-- วิธีที่ใช้: Random Forest
+- วิธีที่ใช้: Ensemble (RF, GB, LR, SVM)
 """
 
         # Build detailed prompt (SAME as individual prediction)
@@ -8359,6 +8422,9 @@ def _parse_wide_format(df, cols_lower, grade_mapping, course_credit_map):
         student_id = str(row.get(id_col, '')).strip()
         if not student_id or student_id == 'nan':
             continue
+        # Skip comment/guide rows starting with #
+        if student_id.startswith('#'):
+            continue
 
         student_name = str(row.get(name_col, '')).strip() if name_col else ''
         if student_name == 'nan':
@@ -8425,6 +8491,9 @@ def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
         grade = str(row.get(grade_col, '')).strip().upper()
 
         if not sid or sid == 'nan' or not cid or not grade:
+            continue
+        # Skip comment/guide rows starting with #
+        if sid.startswith('#'):
             continue
         if grade not in valid_grades:
             continue
@@ -8710,18 +8779,13 @@ def _generate_wide_template(courses_data, all_terms):
     guide_row += [''] * len(ordered_ids)
     output.write(','.join(guide_row) + '\n')
 
-    # --- Row 5-10: Step-by-step retake guide ---
+    # --- Row 5-6: Short guide ---
     def _guide(col1, col2=''):
         r = [col1, col2] + [''] * len(ordered_ids)
         output.write(','.join(r) + '\n')
 
-    _guide('# ===== วิธีกรอก ถ้าได้ F หรือ W แล้วลงเรียนซ้ำ (Wide format) =====')
-    _guide('# ขั้นตอน: ใส่ "เกรดล่าสุด" หลังลงซ้ำในช่องวิชานั้น (ไม่ต้องใส่ F)')
-    _guide('# ตัวอย่าง: ได้ F แคลคูลัส1 ปี1เทอม1 → ลงซ้ำปี1เทอม2 ได้ D+', '# → ใส่ D+ ในช่องแคลคูลัส1 (ไม่ต้องใส่ F)')
-    _guide('# ตัวอย่าง: ได้ W โปรแกรม ปี1เทอม1 → ลงซ้ำปี2เทอม1 ได้ C', '# → ใส่ C ในช่องโปรแกรม (ไม่ต้องใส่ W)')
-    _guide('# ข้อจำกัด: Wide format ไม่สามารถบอกได้ว่าลงซ้ำกี่ครั้ง/จากเกรดอะไร')
-    _guide('# ⚠ ถ้าต้องการให้ AI รู้ว่าลงซ้ำ → ใช้ Long format แทน (แม่นยำกว่า)')
-    _guide('# =================================================================')
+    _guide('# ถ้าลงซ้ำ: ใส่เกรดล่าสุดในช่องวิชานั้น (Wide ไม่สามารถ detect retake ได้)')
+    _guide('# ⚠ ต้องการให้ AI รู้ว่าลงซ้ำ → ใช้ Long format แทน (แม่นยำกว่า)')
 
     # --- Build cumulative course index ranges per term ---
     term_ranges = []  # [(start_idx, end_idx, year, term), ...]
@@ -8831,59 +8895,12 @@ def _generate_long_template(courses_data, all_terms):
     # Header
     output.write('STUDENT_ID,STUDENT_NAME,COURSE_CODE,COURSE_NAME,CREDIT,YEAR,TERM,GRADE\n')
 
-    # Guide comments
-    output.write('# รหัสนักศึกษา,ชื่อนักศึกษา,รหัสวิชา,ชื่อวิชา(ไม่ต้องกรอกก็ได้),หน่วยกิต,ปีการศึกษา(พ.ศ.),เทอม(1/2/3),เกรด\n')
+    # Guide comments (concise — 6 lines)
     output.write('# เกรดที่ใส่ได้: A / B+ / B / C+ / C / D+ / D / F / W / I\n')
-    output.write('# แต่ละแถว = 1 วิชาของ 1 นักศึกษา\n')
-    output.write('# สำคัญ: ต้องระบุ YEAR(ปีพ.ศ.) และ TERM(เทอม) ทุกแถว\n')
-    output.write('#\n')
-    output.write('# =====================================================================\n')
-    output.write('# ===== วิธีกรอก ถ้าได้ F หรือ W แล้วลงเรียนซ้ำ (Long format) =====\n')
-    output.write('# =====================================================================\n')
-    output.write('#\n')
-    output.write('# กรณี 1: ได้ F แคลคูลัส1 ปี1เทอม1 → ลงซ้ำปี1เทอม2 ได้ D+\n')
-    output.write('# ให้ใส่ 2 แถว:\n')
-    output.write('#   แถวที่ 1 (ตกครั้งแรก):  6601001,ชื่อ,02-005-011-109,แคลคูลัส 1,3,2566,1,F\n')
-    output.write('#   แถวที่ 2 (ลงซ้ำผ่าน):  6601001,ชื่อ,02-005-011-109,แคลคูลัส 1,3,2566,2,D+\n')
-    output.write('#   → ระบบจะรู้ว่า: ตก F ก่อน แล้วลงซ้ำได้ D+ (เกรดดีขึ้น +1.5)\n')
-    output.write('#\n')
-    output.write('# กรณี 2: ได้ W (ถอน) โปรแกรม ปี1เทอม1 → ลงซ้ำปี2เทอม1 ได้ C+\n')
-    output.write('# ให้ใส่ 2 แถว:\n')
-    output.write('#   แถวที่ 1 (ถอนครั้งแรก): 6601001,ชื่อ,03-407-100-101,โปรแกรม,3,2566,1,W\n')
-    output.write('#   แถวที่ 2 (ลงซ้ำผ่าน):  6601001,ชื่อ,03-407-100-101,โปรแกรม,3,2567,1,C+\n')
-    output.write('#   → ระบบจะรู้ว่า: ถอน W ก่อน แล้วลงซ้ำได้ C+ (เกรดดีขึ้น +2.5)\n')
-    output.write('#\n')
-    output.write('# กรณี 3: ได้ F แล้วลงซ้ำยังตก F อีก → ลงครั้งที่ 3 ผ่าน D\n')
-    output.write('# ให้ใส่ 3 แถว:\n')
-    output.write('#   แถวที่ 1: 6601001,ชื่อ,02-005-011-109,แคลคูลัส 1,3,2566,1,F\n')
-    output.write('#   แถวที่ 2: 6601001,ชื่อ,02-005-011-109,แคลคูลัส 1,3,2566,2,F\n')
-    output.write('#   แถวที่ 3: 6601001,ชื่อ,02-005-011-109,แคลคูลัส 1,3,2567,1,D\n')
-    output.write('#   → ระบบจะรู้ว่า: ลงซ้ำ 3 ครั้ง เกรดสุดท้าย D\n')
-    output.write('#\n')
-    output.write('# กรณี 4: ลงวิชาข้ามเทอม (ไม่ได้ลงตามหลักสูตร)\n')
-    output.write('# เช่น แคลฯ1 ปกติอยู่เทอม1 แต่ไม่ได้ลง → ไปลงเทอม2 แทน\n')
-    output.write('#   6601001,ชื่อ,02-005-011-109,แคลคูลัส 1,3,2566,2,D+\n')
-    output.write('#   → ใส่ YEAR/TERM ที่เรียนจริง ระบบรู้ว่าลงเทอม2 (ไม่ต้องตรงหลักสูตร)\n')
-    output.write('#\n')
-    output.write('# สรุป: ใส่ทุกครั้งที่ลง ระบบจะ:\n')
-    output.write('#   1. ใช้เกรดล่าสุด (แถวสุดท้ายตาม YEAR/TERM) ในการทำนาย\n')
-    output.write('#   2. ตรวจพบ retake อัตโนมัติ → นับจำนวน F/W ที่ลงซ้ำ\n')
-    output.write('#   3. คำนวณเกรดดีขึ้น → บอก AI ว่า "แคลฯ1: F→D+ (+1.5 จุด)"\n')
-    output.write('#   4. AI วิเคราะห์รวม: วิชาที่ตก + วิชาที่ซ้ำ + แนวโน้มดีขึ้นหรือไม่\n')
-    output.write('# =====================================================================\n')
-    output.write('#\n')
-
-    # Show term mapping guide
-    output.write('# === ตารางปี/เทอมกับวิชาในหลักสูตร (อ้างอิง) ===\n')
-    for term_info in all_terms:
-        course_count = len(term_info['ids'])
-        course_names = []
-        for cid in term_info['ids'][:3]:
-            c = course_lookup.get(cid, {'thaiName': cid})
-            course_names.append(c['thaiName'][:20])
-        etc = '...' if course_count > 3 else ''
-        output.write(f'# ปี{term_info["year"]}เทอม{term_info["term"]}: {course_count} วิชา เช่น {" / ".join(course_names)}{etc}\n')
-    output.write('# หมายเหตุ: YEAR = ปี พ.ศ. ที่เรียนจริง (เช่น 2566, 2567) ไม่ต้องตรงหลักสูตร\n')
+    output.write('# แต่ละแถว = 1 วิชาของ 1 นักศึกษา | ต้องระบุ YEAR และ TERM ทุกแถว\n')
+    output.write('# ถ้าลงซ้ำ: เพิ่มแถวใหม่ (ระบบ detect retake อัตโนมัติ)\n')
+    output.write('# ตัวอย่าง: F ในปี2566เทอม1 → ลงซ้ำปี2566เทอม2 = เพิ่มแถวใหม่เกรดใหม่\n')
+    output.write('# YEAR = ปี พ.ศ. ที่เรียนจริง (เช่น 2566, 2567) | TERM = เทอม (1/2/3)\n')
     output.write('#\n')
 
     # ============================================================
@@ -9064,23 +9081,7 @@ def _generate_long_template(courses_data, all_terms):
                 curr_term = curriculum_term_map.get(cid, '')
                 output.write(f'{student["id"]},{student["name"]},{cid},{c["thaiName"]},{c["credit"]},{actual_year},{actual_term},{grade}\n')
 
-    output.write('#\n')
-    output.write('# =====================================================================\n')
-    output.write('# ===== ดูตัวอย่างในข้อมูลด้านบน =====\n')
-    output.write('# =====================================================================\n')
-    output.write('# ★ นศ.2 (65010045): ลงแคลฯ1 เทอม2 แทนเทอม1 + ตกแคลฯ2(F) แล้วลงซ้ำ(D+)\n')
-    output.write('#   → ดูแถว 02-005-011-109 ที่ YEAR=2565 TERM=2 (ลงข้ามเทอม)\n')
-    output.write('#   → ดูแถว 02-005-011-110 ที่มี 2 แถว: F(2565/2) แล้ว D+(2566/2) = ลงซ้ำ\n')
-    output.write('#\n')
-    output.write('# ★ นศ.3 (66010112): เลื่อนโปรแกรม(F)+Workshop ไปเทอมหลัง + ซ้ำโปรแกรม(C+)\n')
-    output.write('#   → ดูแถว 03-407-100-101 ที่มี 2 แถว: F(2566/2) แล้ว C+(2567/1) = ลงซ้ำ\n')
-    output.write('#   → ดูแถว 03-407-100-102 ที่ YEAR=2567 TERM=1 (ลงข้ามเทอมจากปี1เทอม1)\n')
-    output.write('#\n')
-    output.write('# ★ นศ.5 (64010023): ลงข้ามเทอมหลายวิชา + ซ้ำ 3 วิชา\n')
-    output.write('#   → แคลฯ1: ไม่ได้ลงปี1 → ลงปี2เทอม1(F) → ซ้ำปี2เทอม2(D+)\n')
-    output.write('#   → วงจรดิจิทัล: ถอน W(2565/1) → ซ้ำ(2566/1) ได้ C\n')
-    output.write('#   → สื่อสารข้อมูล: ตก F(2566/1) → ซ้ำ(2566/2) ได้ D\n')
-    output.write('# =====================================================================\n')
+    output.write('# ดูตัวอย่างข้อมูล 5 นศ. ด้านบน (มีทั้งลงซ้ำ/ลงข้ามเทอม)\n')
 
     csv_content = output.getvalue()
     output.close()
