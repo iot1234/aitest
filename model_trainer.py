@@ -3,9 +3,7 @@ import numpy as np
 import joblib
 import os
 import logging
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -100,9 +98,6 @@ class AdvancedModelTrainer:
     def __init__(self):
         self.models = {
             'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
-            'GradientBoosting': GradientBoostingClassifier(n_estimators=100, random_state=42),
-            'LogisticRegression': LogisticRegression(random_state=42, max_iter=1000),
-            'SVM': SVC(probability=True, random_state=42)
         }
         self.best_model = None
         self.best_score = 0

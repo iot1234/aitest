@@ -40,9 +40,7 @@ from flask import (
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, f1_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -322,9 +320,6 @@ class AdvancedModelTrainer:
     def __init__(self):
         self.models = {
             'RandomForest': RandomForestClassifier(n_estimators=100, random_state=42),
-            'GradientBoosting': GradientBoostingClassifier(n_estimators=100, random_state=42),
-            'LogisticRegression': LogisticRegression(random_state=42, max_iter=1000),
-            'SVM': SVC(probability=True, random_state=42)
         }
         self.best_model = None
         self.best_score = 0
@@ -779,15 +774,13 @@ class AdvancedModelTrainer:
                 logger.warning(f"      ⚠️ {name} ไม่สามารถเทรนได้: {e}")
                 continue
 
-        # บันทึกทุกโมเดลที่เทรนสำเร็จ
+        # บันทึกโมเดล Random Forest
         self.trained_models = {}
-        key_map = {'RandomForest': 'rf', 'GradientBoosting': 'gb', 'LogisticRegression': 'lr', 'SVM': 'svm'}
-        for name, res in results.items():
-            if 'model' in res:
-                self.trained_models[key_map.get(name, name.lower())] = res['model']
+        if 'RandomForest' in results and 'model' in results['RandomForest']:
+            self.trained_models['rf'] = results['RandomForest']['model']
 
-        logger.info(f"🏆 โมเดลที่ดีที่สุด: {best_model_name} (Accuracy: {self.best_score:.3f})")
-        logger.info(f"📦 บันทึกโมเดลทั้งหมด: {list(self.trained_models.keys())}")
+        logger.info(f"🏆 โมเดล Random Forest (Accuracy: {self.best_score:.3f})")
+        logger.info(f"📦 บันทึกโมเดล: {list(self.trained_models.keys())}")
 
         return results
     
@@ -2966,12 +2959,8 @@ def train_ensemble_model(X, y):
         X_test_scaled = scaler.transform(X_test) if len(X_test) > 0 else np.array([])
 
         param_grid_rf = app.config['MODEL_HYPERPARAMETERS']['RandomForest']
-        param_grid_gb = app.config['MODEL_HYPERPARAMETERS']['GradientBoosting']
-        param_grid_lr = app.config['MODEL_HYPERPARAMETERS']['LogisticRegression']
 
         best_rf = None
-        best_gb = None
-        best_lr = None
 
         try:
             logger.info("Performing GridSearchCV for RandomForest...")
@@ -2997,91 +2986,14 @@ def train_ensemble_model(X, y):
             )
             best_rf.fit(X_train, y_train)
 
-        try:
-            logger.info("Performing GridSearchCV for GradientBoosting...")
-            grid_search_gb = GridSearchCV(
-                GradientBoostingClassifier(random_state=app.config['ML_CONFIG']['random_state']),
-                param_grid_gb,
-                cv=min(app.config['ML_CONFIG']['cv_folds'], len(X_train) // 2) if len(X_train) >= 4 else 2,
-                scoring='accuracy',
-                n_jobs=1,
-                verbose=0
-            )
-            grid_search_gb.fit(X_train, y_train)
-            best_gb = grid_search_gb.best_estimator_
-            logger.info(f"GradientBoosting Best Params: {grid_search_gb.best_params_}")
-            logger.info(f"GradientBoosting Best Score: {grid_search_gb.best_score_:.3f}")
-        except Exception as e:
-            logger.warning(f"GridSearchCV for GradientBoosting failed: {str(e)}. Falling back to default parameters.")
-            best_gb = GradientBoostingClassifier(
-                n_estimators=app.config['ML_CONFIG']['n_estimators'],
-                max_depth=app.config['ML_CONFIG']['max_depth'],
-                random_state=app.config['ML_CONFIG']['random_state']
-            )
-            best_gb.fit(X_train, y_train)
-
-        try:
-            logger.info("Performing GridSearchCV for LogisticRegression...")
-            base_max_iter = app.config['MODEL_HYPERPARAMETERS']['LogisticRegression'].get('max_iter', [1000])[0]
-
-            grid_search_lr = GridSearchCV(
-                LogisticRegression(random_state=app.config['ML_CONFIG']['random_state'], max_iter=base_max_iter),
-                param_grid_lr,
-                cv=min(app.config['ML_CONFIG']['cv_folds'], len(X_train) // 2) if len(X_train) >= 4 else 2,
-                scoring='accuracy',
-                n_jobs=4,
-                verbose=0
-            )
-            grid_search_lr.fit(X_train_scaled, y_train)
-            best_lr = grid_search_lr.best_estimator_
-            logger.info(f"LogisticRegression Best Params: {grid_search_lr.best_params_}")
-            logger.info(f"LogisticRegression Best Score: {grid_search_lr.best_score_:.3f}")
-        except Exception as e:
-            logger.warning(f"GridSearchCV for LogisticRegression failed: {str(e)}. Falling back to default parameters.")
-            best_lr = LogisticRegression(
-                random_state=app.config['ML_CONFIG']['random_state'],
-                max_iter=1000,
-                solver='liblinear'
-            )
-            best_lr.fit(X_train_scaled, y_train)
-
-        models_dict = {
-            'rf': best_rf,
-            'gb': best_gb,
-            'lr': best_lr
-        }
-
-        trained_models = {}
-        predictions = {}
-
-        for name, model in models_dict.items():
-            try:
-                logger.info(f"Evaluating model {name}...")
-                if name == 'lr':
-                    if len(X_test_scaled) > 0:
-                        pred_proba = model.predict_proba(X_test_scaled)
-                        predictions[name] = pred_proba[:, 1] if pred_proba.shape[1] > 1 else pred_proba[:, 0]
-                else:
-                    if len(X_test) > 0:
-                        pred_proba = model.predict_proba(X_test)
-                        predictions[name] = pred_proba[:, 1] if pred_proba.shape[1] > 1 else pred_proba[:, 0]
-                trained_models[name] = model
-            except Exception as e:
-                logger.warning(f"Could not evaluate model {name}: {str(e)}")
-                continue
-
-        if not trained_models:
-            raise ValueError("No models could be trained.")
-
         accuracy, precision, recall, f1 = 0.0, 0.0, 0.0, 0.0
-        if len(X_test) > 0 and predictions:
-            ensemble_pred_proba = np.mean(list(predictions.values()), axis=0)
-            ensemble_pred = (ensemble_pred_proba > 0.5).astype(int)
-
-            accuracy = accuracy_score(y_test, ensemble_pred)
-            precision = precision_score(y_test, ensemble_pred, zero_division=0)
-            recall = recall_score(y_test, ensemble_pred, zero_division=0)
-            f1 = f1_score(y_test, ensemble_pred, zero_division=0)
+        if len(X_test) > 0:
+            y_pred = best_rf.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred, zero_division=0)
+            recall = recall_score(y_test, y_pred, zero_division=0)
+            f1 = f1_score(y_test, y_pred, zero_division=0)
+            logger.info(f"RandomForest results - Accuracy: {accuracy:.3f}, Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1:.3f}")
         else:
             accuracy = None
             precision = None
@@ -3089,13 +3001,8 @@ def train_ensemble_model(X, y):
             f1 = None
             logger.warning("No test data for model evaluation. Metrics not available.")
 
-        if accuracy is not None:
-            logger.info(f"Model training results - Accuracy: {accuracy:.3f}, Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1:.3f}")
-        else:
-            logger.info("Model training results - Metrics not available (no test data)")
-
         return {
-            'models': trained_models,
+            'models': {'rf': best_rf},
             'scaler': scaler,
             'accuracy': accuracy,
             'precision': precision,
@@ -3105,8 +3012,6 @@ def train_ensemble_model(X, y):
             'validation_samples': len(X_test),
             'features_count': X.shape[1],
             'best_rf_params': best_rf.get_params() if best_rf else {},
-            'best_gb_params': best_gb.get_params() if best_gb else {},
-            'best_lr_params': best_lr.get_params() if best_lr else {}
         }
 
     except Exception as e:
@@ -3502,8 +3407,6 @@ def train_model():
           'gemini_training_analysis': gemini_training_analysis,
           'hyperparameters': {
               'best_rf_params': model_result.get('best_rf_params', {}),
-              'best_gb_params': model_result.get('best_gb_params', {}),
-              'best_lr_params': model_result.get('best_lr_params', {})
           }
         }
 

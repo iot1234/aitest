@@ -223,42 +223,14 @@ class Config:
     # Hyperparameters สำหรับ GridSearchCV - FULL RANGE สำหรับ High Spec
     MODEL_HYPERPARAMETERS: Dict[str, Dict[str, List[Any]]] = {
         'RandomForest': {
-            'n_estimators': [100, 200],  # ลดลง
-            'max_depth': [5, 10, None],  # ลดลง
+            'n_estimators': [100, 200],
+            'max_depth': [5, 10, None],
             'min_samples_split': [2, 5],
             'min_samples_leaf': [1, 2],
-            'max_features': ['sqrt', None], # ลดลง
+            'max_features': ['sqrt', None],
             'bootstrap': [True],
             'class_weight': ['balanced', None]
         },
-        'GradientBoosting': {
-            'n_estimators': [100, 200], # ลดลง
-            'learning_rate': [0.05, 0.1, 0.2], # ลดลง
-            'max_depth': [3, 5, 7], # ลดลง
-            'min_samples_split': [2, 5],
-            'min_samples_leaf': [1, 2],
-            'subsample': [0.8, 1.0],
-            'max_features': ['sqrt', None] # ลดลง
-        },
-        'LogisticRegression': {
-            'C': [0.1, 1, 10], # ลดลง
-            'penalty': ['l1', 'l2'], # ลดลง
-            'solver': ['liblinear'], # ลดลง
-            'max_iter': [1000, 2000], # ลดลง
-            'class_weight': ['balanced', None]
-        },
-        'SVM': {
-            'C': [1, 10], # ลดลง
-            'kernel': ['linear', 'rbf'], # ลดลง
-            'gamma': ['scale'], # ลดลง
-            'class_weight': ['balanced', None]
-        },
-        'XGBoost': {  # ลดลง
-            'n_estimators': [100, 200],
-            'learning_rate': [0.05, 0.1],
-            'max_depth': [3, 5],
-            'subsample': [0.8, 1.0],
-        }
     }
 
     # Advanced Prediction Config สำหรับ High Performance
