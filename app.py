@@ -1884,6 +1884,7 @@ def enforce_login_for_non_prediction_pages():
         'main_page',
         'curriculum_prediction_form',
         'predict_batch_page',
+        'batch_prediction_page',
 
         # Public prediction APIs
         'list_models',
@@ -8416,7 +8417,12 @@ def _generate_long_template(courses_data, all_terms):
 
 @app.route('/predict-batch')
 def predict_batch_page():
-    """Page for batch prediction from uploaded file."""
+    """Page for training models (upload data to train)."""
+    return render_template('index.html')
+
+@app.route('/batch-prediction')
+def batch_prediction_page():
+    """Page for batch prediction from uploaded file (predict multiple students)."""
     try:
         courses_json = json.dumps(app.config.get('COURSES_DATA', []))
         terms_json = json.dumps(app.config.get('ALL_TERMS_DATA', []))
