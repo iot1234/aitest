@@ -538,10 +538,29 @@ class AdvancedModelTrainer:
             return np.zeros(NUM_FEATURES)
 
         # ฟีเจอร์พื้นฐาน - สถิติเกรด
-        numeric_grades = []
-        for grade in grades_dict.values():
-            if grade in self.grade_mapping and self.grade_mapping[grade] is not None:
-                numeric_grades.append(self.grade_mapping[grade])
+        # BUG FIX: เรียงเกรดตามลำดับหลักสูตร (ไม่ใช่ลำดับ dict)
+        # เพื่อให้ recent_trend คำนวณถูกต้องทั้งตอนเทรนและทำนาย
+        try:
+            all_terms = app.config.get('ALL_TERMS_DATA', [])
+            course_order = {}
+            pos = 0
+            for term in all_terms:
+                for cid in term.get('ids', []):
+                    course_order[cid] = pos
+                    pos += 1
+            # สร้าง numeric_grades เรียงตามหลักสูตร
+            ordered_pairs = []
+            for cid, grade in grades_dict.items():
+                if grade in self.grade_mapping and self.grade_mapping[grade] is not None:
+                    ordered_pairs.append((course_order.get(cid, 999), self.grade_mapping[grade]))
+            ordered_pairs.sort(key=lambda x: x[0])
+            numeric_grades = [g for _, g in ordered_pairs]
+        except Exception:
+            # fallback: ใช้ลำดับเดิม
+            numeric_grades = []
+            for grade in grades_dict.values():
+                if grade in self.grade_mapping and self.grade_mapping[grade] is not None:
+                    numeric_grades.append(self.grade_mapping[grade])
 
         if not numeric_grades:
             return np.zeros(NUM_FEATURES)
@@ -614,7 +633,9 @@ class AdvancedModelTrainer:
         else:
             recent_trend = 0
 
-        progress_ratio = len(grades_dict) / total_courses_taken if total_courses_taken > 0 else 0
+        # BUG FIX: เปลี่ยนจาก len/total (=1.0 เสมอ) เป็น len/47 (จำนวนวิชาทั้งหลักสูตร)
+        TOTAL_CURRICULUM_COURSES = 47
+        progress_ratio = len(grades_dict) / TOTAL_CURRICULUM_COURSES
         consistency_score = 1 / (1 + gpa_std)
         academic_momentum = current_gpa * progress_ratio
         risk_score = (num_failed_courses + num_killer_courses) / len(grades_dict) if len(grades_dict) > 0 else 0
@@ -822,6 +843,7 @@ class AdvancedModelTrainer:
             'training_type': 'tan1_advanced',
             'created_at': datetime.now().isoformat(),
             'performance_metrics': clean_metrics,
+            'feature_version': 2,  # v2: fixed progress_ratio + sorted numeric_grades
         }
     
     def load_model(self, model_path):
@@ -7232,6 +7254,11 @@ def analyze_curriculum():
 
                         logger.info(f"📦 Model loaded: models={list(models.keys())}, features={len(feature_names)}, scaler={'✅' if scaler else '❌'}")
 
+                        # ตรวจสอบ feature_version — ถ้าเป็นโมเดลเก่า (v1) จะแจ้งเตือน
+                        model_feature_version = loaded_model_data.get('feature_version', 1)
+                        if model_feature_version < 2:
+                            logger.warning("⚠️ โมเดลนี้เทรนด้วย feature v1 (progress_ratio=1.0 เสมอ, recent_trend ไม่เรียงลำดับ) — แนะนำให้เทรนใหม่เพื่อความแม่นยำ")
+
                         # สร้าง grades_dict จาก current_grades (เฉพาะวิชาที่มีเกรด)
                         grades_dict = {cid: g for cid, g in current_grades.items() if g}
 
@@ -7240,18 +7267,63 @@ def analyze_curriculum():
                             trainer = AdvancedModelTrainer()
                             trainer.course_credit_map = course_credit_map
 
-                            # ใช้ loaded_terms_count เป็น semester_number (fix #4)
-                            semester_number = max(1, loaded_terms_count) if loaded_terms_count else None
+                            # ใช้ loaded_terms_count เป็น semester_number
+                            # BUG FIX: ถ้า loaded_terms_count=0 แต่มีเกรด → ประมาณจากจำนวนวิชา
+                            if loaded_terms_count and loaded_terms_count > 0:
+                                semester_number = loaded_terms_count
+                            else:
+                                # ประมาณจากจำนวนวิชาที่มีเกรด (~6-7 วิชา/เทอม)
+                                semester_number = max(1, round(len(grades_dict) / 6.5))
+                                logger.warning(f"⚠️ loaded_terms_count={loaded_terms_count}, estimated semester={semester_number} from {len(grades_dict)} courses")
 
-                            # total_courses_taken = จำนวนวิชาที่นศ.กรอกมา (ตรงกับตอนเทรนที่ใช้ len(cumulative_grades))
                             total_courses_taken = len(grades_dict)
 
-                            # สร้าง features ด้วย create_dynamic_features — ตรง 100% กับตอนเทรน (fix #2)
+                            # === BUG FIX: สร้าง retake_info จาก repeated_courses ===
+                            # repeated_courses_in_this_term_ids = วิชาที่ลงซ้ำในเทอมนี้
+                            retake_info = None
+                            cumulative_retakes = 0
+                            if repeated_courses_in_this_term_ids:
+                                retake_f_count = sum(
+                                    1 for cid in repeated_courses_in_this_term_ids
+                                    if current_grades.get(cid, '') == 'F' or cid in grades_dict
+                                )
+                                # นับวิชาที่ลงซ้ำจริง (มีเกรดเดิมอยู่แล้ว)
+                                actual_retakes = [
+                                    cid for cid in repeated_courses_in_this_term_ids
+                                    if cid in grades_dict
+                                ]
+                                num_retake_courses = len(actual_retakes)
+                                cumulative_retakes = num_retake_courses
+
+                                # คำนวณ improvement (ประมาณ: ถ้ามีเกรดอยู่ ถือว่า retake แล้วเกรดปัจจุบัน)
+                                # เกรดที่แสดงใน current_grades คือเกรดล่าสุด
+                                # สมมุติว่าเกรดเดิมคือ F (กรณี worst case)
+                                improvements = []
+                                retake_f_actual = 0
+                                retake_w_actual = 0
+                                for cid in actual_retakes:
+                                    current_grade_val = grade_mapping.get(grades_dict.get(cid, ''), None)
+                                    if current_grade_val is not None:
+                                        # สมมุติเกรดเดิม F=0 (worst case ที่ต้อง retake)
+                                        improvements.append(current_grade_val - 0.0)
+                                        retake_f_actual += 1
+
+                                retake_info = {
+                                    'num_retake_courses': num_retake_courses,
+                                    'retake_f_count': retake_f_actual,
+                                    'retake_w_count': retake_w_actual,
+                                    'avg_retake_improvement': float(np.mean(improvements)) if improvements else 0.0,
+                                }
+                                logger.info(f"📊 Individual retake_info built: {retake_info}")
+
+                            # สร้าง features ด้วย create_dynamic_features — ตรงกับตอนเทรน
                             features_array = trainer.create_dynamic_features(
                                 grades_dict=grades_dict,
                                 course_profiles=course_profiles,
                                 total_courses_taken=total_courses_taken,
-                                semester_number=semester_number
+                                semester_number=semester_number,
+                                retake_info=retake_info,
+                                cumulative_retakes=cumulative_retakes
                             )
 
                             # แปลงเป็น DataFrame ด้วย feature_names 28 ชื่อ
@@ -7811,6 +7883,11 @@ def api_predict_batch():
         if not all([subject_model, scaler, feature_columns]):
             return jsonify({'success': False, 'error': 'Incomplete model data. Missing model, scaler, or feature columns.'})
 
+        # ตรวจสอบ feature_version ของโมเดล
+        batch_model_feature_version = model_data.get('feature_version', 1)
+        if batch_model_feature_version < 2:
+            logger.warning("⚠️ โมเดลนี้เทรนด้วย feature v1 — แนะนำเทรนใหม่เพื่อความแม่นยำ")
+
         # --- Read uploaded file ---
         filename = file.filename
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
@@ -8311,8 +8388,12 @@ def _parse_wide_format(df, cols_lower, grade_mapping, course_credit_map):
                 'student_name': student_name,
                 'grades': grades,
                 'loaded_terms_count': loaded_terms_count,
-                'terms_detail': terms_detail
+                'terms_detail': terms_detail,
+                'retake_info': None  # Wide format ไม่สามารถตรวจจับ retake ได้ (มีแค่เกรดสุดท้าย)
             })
+
+    if students:
+        logger.info(f"⚠️ Wide format: ไม่มีข้อมูล retake (features 29-32 จะเป็น 0) — แนะนำใช้ Long format")
 
     return students
 
