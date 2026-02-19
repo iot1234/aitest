@@ -7890,16 +7890,20 @@ def api_predict_batch():
                     errors.append({'student_id': student_id, 'error': 'No grade data found'})
                     continue
 
-                # Use create_dynamic_features — exactly the same as individual prediction
+                # Use create_dynamic_features — exactly the same as training
                 total_courses_taken = len(grades_dict)
                 loaded_terms_count = student.get('loaded_terms_count')
                 semester_number = max(1, loaded_terms_count) if loaded_terms_count else None
+                retake_info = student.get('retake_info')  # from long format parser
+                cumulative_retakes = retake_info.get('num_retake_courses', 0) if retake_info else 0
 
                 features_array = trainer.create_dynamic_features(
                     grades_dict=grades_dict,
                     course_profiles=course_profiles,
                     total_courses_taken=total_courses_taken,
-                    semester_number=semester_number
+                    semester_number=semester_number,
+                    retake_info=retake_info,
+                    cumulative_retakes=cumulative_retakes
                 )
 
                 # Convert to DataFrame with correct feature column names (same as individual prediction)
@@ -7956,6 +7960,7 @@ def api_predict_batch():
                     'reasons': reasons,
                     'loaded_terms_count': loaded_terms_count or 0,
                     'terms_detail': student.get('terms_detail', []),
+                    'retake_info': retake_info or {},
                     'grades': grades_dict  # ส่ง grades กลับเพื่อใช้กับ Gemini AI
                 })
 
@@ -8030,6 +8035,7 @@ def api_batch_gemini_analyze():
         student_name = payload.get('student_name', 'นักศึกษา')
         loaded_terms_count = int(payload.get('loaded_terms_count') or 0)
         terms_detail = payload.get('terms_detail', [])
+        retake_info = payload.get('retake_info', {})
         model_filename = payload.get('model_filename', '')
         prob_graduate = payload.get('probability', 0)
         prediction_label = payload.get('prediction', '')
@@ -8119,6 +8125,8 @@ def api_batch_gemini_analyze():
 - เกรดเฉลี่ย (โดยประมาณ): {grade_summary.get('estimated_gpa', 0):.2f}
 - หน่วยกิตที่เรียนแล้ว: {grade_summary.get('total_credits_recorded', 0)} หน่วยกิต
 - จำนวนวิชาที่สอบตก: {grade_summary.get('failed_count', 0)} วิชา
+- วิชาที่ลงเรียนซ้ำ: {retake_info.get('num_retake_courses', 0)} วิชา (ตก F แล้วซ้ำ: {retake_info.get('retake_f_count', 0)}, ถอน W แล้วซ้ำ: {retake_info.get('retake_w_count', 0)})
+- เกรดดีขึ้นเฉลี่ยจากการลงซ้ำ: {retake_info.get('avg_retake_improvement', 0):.2f} จุด
 
 **การกระจายเกรด:**
 {json.dumps(grade_summary.get('grade_distribution', {}), ensure_ascii=False, indent=2)}
@@ -8331,9 +8339,18 @@ def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
             sname = str(row.get(name_col, '')).strip() if name_col else ''
             if sname == 'nan':
                 sname = ''
-            students_dict[sid] = {'student_id': sid, 'student_name': sname, 'grades': {}, 'terms_set': set()}
+            students_dict[sid] = {
+                'student_id': sid, 'student_name': sname,
+                'grades': {}, 'terms_set': set(),
+                'all_attempts': {}  # {course_id: [grade1, grade2, ...]} สำหรับ detect retake
+            }
 
-        # If same course appears multiple times, keep the latest (last row)
+        # Track ALL attempts per course (for retake detection)
+        if cid not in students_dict[sid]['all_attempts']:
+            students_dict[sid]['all_attempts'][cid] = []
+        students_dict[sid]['all_attempts'][cid].append(grade)
+
+        # Keep latest grade as the final grade
         students_dict[sid]['grades'][cid] = grade
 
         # Track unique (year, term) pairs to calculate loaded_terms_count
@@ -8343,26 +8360,72 @@ def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
             if yr and yr != 'nan' and tm and tm != 'nan':
                 students_dict[sid]['terms_set'].add((yr, tm))
 
-    # Convert terms_set to loaded_terms_count
+    # Convert to result list with retake_info
     result = []
     for sid, data in students_dict.items():
         terms_set = data.get('terms_set', set())
         loaded_terms_count = len(terms_set)
-        # Build readable term details from YEAR/TERM pairs
         terms_detail = []
         if terms_set:
             sorted_terms = sorted(terms_set, key=lambda x: (x[0], x[1]))
             for yr, tm in sorted_terms:
                 terms_detail.append(f"พ.ศ.{yr}เทอม{tm}")
+
+        # Build retake_info from all_attempts (same format as training)
+        retake_info = _build_retake_info(data['all_attempts'], grade_mapping)
+
         result.append({
             'student_id': data['student_id'],
             'student_name': data['student_name'],
             'grades': data['grades'],
             'loaded_terms_count': loaded_terms_count if loaded_terms_count > 0 else None,
-            'terms_detail': terms_detail
+            'terms_detail': terms_detail,
+            'retake_info': retake_info
         })
 
     return result
+
+
+def _build_retake_info(all_attempts, grade_mapping):
+    """สร้าง retake_info จากข้อมูลลงเรียนซ้ำ (same format as training)
+
+    Parameters:
+        all_attempts: dict {course_id: [grade1, grade2, ...]}
+        grade_mapping: dict {grade_letter: grade_point}
+
+    Returns:
+        dict with keys: num_retake_courses, retake_f_count, retake_w_count, avg_retake_improvement
+    """
+    num_retake_courses = 0
+    retake_f_count = 0
+    retake_w_count = 0
+    retake_improvements = []
+
+    for cid, grades_list in all_attempts.items():
+        if len(grades_list) <= 1:
+            continue  # ไม่ใช่ retake
+
+        num_retake_courses += 1
+        first_grade = grades_list[0]
+        last_grade = grades_list[-1]
+
+        if first_grade == 'F':
+            retake_f_count += 1
+        if first_grade == 'W':
+            retake_w_count += 1
+
+        # Calculate improvement (last - first grade point)
+        first_gp = grade_mapping.get(first_grade)
+        last_gp = grade_mapping.get(last_grade)
+        if first_gp is not None and last_gp is not None:
+            retake_improvements.append(last_gp - first_gp)
+
+    return {
+        'num_retake_courses': num_retake_courses,
+        'retake_f_count': retake_f_count,
+        'retake_w_count': retake_w_count,
+        'avg_retake_improvement': float(np.mean(retake_improvements)) if retake_improvements else 0.0,
+    }
 
 
 def _build_batch_recommendation(prediction, prob_graduate, gpa, failed_count, total_courses,
