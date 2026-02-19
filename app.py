@@ -8102,6 +8102,12 @@ def api_batch_gemini_analyze():
         grade_summary = summarize_grades_for_gemini(grades_dict, loaded_terms_count)
         grade_summary['student_name'] = student_name
 
+        # สร้าง course name map สำหรับ retake details
+        course_name_map = {c['id']: c['thaiName'] for c in app.config.get('COURSES_DATA', [])}
+        # เพิ่มชื่อวิชาเข้า retake_details
+        for d in retake_info.get('retake_details', []):
+            d['course_name'] = course_name_map.get(d.get('course_id', ''), d.get('course_id', ''))
+
         # Build model prediction context
         model_context_str = f"""
 **ผลจาก AI Model ที่เทรนมาแล้ว:**
@@ -8127,6 +8133,7 @@ def api_batch_gemini_analyze():
 - จำนวนวิชาที่สอบตก: {grade_summary.get('failed_count', 0)} วิชา
 - วิชาที่ลงเรียนซ้ำ: {retake_info.get('num_retake_courses', 0)} วิชา (ตก F แล้วซ้ำ: {retake_info.get('retake_f_count', 0)}, ถอน W แล้วซ้ำ: {retake_info.get('retake_w_count', 0)})
 - เกรดดีขึ้นเฉลี่ยจากการลงซ้ำ: {retake_info.get('avg_retake_improvement', 0):.2f} จุด
+{chr(10).join(f"  • {d.get('course_name', d['course_id'])}: {d['first_grade']}→{d['last_grade']} (ลงซ้ำ {d['attempts']} ครั้ง, เกรดเปลี่ยน {d['improvement']:+.1f})" for d in retake_info.get('retake_details', [])) if retake_info.get('retake_details') else '  (ไม่มีวิชาลงซ้ำ)'}
 
 **การกระจายเกรด:**
 {json.dumps(grade_summary.get('grade_distribution', {}), ensure_ascii=False, indent=2)}
@@ -8322,6 +8329,12 @@ def _parse_long_format(df, cols_lower, grade_mapping, course_credit_map):
     if not id_col or not course_col or not grade_col:
         return []
 
+    # === CRITICAL: Sort by YEAR/TERM ก่อน process ===
+    # ป้องกัน CSV ที่แถวไม่เรียงตามเวลา → grades[cid] จะเก็บเกรดล่าสุดถูกต้อง
+    # และ all_attempts จะเรียงตามเวลาจริง (สำคัญสำหรับ retake detection)
+    if year_col and term_col:
+        df = df.sort_values([year_col, term_col], na_position='last')
+
     valid_grades = set(grade_mapping.keys())
     students_dict = {}
 
@@ -8390,16 +8403,18 @@ def _build_retake_info(all_attempts, grade_mapping):
     """สร้าง retake_info จากข้อมูลลงเรียนซ้ำ (same format as training)
 
     Parameters:
-        all_attempts: dict {course_id: [grade1, grade2, ...]}
+        all_attempts: dict {course_id: [grade1, grade2, ...]} — ต้อง sort ตาม YEAR/TERM แล้ว!
         grade_mapping: dict {grade_letter: grade_point}
 
     Returns:
-        dict with keys: num_retake_courses, retake_f_count, retake_w_count, avg_retake_improvement
+        dict with keys: num_retake_courses, retake_f_count, retake_w_count,
+                        avg_retake_improvement, retake_details
     """
     num_retake_courses = 0
     retake_f_count = 0
     retake_w_count = 0
     retake_improvements = []
+    retake_details = []  # รายละเอียดแต่ละวิชาที่ลงซ้ำ
 
     for cid, grades_list in all_attempts.items():
         if len(grades_list) <= 1:
@@ -8417,14 +8432,25 @@ def _build_retake_info(all_attempts, grade_mapping):
         # Calculate improvement (last - first grade point)
         first_gp = grade_mapping.get(first_grade)
         last_gp = grade_mapping.get(last_grade)
+        improvement = 0.0
         if first_gp is not None and last_gp is not None:
-            retake_improvements.append(last_gp - first_gp)
+            improvement = last_gp - first_gp
+            retake_improvements.append(improvement)
+
+        retake_details.append({
+            'course_id': cid,
+            'first_grade': first_grade,
+            'last_grade': last_grade,
+            'attempts': len(grades_list),
+            'improvement': improvement,
+        })
 
     return {
         'num_retake_courses': num_retake_courses,
         'retake_f_count': retake_f_count,
         'retake_w_count': retake_w_count,
         'avg_retake_improvement': float(np.mean(retake_improvements)) if retake_improvements else 0.0,
+        'retake_details': retake_details,
     }
 
 
