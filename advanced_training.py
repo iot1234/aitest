@@ -865,7 +865,7 @@ class AdvancedFeatureEngineer:
     def _transform_transcript_to_students(self, df: pd.DataFrame) -> Dict[str, Dict]:
         """
         แปลงข้อมูล Transcript (หลายแถวต่อนักศึกษา) เป็น Student Records
-        พร้อมคำนวณสถานะการจบอัตโนมัติตามจำนวนปีที่เรียน
+        พร้อมคำนวณสถานะการจบอัตโนมัติตาม GPA >= 2.00 และหน่วยกิต >= 136
         """
         student_records = {}
         
@@ -896,11 +896,37 @@ class AdvancedFeatureEngineer:
                 
                 # คำนวณจำนวนปีที่เรียนจากข้อมูล
                 years_studied = self._calculate_years_studied(student_data)
-                
-                # 🔴 คำนวณสถานะการจบอัตโนมัติ
-                # จบตามเกณฑ์ = เรียน ≤ 4 ปี
-                # ไม่จบตามเกณฑ์ = เรียน > 4 ปี
-                graduated_status = 1 if years_studied <= 4 else 0
+
+                # 🟢 คำนวณสถานะการจบจาก GPA >= 2.00 AND หน่วยกิตสะสม >= 136
+                # (ตรงกับเกณฑ์ใน preprocess_tan1_data ของ app.py)
+                grade_col = self._find_column(student_data, ['grade', 'เกรด'])
+                credit_col = self._find_column(student_data, ['credit', 'หน่วยกิต'])
+                grade_point_col = self._find_column(student_data, ['grade_point', 'gradepoint', 'คะแนน'])
+
+                total_weighted = 0
+                total_credits = 0
+                passed_credits = 0
+                passed_grades_set = {'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'S', 'S*'}
+
+                if grade_col:
+                    for _, row in student_data.iterrows():
+                        grade_str = str(row[grade_col]).strip().upper() if pd.notna(row[grade_col]) else ''
+                        credit = float(row[credit_col]) if credit_col and pd.notna(row.get(credit_col)) else 3
+
+                        gp_val = None
+                        if grade_point_col and pd.notna(row.get(grade_point_col)):
+                            gp_val = row[grade_point_col]
+                        grade_val = self._convert_grade_to_numeric(grade_str, gp_val)
+
+                        if grade_val is not None:
+                            total_weighted += grade_val * credit
+                            total_credits += credit
+
+                        if grade_str in passed_grades_set:
+                            passed_credits += credit
+
+                student_gpa = total_weighted / total_credits if total_credits > 0 else 0
+                graduated_status = 1 if (student_gpa >= 2.00 and passed_credits >= 136) else 0
                 
                 # นับสถิติ
                 if graduated_status == 1:
@@ -927,8 +953,8 @@ class AdvancedFeatureEngineer:
         
         # สรุปผล
         logger.info(f"✅ Classification results:")
-        logger.info(f"   - จบตามเกณฑ์ (≤4 ปี): {graduation_stats['graduated']} คน")
-        logger.info(f"   - จบไม่ตามเกณฑ์ (>4 ปี): {graduation_stats['not_graduated']} คน")
+        logger.info(f"   - จบตามเกณฑ์ (GPA≥2.00 & credits≥136): {graduation_stats['graduated']} คน")
+        logger.info(f"   - ไม่จบตามเกณฑ์: {graduation_stats['not_graduated']} คน")
         
         return student_records
     
@@ -1564,10 +1590,10 @@ def train_ensemble_model(X, y):
                 n_jobs=1,  # Single thread for Gunicorn compatibility
                 class_weight='balanced'
             )
-            rf.fit(X_train, y_train)
+            rf.fit(X_train_scaled, y_train)
             models['rf'] = rf
             logger.info("✅ Random Forest trained successfully")
-            
+
             # Log feature importance
             if hasattr(rf, 'feature_importances_'):
                 importances = pd.Series(rf.feature_importances_, index=X.columns)
@@ -1575,10 +1601,10 @@ def train_ensemble_model(X, y):
                 logger.info(f"🎯 Top 10 important features:")
                 for feat, imp in top_features.items():
                     logger.info(f"   - {feat}: {imp:.4f}")
-                    
+
         except Exception as e:
             logger.error(f"❌ Random Forest training failed: {e}")
-        
+
         # Gradient Boosting
         try:
             gb = GradientBoostingClassifier(
@@ -1587,7 +1613,7 @@ def train_ensemble_model(X, y):
                 max_depth=5,
                 random_state=42
             )
-            gb.fit(X_train, y_train)
+            gb.fit(X_train_scaled, y_train)
             models['gb'] = gb
             logger.info("✅ Gradient Boosting trained successfully")
         except Exception as e:
@@ -1611,10 +1637,7 @@ def train_ensemble_model(X, y):
         if len(X_test) > 0 and models:
             predictions = []
             for name, model in models.items():
-                if name == 'lr':
-                    pred = model.predict(X_test_scaled)
-                else:
-                    pred = model.predict(X_test)
+                pred = model.predict(X_test_scaled)
                 predictions.append(pred)
             
             # Majority voting
@@ -1760,32 +1783,24 @@ class ContextAwarePredictor:
                 "ไปที่หน้า 'จัดการโมเดล' > 'เทรนโมเดล' > อัปโหลดไฟล์ CSV"
             )
         
-        # ทำนายด้วย Ensemble (เฉลี่ยจากโมเดลทั้งหมด)
+        # ทำนายด้วย Ensemble (เฉลี่ยจากโมเดลทั้งหมด) — ใช้ scaler กับทุกโมเดล
         predictions = []
         model_confidences = {}
-        
+
         try:
-            # 1. Random Forest
-            if 'rf' in self.models:
-                rf_pred = self.models['rf'].predict_proba(X)[0][1]
-                predictions.append(rf_pred)
-                model_confidences['rf'] = rf_pred
-                logger.info(f"🌲 Random Forest prediction: {rf_pred:.3f}")
-            
-            # 2. Gradient Boosting
-            if 'gb' in self.models:
-                gb_pred = self.models['gb'].predict_proba(X)[0][1]
-                predictions.append(gb_pred)
-                model_confidences['gb'] = gb_pred
-                logger.info(f"🚀 Gradient Boosting prediction: {gb_pred:.3f}")
-            
-            # 3. Logistic Regression (ต้องใช้ scaler)
-            if 'lr' in self.models and self.scaler:
-                X_scaled = self.scaler.transform(X)
-                lr_pred = self.models['lr'].predict_proba(X_scaled)[0][1]
-                predictions.append(lr_pred)
-                model_confidences['lr'] = lr_pred
-                logger.info(f"📊 Logistic Regression prediction: {lr_pred:.3f}")
+            # Scale features สำหรับทุกโมเดล (เทรนด้วย scaled data เหมือนกัน)
+            X_scaled = self.scaler.transform(X) if self.scaler else X
+
+            model_icons = {'rf': '🌲', 'gb': '🚀', 'lr': '📊', 'svm': '🎯'}
+            for model_name, model_obj in self.models.items():
+                try:
+                    pred = model_obj.predict_proba(X_scaled)[0][1]
+                    predictions.append(pred)
+                    model_confidences[model_name] = pred
+                    icon = model_icons.get(model_name, '🤖')
+                    logger.info(f"{icon} {model_name} prediction: {pred:.3f}")
+                except Exception as e:
+                    logger.warning(f"⚠️ {model_name} prediction failed: {e}")
             
             # คำนวณ Ensemble (เฉลี่ย)
             if len(predictions) == 0:

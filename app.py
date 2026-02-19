@@ -278,6 +278,7 @@ class AdvancedModelTrainer:
         }
         self.best_model = None
         self.best_score = 0
+        self.trained_models = {}
         self.scaler = StandardScaler()
         self.grade_mapping = {
             'A': 4.0, 'B+': 3.5, 'B': 3.0, 'C+': 2.5, 'C': 2.0,
@@ -704,9 +705,17 @@ class AdvancedModelTrainer:
             except Exception as e:
                 logger.warning(f"      ⚠️ {name} ไม่สามารถเทรนได้: {e}")
                 continue
-        
+
+        # บันทึกทุกโมเดลที่เทรนสำเร็จ
+        self.trained_models = {}
+        key_map = {'RandomForest': 'rf', 'GradientBoosting': 'gb', 'LogisticRegression': 'lr', 'SVM': 'svm'}
+        for name, res in results.items():
+            if 'model' in res:
+                self.trained_models[key_map.get(name, name.lower())] = res['model']
+
         logger.info(f"🏆 โมเดลที่ดีที่สุด: {best_model_name} (Accuracy: {self.best_score:.3f})")
-        
+        logger.info(f"📦 บันทึกโมเดลทั้งหมด: {list(self.trained_models.keys())}")
+
         return results
     
     def build_model_data(self, course_profiles=None, training_results=None):
@@ -724,7 +733,7 @@ class AdvancedModelTrainer:
                     'recall': float(res.get('recall', 0)),
                 }
         return {
-            'models': {'rf': self.best_model},
+            'models': self.trained_models if self.trained_models else {'rf': self.best_model},
             'scaler': self.scaler,
             'feature_columns': [
                 'current_gpa', 'gpa_std', 'min_grade', 'max_grade', 'grade_range',
@@ -7197,98 +7206,116 @@ def analyze_curriculum():
                     logger.info(f"Failed due to low GPA: {completion_status['gpa']:.2f} < {completion_status['min_gpa']}")
                     
                 else:
-                    # ถ้ายังไม่ครบหลักสูตร → ใช้ AI ทำนาย
-                    # Load model
+                    # ถ้ายังไม่ครบหลักสูตร → ใช้ AI ทำนาย (create_dynamic_features ตรงกับ training)
                     loaded_model_data = storage.load_model(model_filename)
                     if loaded_model_data:
-                        # สร้าง AdvancedFeatureEngineer และ ContextAwarePredictor
-                        engineer = AdvancedFeatureEngineer(
-                            grade_mapping=app.config['DATA_CONFIG']['grade_mapping']
-                        )
-                        
-                        # โหลด course_profiles จากโมเดล
-                        course_profiles = loaded_model_data.get('course_profiles', {})
-                        engineer.course_profiles = course_profiles
-                        
-                        # ======= โหลด models, scaler, feature_names จากไฟล์โมเดล =======
                         models = loaded_model_data.get('models', {})
                         scaler = loaded_model_data.get('scaler', None)
-                        # feature_names อาจเก็บใน 'feature_columns' หรือ 'feature_names'
                         feature_names = loaded_model_data.get('feature_columns', loaded_model_data.get('feature_names', []))
-                        
+                        course_profiles = loaded_model_data.get('course_profiles', {})
+                        course_credit_map = loaded_model_data.get('course_credit_map', {})
+
                         logger.info(f"📦 Model loaded: models={list(models.keys())}, features={len(feature_names)}, scaler={'✅' if scaler else '❌'}")
-                        
-                        # สร้าง transcript data จากข้อมูลปัจจุบัน
-                        transcript_data = []
-                        for course_id, grade in current_grades.items():
-                            if grade:  # มีเกรด
-                                course = next((c for c in courses_data if c['id'] == course_id), None)
-                                if course:
-                                    # แปลงเกรดเป็น GRADE_POINT
-                                    grade_point = grade_mapping.get(grade, 0)
-                                    
-                                    transcript_data.append({
-                                        'Dummy StudentNO': student_name,
-                                        'COURSE_CODE': course_id,
-                                        'COURSE_TITLE_TH': course.get('thaiName', ''),
-                                        'CREDIT': course.get('credit', 3),
-                                        'GRADE': grade,
-                                        'GRADE_POINT': grade_point,
-                                        'ปีที่เข้า': 2020,  # ค่าเริ่มต้น
-                                        'ปีการศึกษา': 2024,  # ค่าเริ่มต้น
-                                        'เทอม': 1
-                                    })
-                        
-                        if transcript_data:
-                            # แปลงเป็น DataFrame
-                            transcript_df = pd.DataFrame(transcript_data)
-                            
-                            # ใช้ ContextAwarePredictor พร้อม models, scaler, feature_names จากโมเดลที่โหลด
-                            from advanced_training import ContextAwarePredictor
-                            predictor = ContextAwarePredictor(
-                                feature_engineer=engineer,
-                                models=models,
-                                scaler=scaler,
-                                feature_names=feature_names
+
+                        # สร้าง grades_dict จาก current_grades (เฉพาะวิชาที่มีเกรด)
+                        grades_dict = {cid: g for cid, g in current_grades.items() if g}
+
+                        if grades_dict:
+                            # สร้าง trainer instance สำหรับ create_dynamic_features
+                            trainer = AdvancedModelTrainer()
+                            trainer.course_credit_map = course_credit_map
+
+                            # ใช้ loaded_terms_count เป็น semester_number (fix #4)
+                            semester_number = max(1, loaded_terms_count) if loaded_terms_count else None
+
+                            # total_courses_taken = จำนวนวิชาที่นศ.กรอกมา (ตรงกับตอนเทรนที่ใช้ len(cumulative_grades))
+                            total_courses_taken = len(grades_dict)
+
+                            # สร้าง features ด้วย create_dynamic_features — ตรง 100% กับตอนเทรน (fix #2)
+                            features_array = trainer.create_dynamic_features(
+                                grades_dict=grades_dict,
+                                course_profiles=course_profiles,
+                                total_courses_taken=total_courses_taken,
+                                semester_number=semester_number
                             )
-                            
-                            # ทำนายด้วย Context-Aware AI System
-                            prediction_result = predictor.predict_graduation_probability(transcript_df)
-                            
-                            prob_pass = prediction_result['probability']
-                            prob_fail = 1 - prob_pass
-                            confidence = prediction_result['confidence']
-                            
-                            prediction = 'จบ' if prob_pass >= 0.5 else 'ไม่จบ'
-                            
-                            risk_level = 'สูง'
-                            if confidence > 0.8:
-                                risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
-                            elif confidence > 0.6:
-                                risk_level = 'ปานกลาง'
-                            
-                            # ดึง prediction_method และ models_used จากผลลัพธ์ (ถ้ามี)
-                            ai_method = prediction_result.get('prediction_method', 'AI_MODEL')
-                            models_used = prediction_result.get('models_used', [])
-                            feature_importance = prediction_result.get('feature_importance', {})
-                            
-                            response_data['prediction_result'] = {
-                                'prediction': prediction,
-                                'prob_pass': float(prob_pass),
-                                'prob_fail': float(prob_fail),
-                                'confidence': float(confidence),
-                                'risk_level': risk_level,
-                                'gpa_input': float(completion_status['gpa']),
-                                'features_used': prediction_result['features_used'],
-                                'courses_analyzed': prediction_result['courses_analyzed'],
-                                'method': ai_method,  # AI_MODEL หรือ Context-Aware
-                                'models_used': models_used,  # ['rf', 'gb', 'lr']
-                                'feature_importance': feature_importance,  # Top 10 features
-                                'status': 'predicted'
-                            }
-                            logger.info(f"🤖 AI Model Prediction: {prediction} (confidence: {confidence:.3f}, models: {models_used})")
+
+                            # แปลงเป็น DataFrame ด้วย feature_names 28 ชื่อ
+                            X = pd.DataFrame([features_array], columns=feature_names)
+
+                            # Scale features สำหรับทุกโมเดล (fix #3)
+                            X_scaled = scaler.transform(X) if scaler else X
+
+                            # Ensemble prediction — วน loop ทุกโมเดล
+                            predictions = []
+                            model_confidences = {}
+                            model_icons = {'rf': '🌲', 'gb': '🚀', 'lr': '📊', 'svm': '🎯'}
+
+                            for model_name, model_obj in models.items():
+                                try:
+                                    pred = model_obj.predict_proba(X_scaled)[0][1]
+                                    predictions.append(pred)
+                                    model_confidences[model_name] = float(pred)
+                                    icon = model_icons.get(model_name, '🤖')
+                                    logger.info(f"{icon} {model_name} prediction: {pred:.3f}")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ {model_name} prediction failed: {e}")
+
+                            if predictions:
+                                prob_pass = float(np.mean(predictions))
+                                prob_fail = 1 - prob_pass
+
+                                # ความมั่นใจ: ยิ่ง std น้อย = โมเดลเห็นพ้อง = มั่นใจมาก
+                                if len(predictions) > 1:
+                                    prediction_std = float(np.std(predictions))
+                                    confidence = max(0.5, min(0.95, 1.0 - prediction_std))
+                                else:
+                                    distance = abs(prob_pass - 0.5)
+                                    confidence = max(0.5, min(0.95, 0.5 + distance))
+
+                                prediction = 'จบ' if prob_pass >= 0.5 else 'ไม่จบ'
+
+                                risk_level = 'สูง'
+                                if confidence > 0.8:
+                                    risk_level = 'ต่ำ' if prediction == 'จบ' else 'สูง'
+                                elif confidence > 0.6:
+                                    risk_level = 'ปานกลาง'
+
+                                # Feature importance จาก Random Forest
+                                feature_importance = {}
+                                if 'rf' in models:
+                                    try:
+                                        importances = models['rf'].feature_importances_
+                                        importance_dict = dict(zip(feature_names, importances))
+                                        feature_importance = dict(sorted(
+                                            importance_dict.items(),
+                                            key=lambda x: x[1],
+                                            reverse=True
+                                        )[:10])
+                                    except Exception:
+                                        pass
+
+                                models_used = list(model_confidences.keys())
+
+                                response_data['prediction_result'] = {
+                                    'prediction': prediction,
+                                    'prob_pass': prob_pass,
+                                    'prob_fail': prob_fail,
+                                    'confidence': float(confidence),
+                                    'risk_level': risk_level,
+                                    'gpa_input': float(completion_status['gpa']),
+                                    'features_used': len(feature_names),
+                                    'courses_analyzed': len(grades_dict),
+                                    'method': 'AI_MODEL',
+                                    'models_used': models_used,
+                                    'model_confidence': model_confidences,
+                                    'feature_importance': feature_importance,
+                                    'status': 'predicted'
+                                }
+                                logger.info(f"🤖 AI Model Prediction: {prediction} (prob={prob_pass:.3f}, confidence={confidence:.3f}, models={models_used})")
+                            else:
+                                logger.warning("No model could make a prediction")
                         else:
-                            logger.warning("No valid transcript data for prediction")
+                            logger.warning("No valid grades for prediction")
                     else:
                         logger.warning(f"Failed to load model: {model_filename}")
 
