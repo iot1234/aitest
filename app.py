@@ -8616,42 +8616,81 @@ def _generate_wide_template(courses_data, all_terms):
         term_ranges.append((idx_offset, idx_offset + n, t['year'], t['term']))
         idx_offset += n
 
-    # === Student 1: เรียนถึง ปี3เทอม1 (5 เทอม) — เกรดดี ===
-    # Terms 0-4: Y1T1(8) + Y1T2(8) + Y2T1(5) + Y2T2(7) + Y3T1(6) = 34 วิชา
+    # ============================================================
+    # 5 นักศึกษาจำลอง — คละเกรด สมจริง เหมือนนักศึกษาจริง
+    # Wide format: ใส่เกรดล่าสุด (ถ้าลงซ้ำ ใส่เกรดหลังซ้ำ)
+    # ============================================================
+
+    # === นศ.1: กิตติพงศ์ — เรียนถึง ปี3เทอม2 (6 เทอม, 40 วิชา) ===
+    # เก่งโปรแกรม/คำนวณ แต่ภาษาอังกฤษปานกลาง, GPA ~3.1, ไม่เคยลงซ้ำ
     grades_s1 = [
-        'B+','A','B','C+','A','B+','B','A',         # ปี1เทอม1 (8 วิชา)
-        'A','B+','B','B+','A','B','C+','B+',         # ปี1เทอม2 (8 วิชา)
-        'B+','A','B','C+','B',                        # ปี2เทอม1 (5 วิชา)
-        'B','A','B+','C+','B','B+','A',              # ปี2เทอม2 (7 วิชา)
-        'B+','B','A','C+','B','B+',                   # ปี3เทอม1 (6 วิชา)
+        'B+','B','C+','A','A','A','A','B+',           # ปี1เทอม1: GE ปานกลาง, แคลฯ/ฟิสิกส์/โปรแกรมดี
+        'B','B+','B','B+','B+','A','A','A',            # ปี1เทอม2: ดีสม่ำเสมอ
+        'A','B+','A','B','B+',                          # ปี2เทอม1: เอกเด่น
+        'C+','B+','B','A','A','A','A',                 # ปี2เทอม2: GE ปานกลาง วิชาเอกดี
+        'C+','B+','B+','A','A','B+',                   # ปี3เทอม1: อังกฤษปานกลาง เอกดี
+        'B','B+','B+','A','B+','A',                    # ปี3เทอม2: ดี
     ]
-    ex1 = ['6301001', 'นาย สมชาย ใจดี']
+    ex1 = ['66010001', 'นาย กิตติพงศ์ วงศ์สุวรรณ']
     for i, cid in enumerate(ordered_ids):
         ex1.append(grades_s1[i] if i < len(grades_s1) else '')
     output.write(','.join(ex1) + '\n')
 
-    # === Student 2: เรียนถึง ปี1เทอม2 (2 เทอม) — เกรดปานกลาง มีตก ===
-    # Terms 0-1: Y1T1(8) + Y1T2(8) = 16 วิชา
+    # === นศ.2: พิมพ์ชนก — เรียนถึง ปี2เทอม1 (3 เทอม, 21 วิชา) ===
+    # GE ดี แต่คำนวณ/ฟิสิกส์แย่ ตกแคลฯ2 แล้วลงซ้ำ, GPA ~2.2
+    # Wide format: แคลฯ2 ใส่ D+ (เกรดหลังลงซ้ำ)
     grades_s2 = [
-        'C+','B','D+','F','C','B','D','C+',          # ปี1เทอม1 (มีตก F 1 วิชา)
-        'C','D+','C+','D','B','C','F','D+',           # ปี1เทอม2 (มีตก F 1 วิชา)
+        'B+','B','B+','D+','C','D','C+','C',          # ปี1เทอม1: GE ดี, แคลฯ D+, ฟิสิกส์ปานกลาง
+        'B','B+','A','D+','D+','D','C','C+',           # ปี1เทอม2: แคลฯ2=D+(หลังซ้ำ), ฟิสิกส์2แย่
+        'C','C+','C','D+','C',                          # ปี2เทอม1: วิชาเอกยากขึ้น
     ]
-    ex2 = ['6301002', 'นางสาว สมหญิง รักเรียน']
+    ex2 = ['65010045', 'นางสาว พิมพ์ชนก ศรีสมบูรณ์']
     for i, cid in enumerate(ordered_ids):
         ex2.append(grades_s2[i] if i < len(grades_s2) else '')
     output.write(','.join(ex2) + '\n')
 
-    # === Student 3: เรียนถึง ปี2เทอม1 (3 เทอม) — มี W, ลงซ้ำ ===
-    # Terms 0-2: Y1T1(8) + Y1T2(8) + Y2T1(5) = 21 วิชา
+    # === นศ.3: ธนากร — เรียนถึง ปี3เทอม1 (5 เทอม, 34 วิชา) ===
+    # เริ่มต้นแย่แต่พัฒนาขึ้นเรื่อยๆ, ตกโปรแกรม+ถอน Workshop แล้วลงซ้ำ, GPA ~2.4
+    # Wide format: โปรแกรม=C+(หลังซ้ำ), Workshop=C(หลังซ้ำ)
     grades_s3 = [
-        'B','C+','C','B+','C','D+','W','B',          # ปี1เทอม1 (มี W 1 วิชา, ลงซ้ำแล้วใส่เกรดใหม่)
-        'C+','B','D+','C','B+','C+','C','B',          # ปี1เทอม2
-        'C+','B','C','D+','C+',                        # ปี2เทอม1
+        'C','C+','D+','D','C','D+','C+','C',          # ปี1เทอม1: ปรับตัวไม่ทัน (โปรแกรม=C+หลังซ้ำ, Workshop=Cหลังซ้ำ)
+        'C+','C','C+','D+','C+','C','C','D+',          # ปี1เทอม2: ดีขึ้นเล็กน้อย
+        'C+','B','C+','C','C',                          # ปี2เทอม1: ดีขึ้นอีก
+        'B','B','C+','C','B','B','B+',                 # ปี2เทอม2: เกรดดีขึ้นมาก!
+        'C+','B','B','B+','B+','C+',                   # ปี3เทอม1: ดีต่อเนื่อง
     ]
-    ex3 = ['6301003', 'นาย สมศักดิ์ พยายาม']
+    ex3 = ['66010112', 'นาย ธนากร แสงอรุณ']
     for i, cid in enumerate(ordered_ids):
         ex3.append(grades_s3[i] if i < len(grades_s3) else '')
     output.write(','.join(ex3) + '\n')
+
+    # === นศ.4: สุภาพร — เรียนถึง ปี1เทอม2 (2 เทอม, 16 วิชา) ===
+    # เรียนดีสม่ำเสมอ ปรับตัวได้เร็ว GPA ~3.4 ไม่มี F/W
+    grades_s4 = [
+        'A','A','B+','B+','B','B+','A','B+',          # ปี1เทอม1: ดีทุกวิชา
+        'B+','A','A','B','B+','B','A','B+',            # ปี1เทอม2: ดีต่อเนื่อง แคลฯ2=B
+    ]
+    ex4 = ['66010078', 'นางสาว สุภาพร จันทร์เพ็ญ']
+    for i, cid in enumerate(ordered_ids):
+        ex4.append(grades_s4[i] if i < len(grades_s4) else '')
+    output.write(','.join(ex4) + '\n')
+
+    # === นศ.5: วรวิทย์ — เรียนถึง ปี4เทอม1 (7 เทอม, 46 วิชา) ===
+    # เรียนมานาน GPA ~2.0, มีลงซ้ำหลายวิชา, borderline จะจบหรือไม่จบ
+    # Wide format: แคลฯ1=D+(หลังซ้ำ), วงจรดิจิทัล=C(หลังซ้ำ), สื่อสารข้อมูล=D(หลังซ้ำ)
+    grades_s5 = [
+        'C+','C','D+','D+','D+','D','D+','D',         # ปี1เทอม1: แคลฯ1=D+(หลังซ้ำจากF)
+        'C','D+','C+','D','C','D+','C','C',            # ปี1เทอม2: แย่ทั่วไป
+        'D+','C','D+','C','D+',                         # ปี2เทอม1: วงจรดิจิทัล=C(หลังซ้ำจากW)
+        'C','D+','C','D+','C+','C','C',                # ปี2เทอม2: พอผ่าน
+        'D+','C','D','C','C+','D+',                    # ปี3เทอม1: สื่อสารข้อมูล=D(หลังซ้ำจากF)
+        'C','C+','C','D+','C','C+',                    # ปี3เทอม2: พอไปได้
+        'C','C+','C','D+','C','C+',                    # ปี4เทอม1: ใกล้จบ
+    ]
+    ex5 = ['64010023', 'นาย วรวิทย์ พันธุ์ดี']
+    for i, cid in enumerate(ordered_ids):
+        ex5.append(grades_s5[i] if i < len(grades_s5) else '')
+    output.write(','.join(ex5) + '\n')
 
     # Build response
     csv_content = output.getvalue()
@@ -8687,47 +8726,103 @@ def _generate_long_template(courses_data, all_terms):
     # Show term mapping guide
     output.write('# === ตารางปี/เทอมกับวิชาในหลักสูตร ===\n')
     for term_info in all_terms:
-        year_label = 2566 + (term_info['year'] - 1)
         course_count = len(term_info['ids'])
         course_names = []
         for cid in term_info['ids'][:3]:
             c = course_lookup.get(cid, {'thaiName': cid})
             course_names.append(c['thaiName'][:20])
         etc = '...' if course_count > 3 else ''
-        output.write(f'# ปี{term_info["year"]}เทอม{term_info["term"]} (พ.ศ.{year_label} เทอม{term_info["term"]}): {course_count} วิชา เช่น {" / ".join(course_names)}{etc}\n')
+        output.write(f'# ปี{term_info["year"]}เทอม{term_info["term"]}: {course_count} วิชา เช่น {" / ".join(course_names)}{etc}\n')
+    output.write('# หมายเหตุ: YEAR = ปี พ.ศ. ที่เรียน (เช่น 2566, 2567) ไม่ใช่ปีที่ (1,2,3,4)\n')
     output.write('#\n')
 
-    # === Define 3 example students with different term counts ===
+    # ============================================================
+    # 5 นักศึกษาจำลอง — คละเกรด สมจริง เหมือนนักศึกษาจริง
+    # Long format: ใส่ทุกแถว ถ้าลงซ้ำให้เพิ่มแถวใหม่ (ระบบจะ detect retake)
+    # ============================================================
+
     students_examples = [
         {
-            'id': '6301001', 'name': 'นาย สมชาย ใจดี',
-            'max_terms': 5,  # ปี1เทอม1 ถึง ปี3เทอม1
-            'label': 'เรียนถึง ปี3 เทอม1 (5 เทอม, เกรดดี)',
+            'id': '66010001', 'name': 'นาย กิตติพงศ์ วงศ์สุวรรณ',
+            'start_year': 2566,
+            'max_terms': 6,  # ปี1เทอม1 ถึง ปี3เทอม2
+            'label': 'เรียนถึง ปี3เทอม2 (6 เทอม, เก่งโปรแกรม/คำนวณ แต่ภาษาอังกฤษปานกลาง, GPA~3.1)',
             'grades': [
-                'B+','A','B','C+','A','B+','B','A',         # ปี1เทอม1
-                'A','B+','B','B+','A','B','C+','B+',         # ปี1เทอม2
-                'B+','A','B','C+','B',                        # ปี2เทอม1
-                'B','A','B+','C+','B','B+','A',              # ปี2เทอม2
-                'B+','B','A','C+','B','B+',                   # ปี3เทอม1
-            ]
+                'B+','B','C+','A','A','A','A','B+',           # ปี1เทอม1
+                'B','B+','B','B+','B+','A','A','A',            # ปี1เทอม2
+                'A','B+','A','B','B+',                          # ปี2เทอม1
+                'C+','B+','B','A','A','A','A',                 # ปี2เทอม2
+                'C+','B+','B+','A','A','B+',                   # ปี3เทอม1
+                'B','B+','B+','A','B+','A',                    # ปี3เทอม2
+            ],
+            'retakes': []  # ไม่มีลงซ้ำ
         },
         {
-            'id': '6301002', 'name': 'นางสาว สมหญิง รักเรียน',
-            'max_terms': 2,  # ปี1เทอม1 ถึง ปี1เทอม2
-            'label': 'เรียนถึง ปี1 เทอม2 (2 เทอม, มีตก F)',
-            'grades': [
-                'C+','B','D+','F','C','B','D','C+',          # ปี1เทอม1 (มีตก)
-                'C','D+','C+','D','B','C','F','D+',           # ปี1เทอม2 (มีตก)
-            ]
-        },
-        {
-            'id': '6301003', 'name': 'นาย สมศักดิ์ พยายาม',
+            'id': '65010045', 'name': 'นางสาว พิมพ์ชนก ศรีสมบูรณ์',
+            'start_year': 2565,
             'max_terms': 3,  # ปี1เทอม1 ถึง ปี2เทอม1
-            'label': 'เรียนถึง ปี2 เทอม1 (3 เทอม, มี W + ลงซ้ำ)',
+            'label': 'เรียนถึง ปี2เทอม1 (3 เทอม, GE ดีแต่คำนวณแย่ ตกแคลฯ2 ลงซ้ำ, GPA~2.2)',
             'grades': [
-                'B','C+','C','B+','C','D+','W','B',          # ปี1เทอม1 (มี W)
-                'C+','B','D+','C','B+','C+','C','B',          # ปี1เทอม2
-                'C+','B','C','D+','C+',                        # ปี2เทอม1
+                'B+','B','B+','D+','C','D','C+','C',          # ปี1เทอม1: GE ดี, แคลฯ1=D+, ฟิสิกส์ปานกลาง
+                'B','B+','A','F','D+','D','C','C+',            # ปี1เทอม2: แคลฯ2=F!
+                'C','C+','C','D+','C',                          # ปี2เทอม1
+            ],
+            'retakes': [
+                # ตกแคลฯ2 (F) → ลงซ้ำปี2เทอม2 ได้ D+
+                {'course_idx_in_terms': (1, 3), 'retake_year': 2567, 'retake_term': 2, 'new_grade': 'D+'},
+            ]
+        },
+        {
+            'id': '66010112', 'name': 'นาย ธนากร แสงอรุณ',
+            'start_year': 2566,
+            'max_terms': 5,  # ปี1เทอม1 ถึง ปี3เทอม1
+            'label': 'เรียนถึง ปี3เทอม1 (5 เทอม, เริ่มต้นแย่แต่พัฒนาดีขึ้น ลงซ้ำ2วิชา, GPA~2.4)',
+            'grades': [
+                'C','C+','D+','D','C','D+','F','W',           # ปี1เทอม1: ปรับตัวไม่ทัน โปรแกรม=F Workshop=W
+                'C+','C','C+','D+','C+','C','C','D+',          # ปี1เทอม2: ดีขึ้นเล็กน้อย
+                'C+','B','C+','C','C',                          # ปี2เทอม1
+                'B','B','C+','C','B','B','B+',                 # ปี2เทอม2: ดีขึ้นมาก!
+                'C+','B','B','B+','B+','C+',                   # ปี3เทอม1: ดีต่อเนื่อง
+            ],
+            'retakes': [
+                # ตกโปรแกรม (F) → ลงซ้ำปี2เทอม1 ได้ C+
+                {'course_idx_in_terms': (0, 6), 'retake_year': 2567, 'retake_term': 1, 'new_grade': 'C+'},
+                # ถอน Workshop (W) → ลงซ้ำปี2เทอม2 ได้ C
+                {'course_idx_in_terms': (0, 7), 'retake_year': 2567, 'retake_term': 2, 'new_grade': 'C'},
+            ]
+        },
+        {
+            'id': '66010078', 'name': 'นางสาว สุภาพร จันทร์เพ็ญ',
+            'start_year': 2566,
+            'max_terms': 2,  # ปี1เทอม1 ถึง ปี1เทอม2
+            'label': 'เรียนถึง ปี1เทอม2 (2 เทอม, เรียนดีสม่ำเสมอ ปรับตัวเร็ว, GPA~3.4)',
+            'grades': [
+                'A','A','B+','B+','B','B+','A','B+',          # ปี1เทอม1: ดีทุกวิชา
+                'B+','A','A','B','B+','B','A','B+',            # ปี1เทอม2: ดีต่อเนื่อง
+            ],
+            'retakes': []  # ไม่มีลงซ้ำ
+        },
+        {
+            'id': '64010023', 'name': 'นาย วรวิทย์ พันธุ์ดี',
+            'start_year': 2564,
+            'max_terms': 7,  # ปี1เทอม1 ถึง ปี4เทอม1
+            'label': 'เรียนถึง ปี4เทอม1 (7 เทอม, GPA~2.0 ลงซ้ำ3วิชา, borderline จะจบหรือไม่จบ)',
+            'grades': [
+                'C+','C','D+','F','D+','D','D+','D',          # ปี1เทอม1: แคลฯ1=F!
+                'C','D+','C+','D','C','D+','C','C',            # ปี1เทอม2: แย่ทั่วไป
+                'D+','C','D+','W','D+',                         # ปี2เทอม1: วงจรดิจิทัล=W
+                'C','D+','C','D+','C+','C','C',                # ปี2เทอม2
+                'D+','C','F','C','C+','D+',                    # ปี3เทอม1: สื่อสารข้อมูล=F!
+                'C','C+','C','D+','C','C+',                    # ปี3เทอม2
+                'C','C+','C','D+','C','C+',                    # ปี4เทอม1: ใกล้จบ
+            ],
+            'retakes': [
+                # ตกแคลฯ1 (F) → ลงซ้ำปี2เทอม1 ได้ D+
+                {'course_idx_in_terms': (0, 3), 'retake_year': 2565, 'retake_term': 1, 'new_grade': 'D+'},
+                # ถอนวงจรดิจิทัล (W) → ลงซ้ำปี2เทอม2 ได้ C
+                {'course_idx_in_terms': (2, 3), 'retake_year': 2565, 'retake_term': 2, 'new_grade': 'C'},
+                # ตกสื่อสารข้อมูล (F) → ลงซ้ำปี3เทอม2 ได้ D
+                {'course_idx_in_terms': (4, 2), 'retake_year': 2566, 'retake_term': 2, 'new_grade': 'D'},
             ]
         },
     ]
@@ -8739,7 +8834,7 @@ def _generate_long_template(courses_data, all_terms):
         for term_info in all_terms:
             if terms_written >= student['max_terms']:
                 break
-            year_label = 2566 + (term_info['year'] - 1)
+            year_label = student['start_year'] + (term_info['year'] - 1)
             for cid in term_info['ids']:
                 c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
                 grade = student['grades'][grade_idx] if grade_idx < len(student['grades']) else ''
@@ -8748,27 +8843,21 @@ def _generate_long_template(courses_data, all_terms):
                 grade_idx += 1
             terms_written += 1
 
-    # === ตัวอย่างลงเรียนซ้ำ (Retake) — สมจริง ===
-    output.write('#\n')
-    output.write('# === ตัวอย่างลงเรียนซ้ำ ===\n')
+        # เพิ่มแถวลงเรียนซ้ำ (retake rows) — ระบบจะ detect อัตโนมัติ
+        if student['retakes']:
+            for retake in student['retakes']:
+                term_idx, course_idx = retake['course_idx_in_terms']
+                cid = all_terms[term_idx]['ids'][course_idx]
+                c = course_lookup.get(cid, {'thaiName': cid, 'credit': 3})
+                output.write(f'{student["id"]},{student["name"]},{cid},{c["thaiName"]},{c["credit"]},{retake["retake_year"]},{retake["retake_term"]},{retake["new_grade"]}\n')
+            output.write(f'# ^ ลงเรียนซ้ำ {len(student["retakes"])} วิชา (ระบบตรวจพบ retake อัตโนมัติ)\n')
 
-    # Student 2: ตก F 2 วิชา → ลงซ้ำในปี2เทอม1
-    output.write('# นศ.2 ตก F 2 วิชาในปี1 แล้วลงซ้ำปี2เทอม1\n')
-    failed_1 = all_terms[0]['ids'][3]  # ปี1เทอม1 วิชาที่ 4 (ได้ F)
-    failed_2 = all_terms[1]['ids'][6]  # ปี1เทอม2 วิชาที่ 7 (ได้ F)
-    c1 = course_lookup.get(failed_1, {'thaiName': failed_1, 'credit': 3})
-    c2 = course_lookup.get(failed_2, {'thaiName': failed_2, 'credit': 3})
-    output.write(f'6301002,นางสาว สมหญิง รักเรียน,{failed_1},{c1["thaiName"]},{c1["credit"]},2567,1,D+\n')
-    output.write(f'6301002,นางสาว สมหญิง รักเรียน,{failed_2},{c2["thaiName"]},{c2["credit"]},2567,1,C\n')
-    output.write('# (ระบบใช้เกรดล่าสุด: F -> D+ และ F -> C อัตโนมัติ)\n')
     output.write('#\n')
-
-    # Student 3: ได้ W → ลงซ้ำในปี2เทอม2
-    output.write('# นศ.3 ได้ W ในปี1เทอม1 แล้วลงซ้ำปี2เทอม2\n')
-    retake_course = all_terms[0]['ids'][6] if len(all_terms[0]['ids']) > 6 else all_terms[0]['ids'][0]
-    c = course_lookup.get(retake_course, {'thaiName': retake_course, 'credit': 3})
-    output.write(f'6301003,นาย สมศักดิ์ พยายาม,{retake_course},{c["thaiName"]},{c["credit"]},2567,2,C\n')
-    output.write('# (ระบบใช้เกรดล่าสุด: W -> C อัตโนมัติ)\n')
+    output.write('# === สรุป: ระบบรองรับการลงเรียนซ้ำ ===\n')
+    output.write('# ถ้าวิชาเดียวกันปรากฏหลายแถว ระบบจะ:\n')
+    output.write('# 1. ใช้เกรดล่าสุดในการทำนาย\n')
+    output.write('# 2. นับจำนวนวิชาที่ลงซ้ำ + สาเหตุ (F/W)\n')
+    output.write('# 3. คำนวณเกรดที่ดีขึ้นเฉลี่ย → ส่งให้ AI วิเคราะห์\n')
 
     csv_content = output.getvalue()
     output.close()
